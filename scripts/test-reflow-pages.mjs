@@ -32,15 +32,18 @@ const RENDER = path.join(ROOT, 'templates', 'render-segment.mjs');
 const FFPROBE = process.env.FFPROBE_EXE || 'ffprobe';
 const SLEEP = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// D7 冻结基线（docs/DECISIONS.md）。v2.4 重定一次，理由见 D7 附注：
-// v2.3.5 去掉开发者占位文案、v2.4 引入排版 token，16:9 像素**有意**变了。
-// 重定前已验证 HEAD 页面仍能复现旧哈希，且本轮 D3 接线修复对基线零像素漂移。
+// D7 冻结基线（docs/DECISIONS.md）。v2.5.2 重定 segment 两条，理由见 D7 附注：
+// R2-06 给 drawCapsuleLabel 补 textAlign='left'（旧版继承场景标题的 center，
+// 胶囊文字向左溢出药丸框，浅色主题下整条不可读），有意改变 16:9 像素；
+// 重定前已验证：临时去掉该行可逐字节复现旧哈希 b39be972…。big-card 不画胶囊，两条不变。
 const D7 = {
   'big-card': 'af48254753aeaa0758b2489b285e259e50d8b876460d43e2ab22b63ba298dc0c',
-  segment: 'b39be97209eba14714bd57b9d313779eb3882d4d371c74d6c43aab08bfd8f08e',
+  segment: '1eef52a0ca28fea5b8bce8880927657894ab96f516ef93620d7f2cdbcf30602c',
   // 带内容的基线：无参数形态在 v2.3.5 之后几乎只剩 HUD/背景，守不住标题排版。
   'big-card-content': '416a84f63e44e33266c12f9f7c548ecf10a4ce5b9b246e575c3bc0e6610988d3',
-  'segment-content': 'cd9142a5fe5499e316914318ff1b30d769a7235970722117eaec0fd1b1c19641',
+  // v2.5.2 另含 R2-29：胶囊兜底由标题改为品牌（`?title=` 独占时标题不再复读两遍），
+  // 只影响带内容形态——无内容时两者都落到 '预览'，故 segment 基线只受 R2-06 影响。
+  'segment-content': 'eaaf26ab95a00ed8ba7da5f09246ac2c70f9b08f0b0d3b119628ffa86057ebac',
 };
 const D7_CONTENT_PAGE = {
   'big-card': 'templates/big-card.html?first=契约&keyword=基线？&brand=CVS',
@@ -72,6 +75,10 @@ function renderStill({ page, width, height, t, outdir }) {
   try { fs.unlinkSync(out); } catch { /* first run */ }
   const argv = [
     RENDER, '--page', page, '--width', String(width), '--height', String(height),
+    // 显式钉 jpeg：D7 基线是「jpeg/q92 的 JPG SHA-256」，格式必须由测试自己声明。
+    // 否则 render-segment 把默认捕获格式从 jpeg 改成 png（R2-11 确定性修复）时，
+    // 这里会静默产出 .png → 读到 0 字节 → 基线断言变成假失败。
+    '--format', 'jpeg',
     '--still', String(t), '--outdir', outdir,
   ];
   let last = null;
