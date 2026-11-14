@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>帧工作台 · 逐帧实时预览</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">帧工作台<span class="brand-sub">FRAME BENCH · 逐帧实时预览</span></div>
+  <form id="sourceForm" class="source" autocomplete="off">
+    <select id="kind" aria-label="帧源类型">
+      <option value="video">视频</option>
+      <option value="spec">规格 / 计划</option>
+      <option value="images">图片序列</option>
+    </select>
+    <input id="path" list="paths" placeholder="out/api/…/master.mp4 或 out/plan.json 或 out/images" aria-label="路径">
+    <datalist id="paths"></datalist>
+    <input id="fps" class="tiny-num" type="number" min="0.1" step="0.1" placeholder="fps" title="图片序列播放帧率（视频/规格自动读取）" aria-label="帧率">
+    <button type="submit" class="primary" id="openBtn">打开</button>
+  </form>
+  <span id="status" class="status">未打开帧源</span>
+</header>
+
+<main>
+  <section class="stage-col">
+    <div class="stage-wrap" id="stageWrap">
+      <img id="frameImg" alt="当前帧" draggable="false">
+      <div class="hud">
+        <span id="hudFrame" class="hud-item strong">— / —</span>
+        <span id="hudTc" class="hud-item mono">00:00:00:00</span>
+        <span id="hudSeg" class="hud-item seg"></span>
+        <span id="hudMs" class="hud-item mono dim"></span>
+      </div>
+      <div id="stageMsg" class="stage-msg" role="status"></div>
+      <div class="rangebar" id="rangebar" hidden></div>
+    </div>
+
+    <div class="transport card">
+      <div class="row">
+        <button id="first" title="第一帧 (Home)">⏮</button>
+        <button id="prev10" title="−10 帧 (Shift+←)">−10</button>
+        <button id="prev" title="上一帧 (←)">◀</button>
+        <button id="play" class="primary" title="播放 / 暂停 (Space)">播放</button>
+        <button id="next" title="下一帧 (→)">▶</button>
+        <button id="next10" title="+10 帧 (Shift+→)">+10</button>
+        <button id="last" title="最后一帧 (End)">⏭</button>
+        <span class="sep"></span>
+        <label class="chk"><input id="loop" type="checkbox" checked> 循环</label>
+        <label class="field">速度
+          <select id="rate">
+            <option value="0.25">0.25×</option>
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+        <button id="download" class="ghost" title="下载当前帧 (D)">下载本帧</button>
+      </div>
+      <div class="row scrub">
+        <input id="slider" type="range" min="0" max="0" step="1" value="0" aria-label="帧号">
+        <input id="frameNum" class="num" type="number" min="0" step="1" value="0" aria-label="帧号输入">
+        <span class="mono muted total">/ <b id="total">0</b></span>
+      </div>
+      <div id="ruler" class="ruler" hidden aria-label="段分布" title="段落分布：点击跳到该段首帧"></div>
+      <div class="row meta-row">
+        <span class="mono">t = <b id="time">0.000</b>s</span>
+        <span class="mono">TC <b id="timecode">00:00:00:00</b></span>
+        <span class="mono seg-label" id="segLabel">—</span>
+        <span class="mono muted perf" id="perf">实测 — fps · 延迟 — ms</span>
+      </div>
+    </div>
+
+    <div class="filmstrip card">
+      <div class="strip-head">
+        <b>胶片条</b>
+        <span class="muted">每 <b id="stride">—</b> 帧一张 · 点击跳转 · 当前帧高亮</span>
+        <span class="grow"></span>
+        <button id="restrip" class="ghost tiny">重建</button>
+      </div>
+      <div id="strip" class="strip" aria-label="帧缩略图"></div>
+    </div>
+  </section>
+
+  <aside class="side">
+    <section class="card">
+      <h3>帧源</h3>
+      <dl id="sourceInfo" class="kv"><dt>状态</dt><dd>未打开</dd></dl>
+    </section>
+    <section class="card">
+      <h3>最近产物</h3>
+      <div id="recent" class="recent"><p class="muted small">扫描 out/ 中…</p></div>
+    </section>
+    <section class="card">
+      <h3>快捷键</h3>
+      <pre class="keys">← / →        ±1 帧
+Shift + ←/→  ±10 帧
+Home / End   首帧 / 末帧
+Space        播放 / 暂停
+I / O        设循环入点 / 出点
+L            循环区间开关
+D            下载当前帧
+F            画面全屏</pre>
+      <p class="muted small">帧 n 的时刻恒为 n / fps，与编码器同一量化：
+在本页取到的静止帧就是成片里的那一帧（编码前像素）。</p>
+    </section>
+  </aside>
+</main>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

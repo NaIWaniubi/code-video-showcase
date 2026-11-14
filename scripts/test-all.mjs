@@ -62,6 +62,8 @@ const BROWSER_SUITES = [
   'scripts/test-brand-visual.mjs',
   'scripts/test-type-tokens.mjs',
   'scripts/test-renderer-recovery.mjs',
+  // 逐帧预览工作台：核心断言是「live 画布 == 服务端 PNG」逐像素一致，必须有 Chrome。
+  'scripts/test-frames.mjs',
 ];
 
 function parseArgs(argv) {

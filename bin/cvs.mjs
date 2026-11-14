@@ -77,6 +77,7 @@ const commands = {
   script:   (a) => surface('script', SURFACES.script, a),
   versions: (a) => surface('versions', SURFACES.versions, a),
   review:   (a) => surface('review', SURFACES.review, a),
+  frames:   (a) => node('app/frames/serve.mjs', a),
   test:     (a) => node('scripts/test-all.mjs', a),
 };
 
@@ -106,6 +107,8 @@ usage: cvs <command> [args]
   image [--spec f] [--set a,b] [--at t]  spec -> image set (cover/card/poster/story/...); --list shows presets
   api [--port 5190] [--host h] [--token t]  job-queue HTTP service (origin-checked)
   wizard | canvas | script | versions | review    start a dev surface (5181-5185)
+  frames [--video f|--plan f|--spec f|--dir d] [--port 5186]
+                                         per-frame realtime preview workbench
   test [--browser]                       run all suites
   doctor                                 environment check (renderer capability probe)
   errors [--check|--write]               error-code registry / docs/ERRORS.md

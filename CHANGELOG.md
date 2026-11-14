@@ -3,6 +3,39 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v2.7.0] - 2026-11-15 — 逐帧实时预览工作台（app/frames，cvs frames）
+
+按**帧号**预览正在制作的图 / 视频：`t = n/fps`，段内 `i/fps`，与
+`render-segment.mjs` 的 `i/fps` 是同一量化。三种帧源统一成 `getFrame(n)`。
+
+### 新增
+- `app/frames/`（5186）+ `cvs frames [--spec|--plan|--video|--dir]`：
+  - **spec / plan**：模板页放在同源 iframe 里，宿主直接 `renderFrame(段内帧号/fps)`。
+    不读回像素 → 实测 **0.5–1 ms/帧**，拖动/播放真正实时。iframe 池（3 个）+
+    相邻段预加载；URL 的 `seg/t0/speed/dur` 与 `withSegmentParams()` 逐字一致。
+  - **video**：ffmpeg `-fps_mode passthrough` 逐帧解码到 `out/frames-cache/`，
+    边解码边可看（`ready` 递增），按帧号索引；同一帧字节稳定。
+  - **images**：目录 / `image-manifest.json`，一张一帧，自然排序。
+- UI：逐帧步进（±1 / ±10 / 首末帧）、按 fps 播放（0.25–2×）、帧号滑杆与输入、
+  时间码 `HH:MM:SS:FF`、段落分布条（点击跳段）、胶片条、循环入出点（I/O/L）、
+  下载当前帧 PNG、实测 fps / 目标 fps / 单帧渲染耗时、键盘快捷键、全屏。
+- HTTP API：`/frames/api/{health,candidates,open,meta,frame,close}`；
+  帧响应带 `X-Frame-Index/Time/Timecode/Segment/Render-Ms`。路径限制在项目根内，
+  拒绝 `..` 与点目录，只收 GET/HEAD。
+- `scripts/test-frames.mjs`：**73 条断言**——帧号数学 / 视频与图片 API / 安全边界 /
+  spec 两次独立渲染字节一致 / live 画布与服务端 PNG **逐像素相等（meanDiff=0，段首、
+  段内 +1、跨段三处）** / UI 步进与播放。
+- `npm run test:frames`、`npm run dev:frames`；README `app/frames/README.md`。
+
+### 关键实现记录
+- 首版对每帧 `canvas.toDataURL` 再传给浏览器：软件渲染下 1920×1080 单帧编码
+  **130–300 ms**（160×90 也要 ~130 ms），不可能实时。改为 iframe 直接显示同一张
+  canvas 后，`renderFrame` 本身只要 ~1 ms。
+- iframe 不能用 `display:none`：`innerWidth=0` 会让模板回退 1920×1080，预览布局
+  与成片不一致。改用 `visibility:hidden`，并**先定 CSS 尺寸再设 src**。
+- 多个后台 iframe 会互相拖慢（服务端一次渲染从 90 ms 掉到 6–14 s）；池限制 3 个、
+  只保留一个可见，缩略图在 spec 模式改用帧号卡，避免服务端再起 Chrome 抢 CPU。
+
 ## [v2.6.1] - 2026-11-14 — 离线预览出图、静态材质烘焙、别名歧义清零
 
 上一版留的三个缺口收口：预览图没出（CDP 起不来）、静态材质每帧重画、两处重复别名。

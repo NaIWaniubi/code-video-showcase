@@ -11,7 +11,7 @@ description: |
 license: MIT
 metadata:
   domain: video-production
-  version: 2.6.1
+  version: 2.7.0
   reference: Opus 5.5 / DeepSeek V4.1-Flash 61s style showcase
 compatibility: Node 22+ (raw CDP needs global WebSocket) / Chrome or Edge (Playwright optional) / FFmpeg (libx264+AAC, libvmaf optional) / Python 3.10+ (numpy, scipy; matplotlib optional) / bash. Windows (Git Bash) and WSL/Linux. No external video/image/music generation models; fonts are open-source, served locally.
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
@@ -76,14 +76,15 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
 - **渲染器恢复**：`--timeout`(120s) 与 `--launch-timeout`(30s) 独立；页面抛错杀 ffmpeg + 浏览器进程树，重启换全新 profile——失败不挂住、不留孤儿。
 - **失败对象**：`logPath` 恒指构建日志；`detailPath` 是阶段诊断产物（render/concat/deliver 各自的清单或日志）。
 - **确定性检测**：`golden` manifest 记 Chrome/Node/字体指纹；环境不一致跳过哈希比对并告警（`--strict-env` 改失败）。跨机可比前提 = 同一镜像 + 同一字体锁。
-- **统一入口**：`node bin/cvs.mjs`（28 个子命令，`cvs --help` 全列）。
+- **统一入口**：`node bin/cvs.mjs`（29 个子命令，`cvs --help` 全列）。
 - **参考图**：`cvs ref poster.jpg --spec project.spec.json` 只提取色板/强调色/密度与 top-3 主题候选（不复制像素），写 `meta.reference`。
 - **动效档位**：`look.motion` 选 `calm|standard|dynamic|maximal`，不写按「类型 × 画风」推导；换档位改变画面并触发重渲染（进段哈希），写 `standard` 与旧成片逐像素一致。
 - **画风 → 页面**：`templates/style-pages.mjs` 是唯一真值（20 画风 → 渲染页）；生成端按表填 `style.page`，未知画风回落通用场景页，新增配方页只加一行。
 - **强调色覆盖**：`look.accentOverride` 展开成段 URL 的 `?accent=/accentInk=/accentSoft=`，进 `segmentHash`（换品牌色必重渲染）；没有覆盖时 URL 不变。
 - **代码生图**：`cvs image --spec project.spec.json` 用同一 spec 出图集（cover/card/poster/story，`--list` 全部；默认画风段 78% 处），产物带 `image-manifest.json`（每张 sha256）。
+- **逐帧实时预览**：`cvs frames [--spec f|--plan f|--video f|--dir d]` 打开 `app/frames/`（5186）。帧号是唯一时间轴（`t = n/fps`，段内 `i/fps`，与渲染器同一量化）；spec 源在 iframe 里直接 `renderFrame`（~1ms/帧，不读回像素），视频源用 ffmpeg 逐帧解码，图片源按目录翻页。`scripts/test-frames.mjs` 断言 live 画布与服务端 PNG **逐像素相等**。
 - **spec 是不可信输入**：id 匹配 `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`；页面路径禁绝对 URL/路径/`..`/编码穿越；`flash.count`≤256、单段≤600s、总帧≤18000；outDir 钉在根内；API 默认同源、错误信息抹本机路径。
-- **界面**：`app/wizard/`(5181)、`app/canvas/`(5182)、`app/script/`(5183)、`app/versions/`(5184)、`app/review/`(5185)、`server/api.mjs`(5190)。
+- **界面**：`app/wizard/`(5181)、`app/canvas/`(5182)、`app/script/`(5183)、`app/versions/`(5184)、`app/review/`(5185)、`app/frames/`(5186)、`server/api.mjs`(5190)。
 - **旧项目**：timeline v1 仍完全可用，`spec.mjs` 自动迁移；`render-farm` 默认 batch 模式（一个 worker 一个浏览器跑一个 shard），`--legacy` 回退逐段进程。页面按视口自适应（横/竖/方真重排），16:9 输出位级不变。
 - **质量闸门**：`npm run test:all`（纯 Node）、`npm run test:browser`、`npm run golden`（静帧位级回归）、`npm run brand -- check …`。
 - **配方页**：13–29 号在 `templates/recipe-*.html`（清单见 `templates/style-pages.mjs`）；**实拍素材** `cvs ingest` 出 EDL + spec 草稿（启发式，需人工审）。
