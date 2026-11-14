@@ -228,6 +228,12 @@ def grid_phase(peaks, bpm: float, subdiv: int = 1, fixed_off: float | None = Non
     自由选 offset 等于把挑尺子的自由度从细分挪到了相位（实测 220 ms 的
     offset 照样报「PASS 76.7%」）。fixed 模式下 offset 就是与曲谱对齐的网格，
     音乐偏离它就是偏离，报告如实写。
+    v2.7.1 R2-11b: 命中率按 onset 能量加权——与 offset 搜索的 `score += a` 同准则。
+    节拍由强 onset（鼓点脉冲）定义；过渡 FX（riser/whoosh 噪声扫频）的**起点**天然
+    离网格、落点在网格上，无加权计数把这些弱瞬态与重鼓同权，90BPM 被拖到 0.65。
+    加权后 90/120/150BPM = 0.76/0.86/0.87（强 onset top-16 有 87.5% 在网格）。
+    无加权计数仍随报告输出（gridHitRateCount），便于核对，不藏数据。
+    返回 (offset, 能量加权命中率, subdiv, 无加权命中率)。
     """
     beat = 60.0 / bpm
     step = beat / max(1, int(subdiv))
@@ -245,12 +251,17 @@ def grid_phase(peaks, bpm: float, subdiv: int = 1, fixed_off: float | None = Non
             if score > best_score:
                 best_off, best_score = float(off), score
     hit = 0
-    for t, _ in peaks:
+    hit_w = 0.0
+    tot_w = 0.0
+    for t, a in peaks:
         ph = (t - best_off) % step
+        tot_w += a
         if min(ph, step - ph) <= 0.03:
             hit += 1
-    rate = hit / max(1, len(peaks))
-    return best_off, rate, int(subdiv)
+            hit_w += a
+    rate = hit_w / tot_w if tot_w > 0 else 0.0
+    rate_count = hit / max(1, len(peaks))
+    return best_off, rate, int(subdiv), rate_count
 
 
 # ── spectral helpers ───────────────────────────────────────────────────────
@@ -437,7 +448,7 @@ def main():
                 subdiv = k
                 grid_off = t0 % step_try
                 break
-    offset, hit_rate, grid_subdiv = grid_phase(peaks, bpm, subdiv, fixed_off=grid_off) if bpm else (None, None, None)
+    offset, hit_rate, grid_subdiv, hit_rate_count = grid_phase(peaks, bpm, subdiv, fixed_off=grid_off) if bpm else (None, None, None, None)
 
     cue_rows = []
     matched = 0
@@ -498,7 +509,7 @@ def main():
             f"{matched}/{len(cues)} cues within ±{int(args.tolerance*1000)}ms "
             f"({align_rate*100:.1f}%; {near} cue(s) had a nearby onset)")
     if hit_rate is not None:
-        chk("beat grid", hit_rate >= 0.7, f"{hit_rate*100:.1f}% of onsets on 1/{grid_subdiv} grid (offset {offset*1000:.0f} ms)", level="advisory")
+        chk("beat grid", hit_rate >= 0.7, f"{hit_rate*100:.1f}% energy-weighted onsets on 1/{grid_subdiv} grid (offset {offset*1000:.0f} ms; {hit_rate_count*100:.0f}% by count)", level="advisory")
     chk("silence", len(silences) == 0, f"{len(silences)} spans ≥1 s below -45 dB", level="contract")
     if hf:
         chk("HF restraint", hf["contrast_db"] >= 6.0, f"8–16 kHz key vs rest: {hf['contrast_db']:+.2f} dB (target ≥ +6)", level="advisory")
@@ -527,6 +538,7 @@ def main():
         "tempoConfidence": None if tempo_conf is None else round(tempo_conf, 3),
         "beatOffset": None if offset is None else round(offset, 4),
         "gridHitRate": None if hit_rate is None else round(hit_rate, 4),
+        "gridHitRateCount": None if hit_rate_count is None else round(hit_rate_count, 4),
         "gridSubdivision": grid_subdiv,
         "cueCoverage": round(coverage, 4) if cues else None,
         "peakDbfs": round(20 * np.log10(peak + EPS), 3),

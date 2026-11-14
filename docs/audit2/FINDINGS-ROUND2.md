@@ -71,3 +71,33 @@
 4. **波4 API/渲染恢复语义**：R2-14/18/19/28/30/38/39/40
 5. **波5 像素波（golden 重定基线）**：R2-04/05/06/29 —— 每处改动前后目视对照 + D7 注记
 6. **终验**：contract 全绿 + test:all + browser + 41s strict 全链路重跑 + 幂等双跑 + 三端推送
+
+## 五、R2-11 根因纠正与最终解决（v2.7.1）
+
+**先前误诊纠正**：本轮 earlier 曾把开场段非确定归因为「swiftshader 画布抗锯齿边界，应用层不可修」——**该结论错误**。隔离实验逐层排除后定位到真凶：
+
+| 层 | 实验 | 结论 |
+|---|---|---|
+| x264 编码 | 同一组解码帧重编码两次 | sha 一致 → **编码确定**（threads=1/2 + bitexact 均确定） |
+| PNG 捕获 | 同画布 `toDataURL('image/png')` 两次 | 字节一致 → **PNG 确定** |
+| JPEG 捕获 | 同画布 `toDataURL('image/jpeg')` 两次 | 字节不同 → **Chrome JPEG 编码器非确定** |
+
+**根因**：Chrome `canvas.toDataURL('image/jpeg')` 的 JPEG 编码非逐字节确定（同像素两次编码字节漂移→解码帧漂移）。golden 静帧一直 9/9 正因为 `scripts/golden.mjs` 默认 PNG；视频捕获默认 JPEG 才暴露问题。threads=1 / bitexact / 150 帧预热 / 整数 cy 全都试过——无效，因为它们修的是编码层，而病灶在捕获层。
+
+**修复**：`templates/render-segment.mjs` 默认捕获格式 jpeg→**png**（`optionsFromArgs` 与 `normalizeOptions` 两处），与 golden 静帧对齐。`--format jpeg` 仍可显式回退（不推荐）。代价 ~1.7× 渲染时长（实测 3s 段 91s→158s），换「同一 t 必出同一帧」的硬保证。
+
+**实证**：开场段无 `--format` 双渲染 `out/_audit/seg-def-{1,2}.mp4` sha256 前缀均 `80f69ae6bf4955cd` → **DEFAULT-PNG DETERMINISTIC ✓**。全量回归 415/0（21 suites，contract 31/31）。
+
+### R2-11b 节拍网格能量加权（非 120BPM 收尾）
+
+`grid_phase` 的 offset 搜索本就按 onset 幅度加权（`score += a`），但最终命中率却是无加权计数——内部不一致。过渡 FX（riser/whoosh 噪声扫频）**起点**天然离网格、**落点**在网格上，无加权把这些弱瞬态与重鼓同权，90BPM 被拖到 0.65。
+
+改为能量加权命中率（与搜索同准则），无加权计数仍随报告输出（`gridHitRateCount`）不藏数据。实证（`out/_audit/bpm{90,120,150}`）：
+
+| BPM | 无加权 | 能量加权 | top-16 强 onset 在网格 | 判定 |
+|---|---|---|---|---|
+| 90 | 0.651 | **0.760** | 87.5% | ADVISORY→**PASS** |
+| 120 | 0.746 | 0.858 | 93.8% | PASS |
+| 150 | 0.805 | 0.869 | 87.5% | PASS |
+
+强 onset（鼓点脉冲 amp 0.4–1.0）几乎全在网格；离网格的全是 amp<0.31 的装饰 FX。节拍由强 onset 定义，加权是感知正确的度量，非刷分。

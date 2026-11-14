@@ -109,7 +109,11 @@ export function optionsFromArgs(args) {
     preset: str('preset', 'veryfast'),
     tune: str('tune', ''),
     quality: num('quality', 92),
-    format: str('format', 'jpeg'),
+    // R2-11 根因修复：默认 PNG 捕获。实测 Chrome toDataURL('image/jpeg') 编码器
+    // 非确定（同画布像素两次 JPEG 字节不同→解码帧漂移），而 PNG 无损逐字节确定。
+    // golden 静帧本就默认 PNG（故一直 9/9）；视频捕获改 PNG 与之对齐，恢复全链路幂等。
+    // 代价 ~1.7× 渲染时长（实测 3s 段 91s→158s），换「同一 t 必出同一帧」的硬保证。
+    format: str('format', 'png'),
     capture: str('capture', 'auto'),
     headed: !!args.headed,
     timeout: num('timeout', 120000),
@@ -156,7 +160,7 @@ export function normalizeOptions(raw = {}) {
     crf: num(raw.crf, 12),
     preset: str(raw.preset, 'veryfast'),
     tune: str(raw.tune, ''),
-    format: String(str(raw.format, 'jpeg')).toLowerCase() === 'png' ? 'png' : 'jpeg',
+    format: String(str(raw.format, 'png')).toLowerCase() === 'jpeg' ? 'jpeg' : 'png',
     quality: num(raw.quality, 92),
     capture: str(raw.capture, 'auto'),
     headed: !!raw.headed,
