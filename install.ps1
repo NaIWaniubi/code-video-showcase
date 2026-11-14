@@ -42,7 +42,9 @@ if ($doc -ne 0) {
 } else {
   Write-Host '下一步：'
 }
+Write-Host '  node bin/cvs.mjs ui                 # 打开工作台 http://127.0.0.1:5180/app/  <- 推荐入口'
 Write-Host '  node bin/cvs.mjs new "做一条 20 秒国风宣传片" --out project.spec.json'
 Write-Host '  node bin/cvs.mjs build project.spec.json --platform douyin --strict'
-Write-Host '  # 可选图形入口：node bin/cvs.mjs wizard   → http://127.0.0.1:5181/app/wizard/'
+Write-Host '  # 只想要向导页：node bin/cvs.mjs wizard -> http://127.0.0.1:5181/app/wizard/'
+Write-Host '  # 说明：cvs 命令统一写成 node bin/cvs.mjs <命令>；npm link 后可直接写 cvs <命令>'
 exit $doc

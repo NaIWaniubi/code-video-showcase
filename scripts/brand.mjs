@@ -564,7 +564,7 @@ function main(argv) {
 
   if (args.help || !cmd) {
     console.log(usage());
-    return args.help ? 0 : 1;
+    return args.help ? 0 : 2;
   }
   switch (cmd) {
     case 'apply': return cmdApply(args);

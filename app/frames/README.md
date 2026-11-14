@@ -5,7 +5,7 @@
 ```bash
 node app/frames/serve.mjs                        # http://127.0.0.1:5186/app/frames/
 node app/frames/serve.mjs --plan out/plan.json   # 直接打开一个 plan
-node app/frames/serve.mjs --video out/final.mp4  # 直接看成片每一帧
+node app/frames/serve.mjs --video out/master.mp4  # 直接看成片每一帧
 node app/frames/serve.mjs --dir out/images       # 图片序列翻页
 # 或
 npx cvs frames --spec project.spec.json
@@ -17,7 +17,7 @@ npx cvs frames --spec project.spec.json
 
 | 源 | 参数 | 取帧方式 | 说明 |
 |---|---|---|---|
-| spec / plan | `--plan` / `--spec` | 模板页在**同源 iframe** 里直接 `renderFrame(n 段内帧号 / fps)` | 不读回像素，实测 0.5–1 ms/帧；与 `render-segment.mjs` 同页面 URL / 同 `t` |
+| spec / plan | `--plan` / `--spec` | 模板页在**同源 iframe** 里直接 `renderFrame(n 段内帧号 / fps)` | 不读回像素，实测 0.3–0.8 ms/帧（p95 0.5 ms）；与 `render-segment.mjs` 同页面 URL / 同 `t` |
 | video | `--video` | ffmpeg `-fps_mode passthrough` 逐帧解码成 JPEG，按帧号读 | 边解码边可看（`ready` 递增）；首次打开建缓存 |
 | images | `--dir` | 目录图片 / `image-manifest.json` 一张一帧 | 文件名自然排序 |
 
@@ -26,7 +26,8 @@ npx cvs frames --spec project.spec.json
 渲染管线本来就是「代码逐帧画 → Chrome → 截图 → ffmpeg」。工作台里如果每帧都
 `toDataURL` 再传到浏览器，在软件渲染下 **编码单帧要 130–300 ms**（1920×1080 更高），
 拖动不可能实时。iframe 直接显示同一张 canvas，只调 `renderFrame()`（实测 <1 ms），
-所以是真正逐帧实时的；`iframe` 池最多 3 个，并在空闲时预加载下一段。
+所以是真正逐帧实时的；`iframe` 池最多 6 个，按队列**串行**预加载后面 3 段
+（并发加载反而互相拖慢），静态资源 2 分钟缓存、HTML 仍 no-store。
 
 > 像素证据：`scripts/test-frames.mjs` 会把 live 画布与服务端按帧号渲染的 PNG
 > 逐像素比对，要求 **meanDiff = 0**（段首 / 段内 +1 / 跨段三个位置）。
@@ -77,8 +78,8 @@ GET /frames/api/close?id=
 
 - **没有声音**：只看画面。成片音轨请用 `cvs qa` / 播放器。
 - **spec 切段有首帧延迟**：每段是一个独立页面（URL 参数 baked-in），首次载入要等
-  `__ready`（字体，冷启动 1–3 s；mini 41s 这类 1920×1080 重页面首段可到 10 s+）。
-  池化 + 预加载后回跳已载入的段是即时的。
+  `__ready`（字体，冷启动 0.3–3 s；mini 41s 这类 1920×1080 重页面首段可到 10 s+）。
+  载入期间播放时钟冻结（不会跳帧或 HUD 跑到画面前面）；已载入的段跳转 0–6 ms。
 - **spec 预览分辨率 = spec 原生分辨率**（iframe 视口即设计尺寸，CSS 缩放显示）。
   不能把 1920×1080 的页面缩到 640×360 渲染——页面字号是固定 px，布局会变，
   就不再是成片那一帧。

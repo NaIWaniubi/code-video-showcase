@@ -165,7 +165,7 @@ export function renderInspector(root, entry, { onChange = () => {} } = {}) {
     const value = entry.props ? entry.props[prop] : undefined;
 
     const row = el('div', 'field-row');
-    row.append(el('label', '', spec.label || prop));
+    const lab = el('label', '', spec.label || prop);
 
     let control;
     if (type === 'color') control = colorField(prop, spec, value, onChange);
@@ -173,7 +173,13 @@ export function renderInspector(root, entry, { onChange = () => {} } = {}) {
     else if (type === 'number' || type === 'size') control = numberField(prop, spec, value, onChange);
     else control = textField(prop, spec, value, onChange);
 
-    row.append(control);
+    // label 与控件显式关联（读屏报得出控件名）。
+    const input = control.querySelector('input, select, textarea');
+    if (input) {
+      if (!input.id) input.id = `field-${prop}-${Math.random().toString(36).slice(2, 8)}`;
+      lab.htmlFor = input.id;
+    }
+    row.append(lab, control);
     root.append(row);
   }
 }
@@ -249,7 +255,7 @@ export function renderPatches(root, patches = [], { onCopy, onDownload, onClear 
   root.innerHTML = '';
 
   const head = el('div', 'insp-head');
-  head.append(el('h3', '', 'patches'), el('span', 'badge', String(patches.length)));
+  head.append(el('h3', '', '改动'), el('span', 'badge', String(patches.length)));
   root.append(head);
 
   if (!patches.length) {

@@ -3,7 +3,7 @@
  * serve.mjs — 逐帧实时预览工作台的服务端（零依赖）。
  *
  *   node app/frames/serve.mjs                                   # 打开工作台，页内选源
- *   node app/frames/serve.mjs --video out/final.mp4             # 直接看成片每一帧
+ *   node app/frames/serve.mjs --video out/master.mp4             # 直接看成片每一帧
  *   node app/frames/serve.mjs --plan out/plan.json              # 按帧号实时渲染
  *   node app/frames/serve.mjs --spec project.spec.json          # 从 spec 现场构建
  *   node app/frames/serve.mjs --dir out/images                  # 图片序列翻页
@@ -76,12 +76,17 @@ export function resolveUnderRoot(root, input, label = 'path') {
 
 function listByMtime(dir, root, exts, limit) {
   const found = [];
+  let visited = 0;
+  // out/ 可能是 20GB / 6 万文件。候选列表只做导航，不需要全树扫描：
+  // 深度 3、最多看 4000 个条目，命中足够就停。实测 1.1s -> 0.1s 量级。
+  const skip = (name) => name.startsWith('.') || name === 'node_modules' || name === 'frames-cache';
   const walk = (d, depth) => {
-    if (depth > 4 || found.length > 400) return;
+    if (depth > 3 || found.length >= limit * 2 || visited > 4000) return;
     let entries;
     try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
     for (const ent of entries) {
-      if (ent.name.startsWith('.')) continue;
+      if (++visited > 4000) return;
+      if (skip(ent.name)) continue;
       const p = path.join(d, ent.name);
       if (ent.isDirectory()) { walk(p, depth + 1); continue; }
       if (!ent.isFile()) continue;
@@ -96,18 +101,23 @@ function listByMtime(dir, root, exts, limit) {
   return found.sort((a, b) => b.mtime - a.mtime).slice(0, limit);
 }
 
-/** 最近产物：成片 / plan / spec / 图片目录。只读扫描，深度 4。 */
+/**
+ * 最近产物：成片 / plan / spec / 图片目录。
+ * 只读扫描，单次遍历按类别分流（深度 3、条目上限见 listByMtime）。
+ */
 export function candidates(root) {
   const out = path.join(root, 'out');
   const videos = listByMtime(out, root, ['.mp4', '.webm', '.mov'], 24);
   const plans = listByMtime(out, root, ['plan.json'], 24);
   const specs = listByMtime(out, root, ['.spec.json'], 24);
   const images = [];
+  let dirsVisited = 0;
   const walkDirs = (d, depth) => {
-    if (depth > 3 || images.length > 24) return;
+    if (depth > 3 || images.length > 24 || dirsVisited > 1200) return;
     let entries;
     try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
     for (const ent of entries) {
+      if (++dirsVisited > 1200) return;
       if (!ent.isDirectory() || ent.name.startsWith('.')) continue;
       const p = path.join(d, ent.name);
       const hasManifest = fs.existsSync(path.join(p, 'image-manifest.json'));
@@ -136,7 +146,16 @@ export function createFrameServer(root = DEFAULT_ROOT, opts = {}) {
   const sources = new Map();
   let nextId = 1;
 
-  const staticServer = createStaticServer(ROOT);
+  const staticServer = createStaticServer(ROOT, {
+    cacheControl: (file, pathname) => {
+      // iframe 池会反复载同一批模板/模块/字体。默认 no-store 会让每开一页都
+      // 重新下载并解析（1920×1080 页面首帧 1–3s 的主因）。HTML 仍 no-store，
+      // 保证改了页面刷新即见；资源给 2 分钟缓存（字体 10 分钟）。
+      if (/\.(woff2?|ttf|otf)$/i.test(pathname)) return 'public, max-age=600';
+      if (/^\/(templates|node_modules|assets)\//.test(pathname)) return 'public, max-age=120';
+      return 'no-store';
+    },
+  });
   const staticHandler = staticServer.listeners('request')[0];
 
   function putSource(source) {
@@ -193,7 +212,24 @@ export function createFrameServer(root = DEFAULT_ROOT, opts = {}) {
         common.quality = q.get('quality') ? Number(q.get('quality')) : 88;
       }
       delete common.log;                       // openSource 不吃 log
-      const source = await openSource({ ...common, log });
+      let source;
+      try {
+        source = await openSource({ ...common, log });
+      } catch (e) {
+        // 把底层英文错误包装成可操作的中文（保留原始信息便于排障）。
+        const raw = String((e && e.message) || e);
+        let zh = raw;
+        if (/video not found/i.test(raw)) zh = `视频文件不存在：${common.video}。检查路径，或先 node bin/cvs.mjs build 生成成片。`;
+        else if (/ffprobe failed|no video stream|invalid JSON|frame count/i.test(raw)) zh = `视频打不开（可能损坏或编码不支持）。原始信息：${raw.slice(0, 160)}`;
+        else if (/ffmpeg/i.test(raw) && /spawn|ENOENT/i.test(raw)) zh = '找不到 ffmpeg。安装后确认在 PATH（node bin/cvs.mjs doctor 可检查）。';
+        else if (/not found:/.test(raw) && /plan|spec/i.test(raw)) zh = `${raw.split('\n')[0]}（检查路径；plan 由 build 生成在 out/ 下）`;
+        else if (/no image frames|images dir not found/i.test(raw)) zh = `图片目录里没有可预览的帧：${common.dir || ''}`;
+        else if (e && e.code === 'SPEC_INVALID') zh = `spec 校验失败（${raw.split('\n').length - 1} 处错误）：${raw.split('\n')[1] || ''}。用 node bin/cvs.mjs lint 复验。`;
+        const err = new Error(zh + (raw !== zh ? ` [${raw.slice(0, 120)}]` : ''));
+        err.status = Number(e && e.status) || (e && e.code === 'SPEC_INVALID' ? 400 : 400);
+        err.code = e && e.code === 'SPEC_INVALID' ? 'E_SPEC' : 'E_SOURCE';
+        throw err;
+      }
       const id = putSource(source);
       sendJson(res, 200, { id, meta: source.meta() });
       return;
@@ -273,10 +309,13 @@ export function createFrameServer(root = DEFAULT_ROOT, opts = {}) {
     staticHandler(req, res);
   });
 
-  server.on('close', () => {
+  // 统一工作台（app/ui/serve.mjs）会复用这个 request listener 而不 listen 本 server，
+  // 所以资源清理必须能单独调用。
+  server.cvsDispose = () => {
     for (const [, rec] of sources) Promise.resolve(rec.source.close()).catch(() => {});
     sources.clear();
-  });
+  };
+  server.on('close', () => server.cvsDispose());
 
   return server;
 }

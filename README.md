@@ -24,6 +24,17 @@ An Agent Skill for producing 30–90 s "style showcase" films: an 8 s opening, e
 >
 > 本技能最初起源于创作者 **Mixx.ftr** 的提示词，仓库是在其基础上做的工程化整理与扩展（模板、主题系统、预览与渲染管线）。
 
+## 中文 · 三步上手（网页工作台）
+
+```bash
+bash install.sh          # Windows: powershell -ExecutionPolicy Bypass -File install.ps1
+node bin/cvs.mjs ui      # 启动统一工作台
+# 打开 http://127.0.0.1:5180/app/  ← 六个界面都在这里：向导 / 剧本 / 画布 / 版本 / 评审 / 帧预览
+```
+
+不想装环境先看效果？把下面的话发给你的 AI Agent 即可。全部命令行用法见下文（命令统一写成
+`node bin/cvs.mjs <命令>`；执行过 `npm link` 的环境可直接写 `cvs <命令>`）。
+
 ## Compiler pipeline (v2.1)
 
 v2.1 turns the skill into a **video compiler**: `spec.json` is the single source of truth, `plan.json` is a build plan with a content hash per segment, and recompiles only re-render what changed.
@@ -240,7 +251,7 @@ Pure numpy/scipy synthesis — no samples, no audio model:
 ### QA gate (automated + human)
 
 ```bash
-node scripts/qa-video.mjs out/final.mp4 --plan out/plan.json
+node scripts/qa-video.mjs out/master.mp4 --plan out/plan.json
 python scripts/qa-audio.py audio/mix.wav --plan out/plan.json --strict
 node scripts/theme-audit.mjs --strict
 node scripts/determinism-check.mjs --page "segments/01.html?theme=coral-noir" --t 0.5

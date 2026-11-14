@@ -10,7 +10,7 @@
  * 用法：
  *   import { normalizeSpec, validateSpec, specToTimeline, specDuration } from './spec.mjs';
  */
-import { query, resolveFlashEach } from './timeline.mjs';
+import { query, resolveFlashEach } from './timeline-core.mjs';
 import { MOTION_LEVELS, deriveMotionProfile, motionQuery } from './motion-profile.mjs';
 import { isTransition, isTransitionOff, normalizeTransition } from './transitions.mjs';
 import { THEMES } from './themes.js';

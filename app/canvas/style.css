@@ -279,3 +279,14 @@ input[type="color"] {
   .side { border-left: 0; border-top: 1px solid var(--line); max-height: none; }
   .stage-wrap { max-height: none; }
 }
+
+/* 开发者契约默认折叠 */
+.card.meta summary.meta-summary {
+  cursor: pointer;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.card.meta summary.meta-summary:hover { color: var(--ink); }
+.card.meta[open] summary.meta-summary { margin-bottom: 8px; }

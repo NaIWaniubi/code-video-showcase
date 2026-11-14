@@ -14,16 +14,17 @@
 | 12 | concat | concat (ffmpeg concat / encode) |
 | 13 | qa | qa (qa-video / qa-audio) |
 | 14 | env | env (missing binary / python / audio synthesis) |
-| 15 | ingest | ingest (footage -> EDL) |
 
 脚本可以用退出码做粗分流，用 `--json` / `error.json` 的 `code` 做精确重试。
 
-## 已注册错误码（127）
+## 已注册错误码（136）
 
 | 错误码 | 阶段 | 退出码 | 含义 | 唯一动作 |
 |---|---|---|---|---|
 | `E_COMMAND` | usage | 2 | 未知子命令 | cvs --help |
+| `E_PLAN_MISSING` | usage | 2 | qa-audio 的 --plan 指向不存在的文件（旧行为静默丢掉 cue/HF 门禁假绿） | 先跑 `cvs plan` 生成 plan.json，或修正 --plan 路径 |
 | `E_UNKNOWN_COMMAND` | usage | 2 | 未知子命令 | 运行 `cvs --help` |
+| `E_UNKNOWN_FLAG` | usage | 2 | 未知命令行 flag（拼错的 --strict 等不再被静默忽略） | 按报错里的 did-you-mean 修正；`cvs <cmd> --help` 看全表 |
 | `E_USAGE` | usage | 2 | 命令行参数错误 | 查看 `cvs <cmd> --help` |
 | `E_ACCENT` | spec | 10 | accentOverride 非法 | #rgb/#rrggbb 或 {accent,accentInk,accentSoft} |
 | `E_APCA` | spec | 10 | 主题对比度不足 | 换主题或设置 look.accentOverride |
@@ -64,8 +65,10 @@
 | `E_NOT_FOUND` | spec | 10 | E_NOT_FOUND：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_OUTDIR` | spec | 10 | render.outDir 越出项目根 | 改为不带 .. 的相对路径 |
 | `E_PAGE_ABS` | spec | 10 | 页面用了绝对路径 | 改成相对项目根的路径 |
-| `E_PAGE_MISSING` | spec | 10 | 页面文件不存在 | 检查 --root 与 page 路径；报错里会回显 root |
+| `E_PAGE_EXT` | spec | 10 | 页面不是 .html/.htm 文件，渲染器无法打开 | page 必须指向 HTML 文档；模板/依赖文件不要填进 page |
+| `E_PAGE_MISSING` | spec | 10 | 页面文件不存在 | 检查 --root 与 page 路径；报错回显解析用的 root 绝对路径 |
 | `E_PAGE_REMOTE` | spec | 10 | 远程页面被禁止（SSRF） | 改用本地页面；只有 CLI 显式放行才允许远程 |
+| `E_PAGE_TRAVERSAL` | spec | 10 | 页面路径含 .. 段，越出项目根（文件存在性 oracle / 越界读） | 改成不含 .. 的项目根内相对路径 |
 | `E_PRESET` | spec | 10 | render.preset 非法 | bilibili|douyin|youtube|wechat|weixin|xiaohongshu|master|square |
 | `E_READ` | spec | 10 | spec 文件读不到 | 检查 --spec 路径 |
 | `E_RENDERER` | spec | 10 | E_RENDERER：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
@@ -83,7 +86,7 @@
 | `E_STRUCTURE_MAX` | spec | 10 | 单段超过 600s | 缩短该段 |
 | `E_STYLE_PAGE` | spec | 10 | style 缺 page/recipe | 补 style.page 或 style.recipe |
 | `E_THEME` | spec | 10 | 缺 look.theme | 填主题 id |
-| `E_THEME_UNKNOWN` | spec | 10 | 主题 id 不存在 | 从报错列出的 17 个 id 中选 |
+| `E_THEME_UNKNOWN` | spec | 10 | 主题 id 不存在 | 从报错列出的主题 id 中选（当前 17 个） |
 | `E_TITLE_MISSING` | spec | 10 | 片名为空/untitled | 填 meta.title |
 | `E_TRANSITION` | spec | 10 | render.transition / --transition 名字非法 | 见 templates/transitions.mjs TRANSITIONS（fade/dissolve/wipeleft/slideleft/circleopen/zoomin…），或 none 关闭 |
 | `E_TRANSITION_DURATION` | spec | 10 | 转场时长非法 | render.transitionDuration / --transition-duration 取 (0,2] 秒 |
@@ -131,6 +134,7 @@
 | `E_ASSET_PATH` | asset | 10 | E_ASSET_PATH：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_ASSET_REMOTE` | asset | 10 | E_ASSET_REMOTE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_ASSETS_TYPE` | asset | 10 | E_ASSETS_TYPE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
+| `E_BAD_REQUEST` | preview | 0 | 帧 API 请求参数缺失/非法 | 补齐 id/n 查询参数 |
 | `E_BRAND` | brand | 10 | E_BRAND：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_BRAND_ACCENT_APCA` | brand | 10 | E_BRAND_ACCENT_APCA：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_BRAND_SCHEMA` | brand | 10 | E_BRAND_SCHEMA：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
@@ -142,18 +146,22 @@
 | `E_FFPROBE` | ingest | 15 | E_FFPROBE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_FFPROBE_JSON` | ingest | 15 | E_FFPROBE_JSON：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_FORBIDDEN_WORD` | brand | 10 | E_FORBIDDEN_WORD：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
+| `E_FRAME` | preview | 0 | 帧请求非法（越界/非整数） | 帧号取 0..frames-1 的整数 |
 | `E_INGEST` | ingest | 15 | E_INGEST：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_LOGO_MISSING` | brand | 10 | E_LOGO_MISSING：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_NO_FFMPEG` | ingest | 15 | E_NO_FFMPEG：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_NO_FFPROBE` | ingest | 15 | E_NO_FFPROBE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
+| `E_PATH` | preview | 0 | 预览路径非法（穿越/隐藏目录） | 路径必须落在仓库根内 |
+| `E_ROUTE` | preview | 0 | 未知帧 API 路由 | 见 app/frames/README.md 的 API 表 |
 | `E_SCRIPT_COVER` | ui | 2 | E_SCRIPT_COVER：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_SCRIPT_GAP` | ui | 2 | E_SCRIPT_GAP：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_SCRIPT_T` | ui | 2 | E_SCRIPT_T：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
+| `E_SOURCE` | preview | 0 | 帧源打开失败（路径越界/文件缺失/校验失败） | 按报错指引检查路径；视频先 cvs build |
 
 ## 覆盖情况
 
-- 代码中出现的 `E_*`：126
-- 已注册且被使用：126
+- 代码中出现的 `E_*`：136
+- 已注册且被使用：136
 - 未注册：0
 
-- 已注册但当前未使用：1（E_SPAWN）
+- 已注册但当前未使用：0

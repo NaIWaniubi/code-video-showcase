@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>版本树 · code-video-showcase</title>
+  <link rel="stylesheet" href="/app/shared/home.css">
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
@@ -11,13 +12,14 @@
     <div class="brand">
       <span class="dot" aria-hidden="true"></span>
       <span>版本树</span>
-      <span class="tag">C2-07</span>
+      <span class="tag">快照 · 回滚</span>
     </div>
+    <a class="app-home" href="/app/">← 工作台</a>
     <div class="stats" id="current-stats" aria-live="polite">加载中…</div>
   </header>
 
   <section class="toolbar">
-    <input id="version-name" class="name-input" type="text" placeholder="版本名称（可选）" maxlength="60">
+    <input id="version-name" class="name-input" type="text" placeholder="版本名称（可选）" aria-label="版本名称（可选）" maxlength="60">
     <button id="btn-save" type="button" class="primary">保存当前 spec</button>
     <button id="btn-import" type="button" class="ghost">导入 .json</button>
     <input id="file-input" type="file" accept="application/json,.json" hidden>
@@ -47,6 +49,7 @@
             <button type="button" data-action="save">保存当前 spec</button>
             <button type="button" class="ghost" data-action="import">导入 .json</button>
             <button type="button" class="ghost" data-action="sample">载入示例 spec</button>
+            <a class="ghost link" href="/app/wizard/">去向导生成 →</a>
           </div>
         </div>
         <ul class="version-list" id="version-list"></ul>
@@ -70,7 +73,7 @@
     </section>
   </main>
 
-  <div class="toast" id="toast" hidden></div>
+  <div class="toast" id="toast" hidden role="alert" aria-live="assertive"></div>
 
   <script type="module" src="./app.js"></script>
 </body>

@@ -19,9 +19,10 @@ export const DEFAULT_ROOT = path.resolve(HERE, '..', '..');
 export const DEFAULT_PORT = 5185;
 // 评审页与 API 不同源（5185 vs 5190），API 默认关 CORS → 跨源 fetch 被拦。
 // 同源反代 /jobs/* 与 /health 到 API，评审页默认即可用（无需开 CORS）。
-const API_TARGET = process.env.REVIEW_API || 'http://127.0.0.1:5190';
+const DEFAULT_API_TARGET = process.env.REVIEW_API || 'http://127.0.0.1:5190';
 
-export function createReviewServer(root = DEFAULT_ROOT) {
+export function createReviewServer(root = DEFAULT_ROOT, opts = {}) {
+  const API_TARGET = opts.apiTarget || DEFAULT_API_TARGET;
   const server = createStaticServer(root);
   const staticHandler = server.listeners('request')[0];
   server.removeAllListeners('request');
@@ -50,8 +51,8 @@ export function createReviewServer(root = DEFAULT_ROOT) {
   return server;
 }
 
-export function startReviewServer({ root = DEFAULT_ROOT, port = DEFAULT_PORT, host = '127.0.0.1' } = {}) {
-  const server = createReviewServer(root);
+export function startReviewServer({ root = DEFAULT_ROOT, port = DEFAULT_PORT, host = '127.0.0.1', apiTarget = null } = {}) {
+  const server = createReviewServer(root, { apiTarget });
   return new Promise((resolve, reject) => {
     const onError = (e) => reject(e);
     server.once('error', onError);

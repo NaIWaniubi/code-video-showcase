@@ -4,15 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>评审 · Code Video Showcase</title>
+<link rel="stylesheet" href="/app/shared/home.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="topbar">
   <div class="brand">
     <span class="brandMark" aria-hidden="true"></span>
-    <span>CVS Review</span>
+    <span>评审</span>
+    <span class="brandSub">成片 · 帧级评论</span>
   </div>
   <div class="topbarMeta">
+    <a class="app-home" href="/app/">← 工作台</a>
     <span id="jobLabel" class="jobLabel">无 job</span>
     <span id="conn" class="conn" data-state="idle">未连接</span>
   </div>
@@ -21,8 +24,13 @@
 <main class="page">
   <section id="empty" class="empty" hidden>
     <h1>还没有评审任务</h1>
-    <p>在地址后加 <code>?job=&lt;id&gt;&amp;api=http://127.0.0.1:5190</code>，或在 API 上先 <code>POST /jobs</code> 创建一个编译任务。</p>
-    <p class="hint">示例：<code>/app/review/?job=j-20261111120000-a1b2c3</code>（api 省略时默认 <code>http://127.0.0.1:5190</code>）</p>
+    <p>评审页用来播放成片、按时间码留帧级评论。三步开始：</p>
+    <ol class="steps">
+      <li>启动本地编译 API：<code>cvs api</code>（默认 5190）</li>
+      <li>提交一次编译：<code>curl -X POST http://127.0.0.1:5190/jobs -H "Content-Type: application/json" --data-binary @project.spec.json</code></li>
+      <li>用返回的 job id 打开：<code>/app/review/?job=&lt;id&gt;</code></li>
+    </ol>
+    <p class="hint">用 <code>cvs ui</code> 启动本页时，<code>/jobs/*</code> 已同源反代，只需带 <code>?job=</code>；API 没起时页面会显示「API unreachable」。</p>
     <p id="emptyReason" class="hint" role="status"></p>
   </section>
 

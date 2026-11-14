@@ -3,12 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>编辑画布 · code-video-showcase</title>
+<title>画布 · code-video-showcase</title>
+<link rel="stylesheet" href="/app/shared/home.css">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">编辑画布<span class="brand-sub">C2 · D3 edit contract</span></div>
+  <div class="brand">画布<span class="brand-sub">逐帧查看 · 点选修改</span></div>
+  <a class="app-home" href="/app/">← 工作台</a>
   <label class="field">页面
     <select id="page">
       <option value="big-card">big-card · 1.0s 大字卡</option>
@@ -19,7 +21,7 @@
     <select id="theme"></select>
   </label>
   <button id="reload" class="ghost" title="重新加载 iframe">重载</button>
-  <span id="status" class="status">加载中…</span>
+  <span id="status" class="status" aria-live="polite" role="status">加载中…</span>
 </header>
 
 <main>
@@ -38,11 +40,11 @@
 
   <aside class="side">
     <section id="inspector" class="card">
-      <p class="muted">未选中节点。点击画面里的可编辑区域；Shift+拖拽框选多个节点。</p>
+      <p class="muted">未选中节点。点击画面里的可编辑区域；Shift+拖拽框选多个节点；键盘用 PageUp / PageDown（或 [ / ]）在节点间切换。</p>
     </section>
     <section id="patches" class="card"></section>
-    <section class="card meta">
-      <h3>契约</h3>
+    <details class="card meta">
+      <summary class="meta-summary">编辑契约（开发者）</summary>
       <pre class="mono">__spec()                    → spec 快照
 __inspect(x, y)             → { id, role, rect, props, schema }
 __inspectRect(x0,y0,x1,y1)  → [entry]  框选
@@ -50,7 +52,7 @@ __patch(id, props)          → { id, props, diff }
 __patchMany(ids, props)     → { count, results }
 __hit                       → 当前帧命中表（后注册优先）</pre>
       <p class="muted">x / y 是画布位图坐标（1920×1080）。宿主已按 DPR 与 CSS 缩放换算。</p>
-    </section>
+    </details>
   </aside>
 </main>
 

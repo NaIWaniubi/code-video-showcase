@@ -8,7 +8,7 @@
   --line-soft: #1d2733;
   --ink: #e6edf3;
   --ink-dim: #93a4b8;
-  --ink-faint: #5f7186;
+  --ink-faint: #7d8ea4;
   --accent: #ffb454;
   --accent-soft: rgba(255, 180, 84, 0.12);
   --cyan: #5cc8ff;
@@ -278,9 +278,12 @@ td.editing { padding: 3px 4px; background: #0b1017 !important; }
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* 侧栏总高有限：固定内容的面板不允许被 flex 压缩，否则文字会溢到下一个面板上。 */
+  flex: 0 0 auto;
+  overflow: hidden;
 }
 
-.panel.grow { flex: 1 1 auto; }
+.panel.grow { flex: 1 1 0; min-height: 0; }
 
 .panel h2 {
   margin: 0 0 9px;
@@ -394,4 +397,40 @@ td.editing { padding: 3px 4px; background: #0b1017 !important; }
   .layout { grid-template-columns: 1fr; }
   .side { border-left: 0; border-top: 1px solid var(--line); }
   .table-wrap { max-height: 56vh; }
+}
+
+.toolbar-hint {
+  margin: 0;
+  padding: 6px 16px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.toolbar-hint a { color: var(--accent); text-decoration: none; }
+.toolbar-hint a:hover { text-decoration: underline; }
+
+/* 窄屏横向滚动辅助：固定 # 与 ID 列，行义始终可见 */
+thead th.col-idx,
+tbody td.col-idx {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #10161f;
+}
+thead th.col-id,
+tbody td.col-id {
+  position: sticky;
+  left: 34px;
+  z-index: 3;
+  background: #10161f;
+}
+tbody tr[data-role='card'] td.col-idx,
+tbody tr[data-role='card'] td.col-id { background: #121826; }
+.scroll-hint { display: none; }
+@media (max-width: 1100px) {
+  .scroll-hint {
+    display: block;
+    margin: 4px 16px 0;
+    font-size: 11px;
+    color: var(--ink-dim);
+  }
 }

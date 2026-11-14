@@ -46,8 +46,16 @@ const MIME = {
  * @param {string} [root] 静态根目录，默认仓库根
  * @returns {http.Server}
  */
-export function createStaticServer(root = DEFAULT_ROOT) {
+/**
+ * @param {string} [root] 静态根目录，默认仓库根
+ * @param {{cacheControl?: (file: string, pathname: string) => string}} [opts]
+ *   cacheControl 决定 Cache-Control；默认 no-store（编辑页/测试的既有行为）。
+ *   app/frames 用它给模板/字体加短缓存 —— 工作台的 iframe 池会反复载同一批模块。
+ * @returns {http.Server}
+ */
+export function createStaticServer(root = DEFAULT_ROOT, opts = {}) {
   const ROOT = path.resolve(root);
+  const cacheFor = typeof opts.cacheControl === 'function' ? opts.cacheControl : () => 'no-store';
 
   return http.createServer((req, res) => {
     try {
@@ -89,7 +97,7 @@ export function createStaticServer(root = DEFAULT_ROOT) {
         const headers = {
           'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
           'Content-Length': st.size,
-          'Cache-Control': 'no-store',
+          'Cache-Control': cacheFor(file, pathname),
           'X-Content-Type-Options': 'nosniff',
         };
         res.writeHead(200, headers);

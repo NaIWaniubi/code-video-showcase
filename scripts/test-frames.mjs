@@ -148,7 +148,7 @@ async function testMediaApis() {
     const post = await fetch(url + '/frames/api/health', { method: 'POST' });
     check('POST → 405', post.status === 405);
     const stat = await apiBuf(url, '/app/frames/');
-    check('工作台页面 200', stat.res.status === 200 && stat.buf.toString('utf8').includes('帧工作台'));
+    check('工作台页面 200', stat.res.status === 200 && stat.buf.toString('utf8').includes('帧预览'));
 
     section('图片序列 API');
     const imgOpen = await apiJson(url, '/frames/api/open?dir=' + encodeURIComponent(path.relative(ROOT, imgDir)));
@@ -271,6 +271,11 @@ async function testSpecAndUi() {
     check('live iframe 就绪并激活', !!activeInfo, activeInfo ? activeInfo.src.split('?')[1] : 'timeout');
     check('live URL 带 t0/speed', !!activeInfo && activeInfo.src.includes('t0=0.3') && activeInfo.src.includes('speed=1.3'), activeInfo && activeInfo.src.split('?')[1]);
 
+    // CDP evaluate 把 arg 内联进表达式，PNG base64（~300KB+）会超限截断导致
+    // "source image could not be decoded"。分两步：先注入 base64，再执行对比。
+    const png0 = (await apiBuf(url, `/frames/api/frame?id=${uiId}&n=0&fmt=png&q=90`)).buf.toString('base64');
+    const png1 = (await apiBuf(url, `/frames/api/frame?id=${uiId}&n=1&fmt=png&q=90`)).buf.toString('base64');
+    await ev((b64) => { window.__pngB64 = b64; }, png0);
     const live = await ev(async (arg) => {
       const frames = [...document.querySelectorAll('.live-frame')];
       const active = frames.find((f) => !f.classList.contains('off'));
@@ -281,7 +286,20 @@ async function testSpecAndUi() {
         active.contentWindow.renderFrame(offset / arg.fps);
         const ms = performance.now() - t0;
         const canvasData = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
-        const bytes = Uint8Array.from(atob(arg.pngs[offset]), (c) => c.charCodeAt(0));
+        if (offset === 1) {
+          // 第二张 PNG 走页内 fetch（同源帧 API），绕开 evaluate 的 payload 限制。
+          const blob = await (await fetch(`/frames/api/frame?id=${arg.id}&n=1&fmt=png&q=90`)).blob();
+          const bmp = await createImageBitmap(blob);
+          const off = new OffscreenCanvas(bmp.width, bmp.height);
+          const oc = off.getContext('2d');
+          oc.drawImage(bmp, 0, 0);
+          const serverData = oc.getImageData(0, 0, bmp.width, bmp.height).data;
+          let diff = 0;
+          for (let i = 0; i < canvasData.length; i += 4) diff += Math.abs(canvasData[i] - serverData[i]);
+          out.push({ offset, ms: +ms.toFixed(2), meanDiff: +(diff / (canvasData.length / 4)).toFixed(4) });
+          continue;
+        }
+        const bytes = Uint8Array.from(atob(window.__pngB64), (c) => c.charCodeAt(0));
         const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
         const off = new OffscreenCanvas(bmp.width, bmp.height);
         const oc = off.getContext('2d');
@@ -292,15 +310,7 @@ async function testSpecAndUi() {
         out.push({ offset, ms: +ms.toFixed(2), meanDiff: +(diff / (canvasData.length / 4)).toFixed(4) });
       }
       return { w: cv.width, h: cv.height, out };
-    }, {
-      id: uiId,
-      n: 0,
-      fps: 30,
-      pngs: [
-        (await apiBuf(url, `/frames/api/frame?id=${uiId}&n=0&fmt=png&q=90`)).buf.toString('base64'),
-        (await apiBuf(url, `/frames/api/frame?id=${uiId}&n=1&fmt=png&q=90`)).buf.toString('base64'),
-      ],
-    });
+    }, { id: uiId, n: 0, fps: 30 });
     check('live 画布 = 服务端 PNG（段首帧）', live.out[0].meanDiff === 0, `meanDiff=${live.out[0].meanDiff} ${live.w}×${live.h}`);
     check('live 画布 = 服务端 PNG（段内 +1 帧）', live.out[1].meanDiff === 0, `meanDiff=${live.out[1].meanDiff}`);
     check('live 单帧渲染 < 20ms', live.out[0].ms < 20, `${live.out[0].ms}ms`);
@@ -323,22 +333,21 @@ async function testSpecAndUi() {
     }
     check('跨段切到 big-card 页面', !!seg2, seg2 ? seg2.src.split('?')[0].split('/').pop() : 'timeout');
     if (seg2) {
-      const png30 = (await apiBuf(url, `/frames/api/frame?id=${uiId}&n=30&fmt=png&q=90`)).buf.toString('base64');
       const cross = await ev(async (arg) => {
         const frames = [...document.querySelectorAll('.live-frame')];
         const active = frames.find((f) => !f.classList.contains('off'));
         const cv = active.contentWindow.document.querySelector('canvas');
         active.contentWindow.renderFrame(0);
         const canvasData = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
-        const bytes = Uint8Array.from(atob(arg.png), (c) => c.charCodeAt(0));
-        const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+        const blob = await (await fetch(`/frames/api/frame?id=${arg.id}&n=30&fmt=png&q=90`)).blob();
+        const bmp = await createImageBitmap(blob);
         const off = new OffscreenCanvas(bmp.width, bmp.height);
         const oc = off.getContext('2d'); oc.drawImage(bmp, 0, 0);
         const serverData = oc.getImageData(0, 0, bmp.width, bmp.height).data;
         let diff = 0;
         for (let i = 0; i < canvasData.length; i += 4) diff += Math.abs(canvasData[i] - serverData[i]);
         return +(diff / (canvasData.length / 4)).toFixed(4);
-      }, { png: png30 });
+      }, { id: uiId });
       check('跨段帧同样逐像素一致', cross === 0, `meanDiff=${cross}`);
     }
 

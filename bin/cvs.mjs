@@ -78,6 +78,7 @@ const commands = {
   versions: (a) => surface('versions', SURFACES.versions, a),
   review:   (a) => surface('review', SURFACES.review, a),
   frames:   (a) => node('app/frames/serve.mjs', a),
+  ui:       (a) => node('app/ui/serve.mjs', a),
   test:     (a) => node('scripts/test-all.mjs', a),
 };
 
@@ -109,6 +110,7 @@ usage: cvs <command> [args]
   wizard | canvas | script | versions | review    start a dev surface (5181-5185)
   frames [--video f|--plan f|--spec f|--dir d] [--port 5186]
                                          per-frame realtime preview workbench
+  ui [--port 5180]                       one server for all six surfaces (start at /app/)
   test [--browser]                       run all suites
   doctor                                 environment check (renderer capability probe)
   errors [--check|--write]               error-code registry / docs/ERRORS.md

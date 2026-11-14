@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工作台 · code-video-showcase</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="dot" aria-hidden="true"></span>
+    <span>code-video-showcase</span>
+    <span class="slash">/</span>
+    <span class="muted">工作台</span>
+  </div>
+  <nav class="topnav" aria-label="文档">
+    <a href="/README.md">README</a>
+    <a href="/SKILL.md">SKILL</a>
+    <a href="/docs/COVERAGE.md">覆盖矩阵</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>用代码做片子的工作台</h1>
+    <p class="lede">
+      一句话生成设计稿，改文案、微调画面、编译成片、逐帧检查。
+      所有界面都在本机运行，不上传素材。
+    </p>
+    <div class="hero-cta">
+      <a class="cta" href="./wizard/">打开向导，开始做片 →</a>
+      <span class="cta-note">界面入口在 <code>http://127.0.0.1:5180/app/</code>（<code>cvs ui</code> 启动后）</span>
+    </div>
+    <div class="quick">
+      <div class="quick-note">也可以全命令行（本仓库命令统一写成 <code>node bin/cvs.mjs &lt;命令&gt;</code>，npm link 后可用 <code>cvs</code> 短写）：</div>
+      <div class="quick-cmd"><span class="prompt">$</span> node bin/cvs.mjs new "做一个 30 秒赛博像素宣传片" --out project.spec.json</div>
+      <div class="quick-cmd"><span class="prompt">$</span> node bin/cvs.mjs build project.spec.json</div>
+      <div class="quick-note">第一次用？先跑 <code>bash install.sh</code>（Windows：<code>powershell -ExecutionPolicy Bypass -File install.ps1</code>）。</div>
+    </div>
+  </section>
+
+  <section aria-labelledby="surfaces-title">
+    <div class="section-head">
+      <h2 id="surfaces-title">六个界面</h2>
+      <span class="muted small">用 <code>node bin/cvs.mjs ui</code> 启动时都在这个端口下（帧 API / 评审反代齐全）；卡片直接点就能进，命令只是另一种启动方式</span>
+    </div>
+    <div class="grid">
+      <a class="card" href="./wizard/">
+        <div class="card-top"><span class="num">01</span><h3>向导</h3><span class="badge ok">从这里开始</span></div>
+        <p>点两下选风格、时长、画幅，右侧实时生成 <code>project.spec.json</code>。有参考图还能提取配色。</p>
+        <p class="when">第一次做片 / 不想先学 spec 格式</p>
+        <span class="open">打开 →</span><span class="cmd">cvs wizard</span>
+      </a>
+
+      <a class="card" href="./script/">
+        <div class="card-top"><span class="num">02</span><h3>剧本表格</h3><span class="badge">改内容</span></div>
+        <p>每行一段：角色、文案、时间、recipe。双击单元格就地改，右侧实时校验并预览 JSON。</p>
+        <p class="when">文案要改 / 时间轴要挪</p>
+        <span class="open">打开 →</span><span class="cmd">cvs script</span>
+      </a>
+
+      <a class="card" href="./canvas/">
+        <div class="card-top"><span class="num">03</span><h3>画布</h3><span class="badge">调画面</span></div>
+        <p>选页面和主题，拖时间轴看任意时刻；点画面里的元素改文字、颜色、字号。改动可导出 patches。</p>
+        <p class="when">某一帧的字压边 / 颜色不对</p>
+        <span class="open">打开 →</span><span class="cmd">cvs canvas</span>
+      </a>
+
+      <a class="card" href="./versions/">
+        <div class="card-top"><span class="num">04</span><h3>版本树</h3><span class="badge">可回滚</span></div>
+        <p>保存 spec 快照，勾两个版本并排 diff；改坏了随时回滚。快照只存在本机浏览器。</p>
+        <p class="when">大改之前 / 想对比两版文案</p>
+        <span class="open">打开 →</span><span class="cmd">cvs versions</span>
+      </a>
+
+      <a class="card" href="./review/">
+        <div class="card-top"><span class="num">05</span><h3>评审</h3><span class="badge warn">需先起后台服务</span></div>
+        <p>播放成片，按时间码留帧级评论。依赖后台编译服务（<code>cvs api</code>）：没起它时页面会显示「API unreachable」，评论只能试写不保存。</p>
+        <p class="when">片出来了 / 要给同事指问题</p>
+        <span class="cmd">cvs api + cvs review（各开一个终端）</span><span class="open">打开 →</span>
+      </a>
+
+      <a class="card" href="./frames/">
+        <div class="card-top"><span class="num">06</span><h3>帧预览</h3><span class="badge ok">逐帧</span></div>
+        <p>按帧号实时预览：成片每一帧、spec 现场渲染、图片序列。←/→ 逐帧，空格播放，D 下载当前帧。还没编译过也能用（选 spec 现场渲染）。</p>
+        <p class="when">检查某一帧 / 导出静帧</p>
+        <span class="cmd">cvs frames</span><span class="open">打开 →</span>
+      </a>
+    </div>
+  </section>
+
+  <section aria-labelledby="flow-title">
+    <div class="section-head">
+      <h2 id="flow-title">从零到成片</h2>
+      <span class="muted small">每一步都可以停下来看结果，不满意就回去改</span>
+    </div>
+    <ol class="flow">
+      <li><b>生成设计稿</b><code>cvs new "…" --out project.spec.json</code><span>或用向导下载，放到仓库根。</span></li>
+      <li><b>校验</b><code>cvs lint project.spec.json --root .</code><span>检查页面、主题、对比度、占位符。</span></li>
+      <li><b>改内容</b><code>node bin/cvs.mjs script</code><span>改完点「下载」，把浏览器下载的文件放回<strong>仓库根目录</strong>同名覆盖 <code>project.spec.json</code>（浏览器不会自动替换）；画面问题去画布。</span></li>
+      <li><b>编译</b><code>node bin/cvs.mjs build project.spec.json</code><span>产物 <code>out/master.mp4</code>，同时会在 <code>out/</code> 写出 <code>plan.json</code>（分段时间表，质检要用）；增量渲染只重跑改过的段。</span></li>
+      <li><b>检查</b><code>node bin/cvs.mjs qa out/master.mp4 --plan out/plan.json</code><span><code>plan.json</code> 是上一步 build 生成的；再开帧预览逐帧看，或发给同事评审。</span></li>
+      <li><b>交付</b><code>cvs deliver</code><span>成片 + 字幕 + 封面 + 清单；需要留底就 <code>cvs snapshot</code>。</span></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="glossary-title">
+    <div class="section-head">
+      <h2 id="glossary-title">几个名词</h2>
+      <span class="muted small">界面里出现这些词时，指的是——</span>
+    </div>
+    <dl class="glossary">
+      <div><dt>spec</dt><dd>片子的设计稿（一份 JSON），是唯一入口。文案、风格、时长、结构都在里面。</dd></div>
+      <div><dt>plan</dt><dd>由 spec 派生的分段时间表：每段用哪个页面、多长、从第几帧到第几帧、内容 hash。</dd></div>
+      <div><dt>段 / segment</dt><dd>一支片子由若干段拼成。每段 = 一个页面在一个时间区间里的渲染。</dd></div>
+      <div><dt>帧号</dt><dd>第 n 帧的时刻是 n / fps 秒。预览、导出、质检都以帧号对齐。</dd></div>
+      <div><dt>成片</dt><dd><code>out/master.mp4</code>。母版 1920×1080，平台版本是附加文件。</dd></div>
+      <div><dt>recipe</dt><dd>风格配方 id（如 <code>recipe-flat</code>）。剧本表格里给每段指定画面风格用。</dd></div>
+      <div><dt>改动 / patches</dt><dd>画布里点选元素做的修改，导出成 <code>spec.patches.json</code> 后可回放到 spec，不用重画。</dd></div>
+    </dl>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>本地运行 · 零上传 · 依赖 Node 22+ / Chrome / FFmpeg</span>
+  <span class="muted">v2.7.0</span>
+</footer>
+</body>
+</html>

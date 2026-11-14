@@ -3,6 +3,55 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v2.8.0] - 2026-11-15 — 八视角集群审计：体验收口
+
+用 8 个评审视角（新手 / 键盘可达性 / CLI 一致性 / 错误恢复 / 性能感知 / 窄屏 /
+术语 / 视觉层级）对全部界面做只读审计，逐条带 `文件:行号` 证据回炉修复。
+
+### P0（会卡住用户）
+- **安装后入口自相矛盾**：install.sh / install.ps1 的「下一步」只指 5181 向导页，
+  与 `cvs ui`(5180) 脱节。两个脚本第一行改为 `node bin/cvs.mjs ui → http://127.0.0.1:5180/app/`，
+  并注明命令统一写法（`node bin/cvs.mjs <命令>`，npm link 后可短写）。
+- **向导下载后断流**：下载/复制按钮灰着不说原因、下载完没有下一步。现在：禁用时显示
+  原因（校验器加载中 / N 条错误），可用时亮出「放到仓库根 → lint → build」指引；
+  实现细节（normalizeSpec/APCA）折叠进 details。
+- **ffmpeg 缺失被吞**：spawn ENOENT 只在拖到第一帧时炸英文堆栈，且 meta 谎报
+  「全部就绪」。现在 open 即抛中文指引（doctor 检查），`ready` 不随 `done` 虚报；
+  `.done` 缓存标记但 0 帧时自动重建。
+- **首页命令照抄报错**：`cvs new …` 在未 link 的机器上「找不到命令」。首页统一
+  `node bin/cvs.mjs …` 写法 + hero 加「打开向导 →」主按钮。
+
+### P1
+- **错误中文化**：frames 打开失败（视频损坏/不存在/spec 校验失败/ffmpeg 缺失）统一
+  中文可操作文案（serve 层包装，保留原始信息）；帧 API `api()` 加 8s 超时，
+  「Failed to fetch」→「无法连接帧 API（服务没在跑？）」；live 段 `__bootError`
+  只显示首行中文摘要；meta 轮询连续失败提示服务可能退出。
+- **性能**：`execFileSync(ffprobe)` → 异步 `execFile`（原来冻结事件循环最长 20s）；
+  帧读取 `readFileSync` → `fs.promises.readFile`；滑杆 input 事件 rAF 合并。
+- **键盘与可达性**：画布加键盘选节点（PageUp/PageDown 或 `[` `]` 遍历 `__hit`）；
+  帧预览段落条 div → button（可 Tab）；面板 label 补 `htmlFor`；canvas/frames
+  status 补 `aria-live`；script/versions toast 补 `role="alert"`；stageMsg 错误切
+  assertive；keyguard 补 SUMMARY/contentEditable；`--ink-faint` 提亮到 AA；
+  `.usage` 行对比度修复；焦点 `:focus-visible` 全局补齐。
+- **CLI 一致性**：`npm run qa`/`qa:audio` 指向不存在的 `out/final.mp4`/`audio/mix.wav`
+  → `out/master.mp4`/`out/audio/mix.wav`（README 同步）；frames 的 5 个错误码登记进
+  schema/errors.json（coverage 96.3% → 100%）；删除虚构退出码 15；`cvs brand` 用法
+  错误退出 1 → 2（符合全局约定）；README 补中文三步上手。
+- **术语统一**：spec=设计稿/规格/spec 三名并存 → 「spec（设计稿 / plan）」；
+  master.mp4 vs final.mp4 → 统一 master.mp4；导出/下载动词统一；帧工作台 → 帧预览；
+  术语表补 recipe / patches。
+- **视觉层级**：HUD 与 meta 行双写的 TC/段信息去重；首页 h2 15px < 卡片 h3 16px
+  倒挂 → h2 提到 17px；卡片加「打开 →」点击提示，命令降为次要信息。
+
+### P2
+- 窄屏：script 表格 sticky 首 two 列 + 滚动提示；首页网格/术语表小屏降为单列；
+  向导 41s 档位改 45s（41 是示例片长度）；向导右上「集群计划」改为合理入口；
+  评审空状态标题与连接失败状态解耦文案。
+
+### 测试
+- `test:all` 22 套件 / 450 通过；`test:frames` 73/73（含 live==服务端 PNG 逐像素）；
+  `test:ui` 35/35。截图复验：out/ui-shots/（含 script-768.png 窄屏）。
+
 ## [v2.7.0] - 2026-11-15 — 逐帧实时预览工作台（app/frames，cvs frames）
 
 按**帧号**预览正在制作的图 / 视频：`t = n/fps`，段内 `i/fps`，与
@@ -11,7 +60,7 @@
 ### 新增
 - `app/frames/`（5186）+ `cvs frames [--spec|--plan|--video|--dir]`：
   - **spec / plan**：模板页放在同源 iframe 里，宿主直接 `renderFrame(段内帧号/fps)`。
-    不读回像素 → 实测 **0.5–1 ms/帧**，拖动/播放真正实时。iframe 池（3 个）+
+    不读回像素 → 实测 **0.3–0.8 ms/帧**（p95 0.5 ms），拖动/播放真正实时。iframe 池（6 个）+
     相邻段预加载；URL 的 `seg/t0/speed/dur` 与 `withSegmentParams()` 逐字一致。
   - **video**：ffmpeg `-fps_mode passthrough` 逐帧解码到 `out/frames-cache/`，
     边解码边可看（`ready` 递增），按帧号索引；同一帧字节稳定。
@@ -27,14 +76,28 @@
   段内 +1、跨段三处）** / UI 步进与播放。
 - `npm run test:frames`、`npm run dev:frames`；README `app/frames/README.md`。
 
+### 工作台与界面（用户视角收口）
+- 新增 `cvs ui` / `app/ui/serve.mjs`：一个端口（5180）挂齐六个界面 + 帧 API + `/jobs` 评审反代；`/app/` 是统一首页（六张卡片 + 从零到成片 + 名词表），每个界面顶栏都有「← 工作台」。
+- 移除界面里的内部编号（`入口 C1` / `C2-06` / `C2-07` / `D3 edit contract`），换成用户能懂的角色说明。
+- 向导：运行前提折叠；**修复浏览器侧校验器**——`spec.mjs → timeline.mjs` 曾静态 `import node:fs`，整条链在浏览器加载失败，页面一直报「校验器未加载」。拆出 `templates/timeline-core.mjs`（纯函数，浏览器可导入），`spec.mjs` 改导入 core；`timeline.mjs` 保留 Node CLI + `concatList` 并 re-export，CLI 行为不变。
+- 剧本表格：修复右侧「校验 / JSON 预览」面板重叠（flex 收缩导致内容溢出到下一个面板）；加默认示例说明与向导入口。
+- 画布：默认停在画面稳定处（42% 时长），不再首屏空白/白闪；编辑契约默认折叠；「patches」改名「改动」。
+- 帧预览：未打开帧源时隐藏 HUD、禁用控件并给三步引导；修复空 `<img>` 在舞台上显示破图图标；候选扫描从 1.1s 降到 ~0.2s。
+- 评审：空状态改成三步可复制命令（`cvs api` → `POST /jobs` → `?job=`）。
+- 测试：新增 `scripts/test-ui.mjs`（35 条：首页/六界面/API/反代/缓存/穿越/默认静态行为）；`test-all` 22 套件 / 450 通过。
+
 ### 关键实现记录
 - 首版对每帧 `canvas.toDataURL` 再传给浏览器：软件渲染下 1920×1080 单帧编码
   **130–300 ms**（160×90 也要 ~130 ms），不可能实时。改为 iframe 直接显示同一张
   canvas 后，`renderFrame` 本身只要 ~1 ms。
 - iframe 不能用 `display:none`：`innerWidth=0` 会让模板回退 1920×1080，预览布局
   与成片不一致。改用 `visibility:hidden`，并**先定 CSS 尺寸再设 src**。
-- 多个后台 iframe 会互相拖慢（服务端一次渲染从 90 ms 掉到 6–14 s）；池限制 3 个、
+- 多个后台 iframe 会互相拖慢（服务端一次渲染从 90 ms 掉到 6–14 s）；池限制 6 个、
   只保留一个可见，缩略图在 spec 模式改用帧号卡，避免服务端再起 Chrome 抢 CPU。
+- 切段：预加载改为**排队串行**（并发 3 个 1920×1080 页面反而互相拖慢），
+  静态资源给 2 分钟缓存（HTML 仍 no-store），载入期播放时钟冻结，不跳内容。
+- 实测：步进 1.1–1.6 ms/次（点击→画面更新）；单段播放 HUD 按墙钟推进；
+  视频源取帧 avg 4.6 ms（p95 7.7 ms），播放实测 30 fps；预加载后的段跳转 0–6 ms。
 
 ## [v2.6.1] - 2026-11-14 — 离线预览出图、静态材质烘焙、别名歧义清零
 

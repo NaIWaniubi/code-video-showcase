@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>剧本表格 · code-video-showcase</title>
+  <link rel="stylesheet" href="/app/shared/home.css">
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
@@ -11,8 +12,9 @@
     <div class="brand">
       <span class="dot" aria-hidden="true"></span>
       <span>剧本表格</span>
-      <span class="tag">C2-06</span>
+      <span class="tag">改文案 · 调时间</span>
     </div>
+    <a class="app-home" href="/app/">← 工作台</a>
     <div class="stats" id="stats" aria-live="polite">加载中…</div>
   </header>
 
@@ -21,11 +23,16 @@
     <button id="btn-copy" type="button">复制 JSON</button>
     <button id="btn-reset" type="button" class="ghost">恢复原始</button>
     <span class="formula" id="formula"></span>
-    <span class="status" id="status" aria-live="polite"></span>
+    <span class="status" id="status" aria-live="polite" role="status"></span>
   </section>
+  <p class="toolbar-hint">
+    默认载入 <code>fixtures/mini-41s/spec.json</code> 示例；改完点「下载」覆盖仓库根的
+    <code>project.spec.json</code> 即生效。第一次用可先去 <a href="/app/wizard/">向导</a> 生成。
+  </p>
 
   <main class="layout">
     <section class="table-wrap" aria-label="剧本表格">
+      <p class="scroll-hint">表格可左右滑动；# 与 ID 列固定。</p>
       <table id="rows">
         <thead>
           <tr>
@@ -60,7 +67,7 @@
     </aside>
   </main>
 
-  <div class="toast" id="toast" hidden></div>
+  <div class="toast" id="toast" hidden role="alert" aria-live="assertive"></div>
 
   <script type="module" src="./app.js"></script>
 </body>

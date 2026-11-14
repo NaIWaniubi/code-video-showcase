@@ -81,7 +81,7 @@ const ASPECT_LABEL = {
   '6:7': { label: '6:7 竖屏', hint: '1080×1260 · 微信' },
 };
 
-const DURATIONS = [15, 30, 41, 60];
+const DURATIONS = [15, 30, 45, 60]; // 41 是 fixtures 示例片的长度，不作为常规档位
 
 const KIND_CTA = {
   promo: '立即预约',
@@ -175,6 +175,7 @@ const CTA_QUICK = ['立即预约', '立即下单', '预约体验', '关注不迷
 // ── 运行时数据 ─────────────────────────────────────────────────────────────
 
 let specApi = null;
+let specError = '';
 let refApi = null;
 let motionApi = null;
 let lastRef = null;
@@ -822,7 +823,7 @@ function generateNow() {
         level: 'error',
         code: 'E_VALIDATOR',
         path: 'spec',
-        message: '校验器未加载：请用 node app/wizard/serve.mjs 打开本页（file:// 下无法导入 /templates/spec.mjs）',
+        message: `校验器加载失败：${specError || '未知错误'}`,
       },
     ];
   }
@@ -872,6 +873,19 @@ function generateNow() {
   const blocked = !specApi || errors.length > 0;
   $('#download').disabled = blocked;
   $('#copy').disabled = blocked;
+  // 禁用要说原因；可用时把「下载之后」指引亮出来。
+  const hint = $('#blocked-hint');
+  const next = $('#next-step');
+  if (blocked) {
+    hint.hidden = false;
+    hint.textContent = !specApi
+      ? '校验器加载中，加载完就能下载…（若长时间不变，确认是用 cvs ui / serve.mjs 打开本页）'
+      : `有 ${errors.length} 条校验错误，修完上面列出的问题就能下载`;
+    next.hidden = true;
+  } else {
+    hint.hidden = true;
+    next.hidden = false;
+  }
 }
 
 // ── 复制 / 下载 ────────────────────────────────────────────────────────────
@@ -1055,6 +1069,7 @@ async function boot() {
   ]);
 
   if (specLoaded.status === 'fulfilled') specApi = specLoaded.value;
+  else specError = String(specLoaded.reason?.message || specLoaded.reason || 'unknown error');
   if (themesLoaded.status === 'fulfilled') themesDoc = themesLoaded.value;
   if (refLoaded.status === 'fulfilled') refApi = refLoaded.value;
   if (schemaLoaded.status === 'fulfilled') schemaDoc = schemaLoaded.value;

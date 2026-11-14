@@ -8,7 +8,7 @@
   --line-soft: #1d2733;
   --ink: #e6edf3;
   --ink-dim: #93a4b8;
-  --ink-faint: #5f7186;
+  --ink-faint: #7d8ea4;
   --accent: #ffb454;
   --accent-soft: rgba(255, 180, 84, 0.12);
   --cyan: #5cc8ff;
@@ -339,3 +339,16 @@ tr.hunk td {
   .left { border-right: 0; border-bottom: 1px solid var(--line); }
   .diff-panel { min-height: 50vh; }
 }
+
+/* 空状态里的跳转链接（与按钮同高） */
+.empty-actions .link {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+}
+.empty-actions .link:hover { color: var(--accent); border-color: var(--accent); }

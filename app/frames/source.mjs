@@ -21,7 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import { withRenderer } from '../../templates/render-segment.mjs';
 import { buildPlanFromSpec } from '../../templates/plan.mjs';
 
@@ -157,18 +157,26 @@ export function imageSize(buf) {
 
 // ── ffprobe ────────────────────────────────────────────────────────────────
 
+/**
+ * 异步执行外部命令。不能用 execFileSync：openSource 在 HTTP handler 里 await，
+ * 同步版会把整个事件循环（静态页 / meta 轮询 / 其他源）冻住最长 timeout。
+ */
 function run(cmd, args, opts = {}) {
-  try {
-    return execFileSync(cmd, args, { encoding: 'utf8', windowsHide: true, timeout: opts.timeout || 20000 });
-  } catch (e) {
-    const msg = e && e.stderr ? String(e.stderr).trim() : String(e && e.message || e);
-    throw new Error(`${cmd} failed: ${msg.slice(0, 400)}`);
-  }
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, { encoding: 'utf8', windowsHide: true, timeout: opts.timeout || 20000, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) {
+        const msg = err.stderr || stderr || String(err.message || err);
+        reject(new Error(`${cmd} failed: ${String(msg).trim().slice(0, 400)}`));
+        return;
+      }
+      resolve(stdout);
+    });
+  });
 }
 
 /** 探测视频：{ width, height, fps, frames, duration, codec }。 */
-export function probeVideo(file) {
-  const out = run('ffprobe', [
+export async function probeVideo(file) {
+  const out = await run('ffprobe', [
     '-v', 'error', '-select_streams', 'v:0',
     '-show_entries', 'stream=width,height,r_frame_rate,avg_frame_rate,nb_frames,duration,codec_name',
     '-show_entries', 'format=duration',
@@ -245,7 +253,7 @@ export class VideoSource {
 
   async open() {
     if (!exists(this.file)) throw new Error('video not found: ' + this.file);
-    const info = probeVideo(this.file);
+    const info = await probeVideo(this.file);
     this.info = info;
     this.fps = this.fpsOverride && this.fpsOverride > 0 ? this.fpsOverride : info.fps;
     this.frames = info.frames;
@@ -332,7 +340,7 @@ export class VideoSource {
         throw e;
       }
     }
-    return { buf: fs.readFileSync(file), type: 'image/jpeg' };
+    return { buf: await fs.promises.readFile(file), type: 'image/jpeg' };
   }
 
   async close() {
@@ -682,7 +690,7 @@ export class ImageSource {
     if (!this.files.length) throw new Error('no image frames in ' + this.dir);
     this.frames = this.files.length;
     this.duration = this.frames / this.fps;
-    const first = imageSize(fs.readFileSync(this.files[0]));
+    const first = imageSize(await fs.promises.readFile(this.files[0]));
     this.width = first ? first.width : 0;
     this.height = first ? first.height : 0;
     return this;
@@ -702,7 +710,7 @@ export class ImageSource {
         : ext === '.gif' ? 'image/gif'
           : ext === '.bmp' ? 'image/bmp'
             : ext === '.avif' ? 'image/avif' : 'image/jpeg';
-    return { buf: fs.readFileSync(file), type, file: path.relative(this.root, file).split(path.sep).join('/') };
+    return { buf: await fs.promises.readFile(file), type, file: path.relative(this.root, file).split(path.sep).join('/') };
   }
 
   async close() { /* 无资源 */ }

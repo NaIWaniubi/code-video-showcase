@@ -1,0 +1,20 @@
+/* 各界面顶栏的「返回工作台」入口（六个 surface 共用） */
+.app-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 11.5px ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+  color: #a6a291;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 3px 8px;
+  white-space: nowrap;
+  flex: none;
+}
+.app-home:hover,
+.app-home:focus-visible {
+  color: #d97757;
+  border-color: rgba(217, 119, 87, 0.5);
+  outline: none;
+}

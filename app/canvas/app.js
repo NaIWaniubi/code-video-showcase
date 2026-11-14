@@ -136,7 +136,8 @@ function onReady(win, token) {
   installMarquee(win);
 
   fit();
-  renderAt(0);
+  // 首帧默认停在画面稳定处（卡片/段落的入场动画之后），避免用户一进来看到空白或白闪。
+  renderAt(Math.min(state.dur * 0.42, Math.max(0, state.dur - 0.05)));
   refreshPatches();
   setStatus(`就绪 · ${state.page} · ${frame.contentWindow.__hit ? frame.contentWindow.__hit.length : 0} 个可编辑区域 · Shift+拖拽框选`, 'ok');
 }

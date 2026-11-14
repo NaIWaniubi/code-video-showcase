@@ -4,11 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
-    <title>视频编译器 · 七张选择卡</title>
+    <title>开始 · 生成片子设计稿</title>
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0c0e'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23d97757'/%3E%3C/svg%3E"
     />
+    <link rel="stylesheet" href="/app/shared/home.css" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
@@ -17,9 +18,10 @@
         <span class="brand-dot" aria-hidden="true"></span>
         <span>code-video-showcase</span>
         <span class="slash">/</span>
-        <span class="muted">入口 C1</span>
+        <span class="muted">从这里开始</span>
       </div>
       <nav class="topnav" aria-label="相关文档">
+        <a class="app-home" href="/app/">← 工作台</a>
         <a href="/docs/CLUSTER-PLAN.md">集群计划</a>
         <a href="README.md">使用说明</a>
       </nav>
@@ -27,12 +29,15 @@
 
     <main class="layout">
       <section class="choices" aria-label="选择卡">
-        <div class="req-banner" role="note" style="border:1px solid rgba(255,200,120,.45);background:rgba(255,200,120,.08);border-radius:12px;padding:14px 16px;margin:0 0 18px;line-height:1.65">
-          <strong>运行前提：本机需要 Node.js 22+、Chrome、FFmpeg。</strong><br />
-          这是一个本地开发页，不是托管网页。第一次使用请先在仓库根执行
-          <code>bash install.sh</code>（Windows：<code>powershell -ExecutionPolicy Bypass -File install.ps1</code>），
-          然后 <code>node app/wizard/serve.mjs</code> 再打开本页。没有 Node 时页面无法启动——这不是浏览器兼容问题。
-        </div>
+        <details class="req-note">
+          <summary>运行前提：本机需要 Node.js 22+、Chrome、FFmpeg（本地开发页，不是托管网页）</summary>
+          <p>
+            第一次使用先在仓库根执行 <code>bash install.sh</code>
+            （Windows：<code>powershell -ExecutionPolicy Bypass -File install.ps1</code>），
+            然后用 <code>cvs ui</code>（或 <code>node app/wizard/serve.mjs</code>）打开本页。
+            没有 Node 时页面无法启动，这不是浏览器兼容问题。
+          </p>
+        </details>
         <div class="intro">
           <h1>选两下，得到一支片子的 spec。</h1>
           <p>
@@ -176,12 +181,22 @@
             <button id="download" class="primary" type="button" disabled>下载 project.spec.json</button>
             <button id="copy" type="button" disabled>复制</button>
           </div>
+          <p class="blocked-hint" id="blocked-hint" hidden></p>
+          <p class="next-step" id="next-step" hidden>
+            下载后把文件放到<strong>仓库根目录</strong>（与 package.json 同级、同名
+            <code>project.spec.json</code>），然后在仓库根执行：<br>
+            <code>node bin/cvs.mjs lint project.spec.json --root .</code> 通过后
+            <code>node bin/cvs.mjs build project.spec.json</code> 即出片
+            （<a href="/app/">完整流程</a>）。
+          </p>
           <ul class="issues" id="issues" aria-label="校验信息"></ul>
-          <p class="footnote">
+          <details class="footnote">
+            <summary>这一页在做什么（开发者细节）</summary>
             生成后调用一次 <code>normalizeSpec</code> + <code>validateSpec</code>（来自
             <code>/templates/spec.mjs</code>）。自定义主色的 APCA 对比度需用
-            <code>spec-lint</code> 复核。请通过 <code>node app/wizard/serve.mjs</code> 打开本页。
-          </p>
+            <code>spec-lint</code> 复核。用 <code>cvs ui</code> 或
+            <code>node app/wizard/serve.mjs</code> 打开本页。
+          </details>
         </div>
       </aside>
     </main>

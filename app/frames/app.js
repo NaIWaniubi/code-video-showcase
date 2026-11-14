@@ -43,8 +43,6 @@ const el = {
   frameNum: $('frameNum'),
   total: $('total'),
   time: $('time'),
-  timecode: $('timecode'),
-  segLabel: $('segLabel'),
   perf: $('perf'),
   ruler: $('ruler'),
   strip: $('strip'),
@@ -74,14 +72,15 @@ const state = {
   poll: 0,
   stats: { delivered: [], failures: [] },
   range: { in: null, out: null, on: false },
-  live: { url: null, pendingUrl: null, ready: false, token: 0, ms: 0, renders: 0, active: null, segId: null },
+  live: { url: null, pendingUrl: null, ready: false, token: 0, ms: 0, renders: 0, active: null, segId: null, prefetchQueue: [], prefetching: false },
   raf: 0,
   playT0: 0,
   playF0: 0,
 };
 
 const CACHE_LIMIT = 260;
-const LIVE_POOL_MAX = 3;
+const LIVE_POOL_MAX = 6;
+const LIVE_PREFETCH_AHEAD = 3;
 
 // ── 小工具 ─────────────────────────────────────────────────────────────────
 
@@ -114,8 +113,26 @@ function setStageMsg(text, isErr = false, autoHide = 0) {
   if (autoHide) setStageMsg._t = setTimeout(() => setStageMsg(''), autoHide);
 }
 
-async function api(pathname) {
-  const res = await fetch(pathname, { headers: { Accept: 'application/json' } });
+function setControlsEnabled(on) {
+  for (const b of [el.first, el.prev10, el.prev, el.play, el.next, el.next10, el.last, el.download]) b.disabled = !on;
+  el.slider.disabled = !on;
+  el.frameNum.disabled = !on;
+  el.rate.disabled = !on;
+  el.loop.disabled = !on;
+}
+
+async function api(pathname, { timeoutMs = 8000 } = {}) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(new Error('timeout')), timeoutMs);
+  let res;
+  try {
+    res = await fetch(pathname, { headers: { Accept: 'application/json' }, signal: ac.signal });
+  } catch (e) {
+    clearTimeout(timer);
+    if (e && /timeout/i.test(String(e.message || e))) throw new Error('请求超时（8s）：服务可能已退出。用 cvs ui 或 node app/frames/serve.mjs 重新启动后刷新本页。');
+    throw new Error('无法连接帧 API（服务没在跑？）。用 cvs ui 或 node app/frames/serve.mjs 启动后刷新本页。');
+  }
+  clearTimeout(timer);
   const text = await res.text();
   let body = null;
   try { body = text ? JSON.parse(text) : null; } catch { body = null; }
@@ -228,13 +245,11 @@ function updateHud() {
   el.hudFrame.textContent = `#${n} / ${fmtInt(m.frames - 1)}`;
   const tc = timecodeOf(n, m.fps);
   el.hudTc.textContent = tc;
-  el.timecode.textContent = tc;
   el.time.textContent = (n / m.fps).toFixed(3);
   el.slider.value = String(n);
   if (document.activeElement !== el.frameNum) el.frameNum.value = String(n);
   const seg = segmentAt(n);
   el.hudSeg.textContent = seg ? `${seg.id} · ${seg.startFrame}–${seg.endFrame - 1}` : '';
-  el.segLabel.textContent = seg ? `${seg.id} (${seg.kind})` : '—';
   if (state.mode === 'live') {
     el.hudMs.textContent = state.live.ready ? `${state.live.ms.toFixed(2)} ms 渲染` : '载入段…';
   } else {
@@ -368,11 +383,32 @@ function renderLive(idx) {
 function prefetchNextSegment(seg) {
   const segs = state.meta.segments || [];
   const i = segs.findIndex((s) => s.id === seg.id);
-  if (i < 0 || i + 1 >= segs.length) return;
-  const url = liveUrl(segs[i + 1]);
-  if (state.live.pendingUrl === url || livePool.has(url) || !state.meta) return;
-  if (livePool.size >= LIVE_POOL_MAX) return;
-  createLiveFrame(url);
+  if (i < 0) return;
+  // 顺序播放时下一段常常只有 0.4–1s 提前量。并发预载 3 个 1920×1080 页面会
+  // 互相拖慢（实测切点反而卡住），改为**排队串行**：最近的先载，载完再下一个。
+  for (let k = 1; k <= LIVE_PREFETCH_AHEAD; k++) {
+    const next = segs[i + k];
+    if (!next) break;
+    const url = liveUrl(next);
+    if (livePool.has(url) || state.live.prefetchQueue.includes(url)) continue;
+    state.live.prefetchQueue.push(url);
+  }
+  pumpPrefetch();
+}
+
+async function pumpPrefetch() {
+  if (state.live.prefetching) return;
+  state.live.prefetching = true;
+  try {
+    while (state.live.prefetchQueue.length) {
+      const url = state.live.prefetchQueue.shift();
+      if (livePool.has(url)) continue;
+      if (livePool.size >= LIVE_POOL_MAX) break;
+      await ensureLive(url).catch(() => {});
+    }
+  } finally {
+    state.live.prefetching = false;
+  }
 }
 
 function showLive(idx) {
@@ -413,7 +449,10 @@ function showLive(idx) {
     .catch((e) => {
       if (token !== state.live.token) return;
       state.live.pendingUrl = null;
-      setStageMsg('段加载失败：' + e.message, true);
+      // __bootError 存的是 stack：只取首行给用户，完整堆栈留在控制台。
+      const first = String(e.message || e).split('\n')[0].slice(0, 160);
+      setStageMsg(`段页面启动失败：${first}\n\n刷新页面重试；持续失败时打开浏览器控制台看完整堆栈。`, true);
+      setStatus(`段加载失败：${first}`, 'err');
     });
 }
 
@@ -467,6 +506,8 @@ function startPlay() {
   if (!m) return;
   const [lo, hi] = activeRange();
   if (state.n >= hi) show(lo, { force: true });
+  const seg = segmentAt(state.n);
+  if (seg && state.mode === 'live') prefetchNextSegment(seg);
   state.playing = true;
   el.play.textContent = '暂停';
   el.play.classList.add('playing');
@@ -479,6 +520,13 @@ function tick(now) {
   if (!state.playing) return;
   const m = state.meta;
   if (!m) { stopPlay(); return; }
+  // live 段还没就绪：冻结播放时钟。否则 HUD 会跑到画面之前，切点后直接跳过内容。
+  if (state.mode === 'live' && (!state.live.ready || state.live.pendingUrl)) {
+    state.playT0 = now;
+    state.playF0 = state.n;
+    state.raf = requestAnimationFrame(tick);
+    return;
+  }
   const [lo, hi] = activeRange();
   const span = hi - lo + 1;
   const elapsed = (now - state.playT0) / 1000;
@@ -588,13 +636,15 @@ function buildRuler() {
   if (!m || !m.segments || !m.segments.length) { el.ruler.hidden = true; return; }
   el.ruler.hidden = false;
   for (const seg of m.segments) {
-    const b = document.createElement('div');
+    const b = document.createElement('button');
+    b.type = 'button';
     b.className = 'band';
     b.dataset.kind = seg.kind || '';
     const pct = (v) => `${(v / m.frames) * 100}%`;
     b.style.left = pct(seg.startFrame);
     b.style.width = pct(seg.endFrame - seg.startFrame);
     b.title = `${seg.id} · ${seg.kind} · 帧 ${seg.startFrame}–${seg.endFrame - 1}（${seg.frames} 帧）`;
+    b.setAttribute('aria-label', `跳到段 ${seg.id}（帧 ${seg.startFrame}）`);
     b.textContent = (seg.endFrame - seg.startFrame) / m.frames > 0.06 ? seg.id : '';
     b.addEventListener('click', () => { stopPlay(); show(seg.startFrame); });
     el.ruler.append(b);
@@ -619,7 +669,7 @@ function renderSourceInfo() {
   if (!m) { kvRows([['状态', '未打开']]); return; }
   const rows = [
     ['类型', m.kind],
-    ['通道', state.mode === 'live' ? 'iframe 实时渲染' : '服务端帧图片'],
+    ['预览方式', state.mode === 'live' ? '实时渲染（iframe）' : '逐帧图片'],
     ['帧数', `${fmtInt(m.frames)} 帧`],
     ['帧率', `${Number(m.fps).toFixed(3)} fps`],
     ['尺寸', `${m.width}×${m.height}${m.sourceWidth && m.sourceWidth !== m.width ? `（源 ${m.sourceWidth}×${m.sourceHeight}）` : ''}`],
@@ -632,9 +682,9 @@ function renderSourceInfo() {
   if (m.kind === 'video') rows.push(['解码', `${m.decoded} / ${m.frames}${m.done ? '（完成）' : '（进行中）'}`]);
   if (m.kind === 'spec') {
     rows.push(['段数', (m.segments || []).length]);
-    rows.push(['已渲染', `${fmtInt(state.live.renders)} 帧（实时）`]);
+    rows.push(['本次已渲染', `${fmtInt(state.live.renders)} 帧`]);
     rows.push(['当前帧耗时', state.live.ready ? `${state.live.ms.toFixed(2)} ms` : '—']);
-    rows.push(['iframe 池', `${livePool.size} / ${LIVE_POOL_MAX}`]);
+    rows.push(['已预载', `${livePool.size} / ${LIVE_POOL_MAX} 段`]);
   }
   if (m.error) rows.push(['错误', m.error]);
   kvRows(rows);
@@ -679,8 +729,8 @@ async function loadCandidates() {
     };
 
     group('视频', c.videos, 'video', (v) => v.path);
-    group('计划', c.plans, 'spec', (p) => p.path);
-    group('规格', c.specs, 'spec', (p) => p.path);
+    group('plan（分段时间表）', c.plans, 'spec', (p) => p.path);
+    group('spec（设计稿）', c.specs, 'spec', (p) => p.path);
     group('图片序列', c.images, 'images', (p) => p.path + (p.manifest ? ' · manifest' : ` · ${p.images} 张`));
 
     if (!el.recent.children.length) {
@@ -715,11 +765,13 @@ function clearSource() {
   state.stripToken++;
   state.stats.failures = [];
   state.stats.delivered = [];
-  state.live = { url: null, pendingUrl: null, ready: false, token: state.live.token + 1, ms: 0, renders: 0, active: null, segId: null };
+  state.live = { url: null, pendingUrl: null, ready: false, token: state.live.token + 1, ms: 0, renders: 0, active: null, segId: null, prefetchQueue: [], prefetching: false };
   el.ruler.hidden = true;
   el.ruler.textContent = '';
   el.img.hidden = false;
   el.img.removeAttribute('src');
+  el.stageWrap.classList.add('no-source');
+  setControlsEnabled(false);
   setStageMsg('');
 }
 
@@ -738,6 +790,8 @@ function attach(id, meta) {
   el.slider.max = String(Math.max(0, meta.frames - 1));
   el.frameNum.max = String(Math.max(0, meta.frames - 1));
   el.total.textContent = fmtInt(meta.frames);
+  el.stageWrap.classList.remove('no-source');
+  setControlsEnabled(true);
   renderSourceInfo();
   buildRuler();
   buildStrip(0);
@@ -793,9 +847,13 @@ function startPolling() {
       } else if (!meta.done) {
         setStatus(`解码中 ${meta.decoded} / ${meta.frames} 帧…（已解码的帧可立即预览）`, 'warn');
       }
-    } catch { /* 下一轮再试 */ }
+    } catch (e) {
+      metaFailures++;
+      if (metaFailures === 3) setStatus('元数据刷新失败（服务可能已退出），继续重试…', 'err');
+    }
   }, 500);
 }
+let metaFailures = 0;
 
 // ── 下载当前帧 ──────────────────────────────────────────────────────────────
 
@@ -998,7 +1056,12 @@ async function boot() {
   else if (params.get('plan')) { el.kind.value = 'spec'; el.path.value = params.get('plan'); q.set('plan', params.get('plan')); }
   else if (params.get('spec')) { el.kind.value = 'spec'; el.path.value = params.get('spec'); q.set('spec', params.get('spec')); }
   if (params.get('fps')) { el.fps.value = params.get('fps'); q.set('fps', params.get('fps')); }
-  if (![...q.keys()].length) { setStatus('选一个帧源：右侧「最近产物」或填路径', ''); return; }
+  if (![...q.keys()].length) {
+    setStatus('选一个帧源：右侧「最近产物」或填路径', '');
+    setStageMsg('还没有打开帧源。\n\n① 右侧「最近产物」点一项\n② 或在上方选类型、填路径，再点「打开」\n③ 打开后：← / → 逐帧，空格播放，D 下载当前帧');
+    setControlsEnabled(false);
+    return;
+  }
 
   try {
     const { id, meta } = await api('/frames/api/open?' + q.toString());

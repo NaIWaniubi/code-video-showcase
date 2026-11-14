@@ -39,8 +39,11 @@ node scripts/doctor.mjs || true
 
 say ""
 say "下一步："
-say "  node app/wizard/serve.mjs          # 打开 http://127.0.0.1:5181/app/wizard/"
+say "  node bin/cvs.mjs ui                # 打开工作台 http://127.0.0.1:5180/app/  ← 推荐入口"
 say "  node bin/cvs.mjs new \"做一条 20 秒国风宣传片\" --out project.spec.json"
 say "  node bin/cvs.mjs build project.spec.json --platform douyin --strict"
 say ""
+say "只想要向导页：node bin/cvs.mjs wizard  # http://127.0.0.1:5181/app/wizard/"
 say "只想要图片：node bin/cvs.mjs image --spec project.spec.json"
+say ""
+say "说明：本仓库的 cvs 命令统一写成 node bin/cvs.mjs <命令>；若已 npm link（package.json bin），可直接写 cvs <命令>。"

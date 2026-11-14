@@ -8,8 +8,7 @@
     "11": "render (segment render)",
     "12": "concat (ffmpeg concat / encode)",
     "13": "qa (qa-video / qa-audio)",
-    "14": "env (missing binary / python / audio synthesis)",
-    "15": "ingest (footage -> EDL)"
+    "14": "env (missing binary / python / audio synthesis)"
   },
   "codes": {
     "E_USAGE": {
@@ -853,6 +852,36 @@
       "exit": 14,
       "meaning": "job 失败但没有 error.json（旧 job 或非编译失败）",
       "action": "看 build.log 与 job.error"
+    },
+    "E_SOURCE": {
+      "phase": "preview",
+      "exit": 0,
+      "meaning": "帧源打开失败（路径越界/文件缺失/校验失败）",
+      "action": "按报错指引检查路径；视频先 cvs build"
+    },
+    "E_PATH": {
+      "phase": "preview",
+      "exit": 0,
+      "meaning": "预览路径非法（穿越/隐藏目录）",
+      "action": "路径必须落在仓库根内"
+    },
+    "E_FRAME": {
+      "phase": "preview",
+      "exit": 0,
+      "meaning": "帧请求非法（越界/非整数）",
+      "action": "帧号取 0..frames-1 的整数"
+    },
+    "E_ROUTE": {
+      "phase": "preview",
+      "exit": 0,
+      "meaning": "未知帧 API 路由",
+      "action": "见 app/frames/README.md 的 API 表"
+    },
+    "E_BAD_REQUEST": {
+      "phase": "preview",
+      "exit": 0,
+      "meaning": "帧 API 请求参数缺失/非法",
+      "action": "补齐 id/n 查询参数"
     }
   }
 }

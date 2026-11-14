@@ -73,6 +73,12 @@ code {
   letter-spacing: 0.02em;
 }
 
+.brandSub {
+  font: 10.5px ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
 .brandMark {
   width: 14px;
   height: 14px;
@@ -124,6 +130,16 @@ code {
 }
 .empty h1 { margin: 0 0 8px; font-size: 20px; }
 .empty p { margin: 6px 0; color: var(--muted); }
+.empty .steps {
+  margin: 12px 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 13px;
+}
+.empty .steps li { padding-left: 4px; }
+.empty .steps code { display: inline-block; margin-top: 3px; max-width: 100%; overflow-x: auto; white-space: nowrap; }
 
 .layout {
   display: grid;
