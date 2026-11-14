@@ -109,11 +109,12 @@ export function optionsFromArgs(args) {
     preset: str('preset', 'veryfast'),
     tune: str('tune', ''),
     quality: num('quality', 92),
-    // R2-11 根因修复：默认 PNG 捕获。实测 Chrome toDataURL('image/jpeg') 编码器
-    // 非确定（同画布像素两次 JPEG 字节不同→解码帧漂移），而 PNG 无损逐字节确定。
-    // golden 静帧本就默认 PNG（故一直 9/9）；视频捕获改 PNG 与之对齐，恢复全链路幂等。
-    // 代价 ~1.7× 渲染时长（实测 3s 段 91s→158s），换「同一 t 必出同一帧」的硬保证。
-    format: str('format', 'png'),
+    // R2-11c：默认 raw 捕获。早期默认 JPEG（Chrome JPEG 编码器非确定，幂等破功），
+    // 改 PNG 后确定但 zlib 编码吃掉 378ms/帧（renderFrame 本身只要 0.7ms）。
+    // raw 直接把 getImageData 的 RGBA 经本地 POST 送进 ffmpeg rawvideo：无编码器
+    // = 无损且确定性天然成立，实测 3s 段 91s→23s（3.9fps vs 0.7fps），两次渲染
+    // sha256 逐字节相同。画布不是 2D/尺寸不符时自动回退 png（仍确定，只是慢）。
+    format: str('format', 'raw'),
     capture: str('capture', 'auto'),
     headed: !!args.headed,
     timeout: num('timeout', 120000),
@@ -160,7 +161,11 @@ export function normalizeOptions(raw = {}) {
     crf: num(raw.crf, 12),
     preset: str(raw.preset, 'veryfast'),
     tune: str(raw.tune, ''),
-    format: String(str(raw.format, 'png')).toLowerCase() === 'jpeg' ? 'jpeg' : 'png',
+    // R2-11c：raw = getImageData 原始像素经本地 POST 直送 ffmpeg rawvideo。
+    // 无编码器 = 无损 + 确定性天然成立，且删掉 PNG zlib（实测 378ms/帧）与
+    // ffmpeg PNG 解码两次开销。jpeg/png 仅在 raw 不可用（非 2D 画布/尺寸不符/
+    // CDP 回退/静帧）时使用。
+    format: (() => { const f = String(str(raw.format, 'png')).toLowerCase(); return f === 'jpeg' ? 'jpeg' : f === 'raw' ? 'raw' : 'png'; })(),
     quality: num(raw.quality, 92),
     capture: str(raw.capture, 'auto'),
     headed: !!raw.headed,
@@ -195,10 +200,48 @@ export function optionsFromRenderArgs(renderArgs, extra = {}) {
 export function startStaticServer(root, port = 0) {
   return new Promise((resolve, reject) => {
     const ROOT = path.resolve(root);
+    // R2-11c：raw 捕获的帧接收槽。页面把 getImageData 的原始 RGBA 用 fetch POST
+    // 到这里（不经 base64、不经任何编码器），handler 收齐 body 后存 last 并回 200。
+    // fetch 只有在响应到达后才 resolve，而响应只在 'end' 后发出，所以页面侧 await
+    // 返回时 last 必然已就绪——顺序捕获无需额外同步。
+    const frameSink = {
+      last: null,
+      take() { const b = this.last; this.last = null; return b; },
+      stats: { posts: 0, bytes: 0 },
+    };
     const server = http.createServer((req, res) => {
       try {
         let urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
         if (urlPath === '/favicon.ico') { res.writeHead(204).end(); return; }
+        if (req.method === 'POST' && urlPath === '/__frame') {
+          const chunks = []; let size = 0; let dead = false;
+          req.on('data', (d) => {
+            if (dead) return;
+            size += d.length;
+            if (size > 64 * 1024 * 1024) { dead = true; req.destroy(); return; } // 单帧上限 64MB
+            chunks.push(d);
+          });
+          req.on('end', () => {
+            if (dead) return;
+            frameSink.last = Buffer.concat(chunks, size);
+            frameSink.stats.posts += 1;
+            frameSink.stats.bytes += size;
+            // 短连接：本地每帧一个 POST，复用 keep-alive 会踩中 Node 默认 5s
+            // keepAliveTimeout —— 服务端在空闲后单方面断连，页面侧下一次
+            // fetch 直接 'Failed to fetch'（实测第 63 帧必挂）。关连接最省心。
+            res.writeHead(200, {
+              'Content-Type': 'text/plain', 'Content-Length': 2,
+              'Cache-Control': 'no-store', 'Connection': 'close',
+            }).end('ok');
+            req.socket.setTimeout(0);
+          });
+          req.on('error', (e) => {
+            frameSink.stats.errors = (frameSink.stats.errors || 0) + 1;
+            frameSink.stats.lastError = String(e && e.message || e);
+            try { if (!res.headersSent) res.writeHead(400).end('bad'); } catch { /* ignore */ }
+          });
+          return;
+        }
         if (urlPath.endsWith('/')) urlPath += 'index.html';
         // 点文件（.git/、.env…）不提供——渲染服务器也会被外部请求碰到。
         if (urlPath.split('/').some((seg) => seg.startsWith('.') && seg !== '.' && seg !== '..')) {
@@ -216,6 +259,12 @@ export function startStaticServer(root, port = 0) {
         });
       } catch { res.writeHead(400).end('bad request'); }
     });
+    server.frameSink = frameSink;
+    // 每帧 POST 是 8 MB 级别的连续上传，不能被默认 5s keepAlive/请求超时截断。
+    server.keepAliveTimeout = 60000;
+    server.headersTimeout = 65000;
+    server.requestTimeout = 0;
+    server.timeout = 0;
     server.on('error', reject);
     server.listen(port, '127.0.0.1', () => resolve(server));
   });
@@ -224,8 +273,22 @@ export function startStaticServer(root, port = 0) {
 // ---------- ffmpeg ----------
 
 function launchFfmpeg(outFile, opts) {
-  const input = ['-f', 'image2pipe', '-framerate', String(opts.fps), '-i', 'pipe:0'];
+  // R2-11c：raw 直送——页面 POST 的 RGBA 像素原样进编码器。免 PNG zlib 编码
+  // （实测 378ms/帧）与 ffmpeg 的 PNG 解码，且无编码器即无损、确定性天然成立。
+  // 色彩链与 PNG 路径同一套（pc→tv / bt709），所以画面与旧 PNG 路径一致。
+  const raw = opts.format === 'raw';
+  // 色彩链对 raw 与 png 完全一致：实测同一份像素喂两种链，输出逐字节相同
+  // （chain 级实验见 docs/audit2/FINDINGS-ROUND2.md）。alpha 在 scale 前剥离。
+  const input = raw
+    ? ['-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', `${opts.width}x${opts.height}`,
+       '-framerate', String(opts.fps), '-i', 'pipe:0']
+    : ['-f', 'image2pipe', '-framerate', String(opts.fps), '-i', 'pipe:0'];
+  // raw 与 png 必须走**同一条**色彩链才能出同一画面：alpha 在进 scale 之前就先
+  // 丢掉（PNG 解码出来的 RGB 没有 alpha，rgba 若带着 alpha 进 scale，矩阵分支
+  // 与色度下采样的处理会有微差——实测单帧 PSNR 42dB / 边缘最大差 56）。
+  // format=rgb24 把 alpha 剥离，之后 scale/format 与 PNG 路径逐字一致。
   const filters = [
+    ...(raw ? ['format=rgb24'] : []),
     'scale=in_range=pc:out_range=tv:out_color_matrix=bt709',
     'format=yuv420p',
   ].join(',');
@@ -332,7 +395,7 @@ async function openPlaywright(opts) {
         const ev = (fn, arg) => page.evaluate(fn, arg);
         const shot = async () => {
           const r = await cdp.send('Page.captureScreenshot', {
-            format: opts.format, ...(opts.format === 'jpeg' ? { quality: opts.quality } : {}),
+            format: cdpShotFormat(opts), ...(cdpShotFormat(opts) === 'jpeg' ? { quality: opts.quality } : {}),
             fromSurface: true, captureBeyondViewport: false,
             ...(opts.optimize ? { optimizeForSpeed: true } : {}),
             clip: { x: 0, y: 0, width, height, scale: 1 },
@@ -394,7 +457,7 @@ async function openCdp(opts) {
         const ev = (fn, arg) => cdpEvaluate(b.client, p.sessionId, fn, arg);
         const shot = async () => {
           const r = await b.client.send('Page.captureScreenshot', {
-            format: opts.format, ...(opts.format === 'jpeg' ? { quality: opts.quality } : {}),
+            format: cdpShotFormat(opts), ...(cdpShotFormat(opts) === 'jpeg' ? { quality: opts.quality } : {}),
             fromSurface: true, captureBeyondViewport: false,
             ...(opts.optimize ? { optimizeForSpeed: true } : {}),
             clip: { x: 0, y: 0, width, height, scale: 1 },
@@ -427,18 +490,32 @@ export async function openBrowser(opts) {
 
 // ---------- capture ----------
 
+/** CDP Page.captureScreenshot only knows png/jpeg; a raw request falls back to png. */
+function cdpShotFormat(opts) {
+  return opts.format === 'jpeg' ? 'jpeg' : 'png';
+}
+
 async function resolveCaptureMode(page, opts) {
   let mode = opts.capture;
+  const wantRaw = opts.format === 'raw';
   if (mode === 'auto') {
     try {
-      mode = await page.ev(({ w, h }) => {
+      mode = await page.ev(({ w, h, raw }) => {
         if (window.__capture === 'canvas' || window.__capture === 'cdp') return window.__capture;
         const cs = [...document.querySelectorAll('canvas')];
         if (cs.length !== 1) return 'cdp';
         if (document.querySelector('[data-dom-overlay]')) return 'cdp';
         const c = cs[0];
+        if (raw) {
+          // rawvideo 要求画布尺寸与 -s 逐像素一致（否则帧边界错位），且必须是 2D
+          // 上下文（WebGL 画布没有 getImageData）。任一不符 → PNG 回退，仍确定。
+          if (c.width !== w || c.height !== h) return 'canvas';
+          let g = null;
+          try { g = c.getContext('2d'); } catch { /* webgl 等 */ }
+          return g ? 'raw' : 'canvas';
+        }
         return c.width >= w * 0.99 && c.height >= h * 0.99 ? 'canvas' : 'cdp';
-      }, { w: opts.width, h: opts.height });
+      }, { w: opts.width, h: opts.height, raw: wantRaw });
     } catch { mode = 'cdp'; }
   }
   if (mode === 'canvas') {
@@ -449,6 +526,34 @@ async function resolveCaptureMode(page, opts) {
 }
 
 async function grab(page, t, mode, opts) {
+  if (mode === 'raw') {
+    // 页面里 renderFrame → getImageData（纯拷贝，无编码）→ fetch POST 原始 RGBA。
+    // fetch 的 await 保证字节已全部落到 frameSink.last，Node 侧顺序取走即可。
+    // 本地 POST 偶发瞬时断连（实测第 ~60 帧一次），重试成本近零而最稳；
+    // 每次都新建连接，坏掉的复用连接不会传染下一帧。
+    await page.ev(async (tt) => {
+      window.renderFrame(tt);
+      const c = document.querySelector('canvas');
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let lastErr = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          const r = await fetch('/__frame', { method: 'POST', body: d, cache: 'no-store' });
+          if (r.ok) return attempt;
+          lastErr = 'HTTP ' + r.status;
+        } catch (e) {
+          lastErr = (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : String(e));
+        }
+        await new Promise((res) => setTimeout(res, 25 * (attempt + 1)));
+      }
+      throw new Error('frame post failed after 5 attempts — ' + lastErr);
+    }, t);
+    const buf = page.frameSink ? page.frameSink.take() : null;
+    if (!buf || !buf.length) throw new Error('raw frame missing from frame sink');
+    const want = opts.width * opts.height * 4;
+    if (buf.length !== want) throw new Error(`raw frame size ${buf.length} != ${want} (${opts.width}x${opts.height} RGBA)`);
+    return buf;
+  }
   if (mode === 'canvas') {
     const dataUrl = await page.ev(({ tt, fmt, q }) => {
       window.renderFrame(tt);
@@ -512,6 +617,7 @@ export async function withRenderer(rawOptions, fn) {
       const p = await browser.newPage({ url, initScript, width: o.width, height: o.height });
       p.url = url;
       p.log = log;
+      p.frameSink = server.frameSink; // raw 捕获：页面 POST 的原始帧从这里取
       return p;
     },
 
@@ -590,6 +696,13 @@ async function renderVideo(ctx, opts, rawPageOpts = {}) {
     await warmUp(page, opts);
 
     fs.mkdirSync(path.dirname(opts.out), { recursive: true });
+    // R2-11c：ffmpeg 的输入格式必须与**实际**捕获模式一致。raw 模式不可用
+    // （画布非 2D / 尺寸不符 / 已回退 CDP）时改走 PNG——ffmpeg 侧随之切回
+    // image2pipe，否则会把 PNG 字节当 RGBA 像素读成花屏。
+    if (opts.format === 'raw' && page.mode !== 'raw') {
+      opts.format = 'png';
+      page.log('[capture] raw unavailable; falling back to png (still deterministic)');
+    }
     const frames = Math.round(opts.duration * opts.fps);
     const ff = launchFfmpeg(opts.out, opts);
     const started = performance.now();
@@ -603,6 +716,10 @@ async function renderVideo(ctx, opts, rawPageOpts = {}) {
             page.log(`[warn] canvas capture failed at frame ${i} (${e.message}); switching to cdp`);
             page.mode = 'cdp';
             buf = await grab(page, t, page.mode, opts);
+          } else if (page.mode === 'raw') {
+            // raw 流不能中途换格式（ffmpeg 已按 rawvideo 启动，混入 PNG 字节会花屏）。
+            // 报清楚病根，让人直接 --format png 绕过——那同样是确定的，只是慢些。
+            throw new Error(`raw capture failed at frame ${i}: ${e.message} — rerun with --format png to bypass raw`);
           } else throw e;
         }
         await writeAsync(ff.stdin, buf);
@@ -632,6 +749,8 @@ async function renderVideo(ctx, opts, rawPageOpts = {}) {
 
 async function renderStills(ctx, opts, rawPageOpts = {}) {
   const stills = opts.stills || [];
+  // stills 落盘必须是图片文件（golden 基线是 PNG）；raw 只对视频流有意义。
+  if (opts.format === 'raw') opts.format = 'png';
   const page = await preparePage(ctx, opts, rawPageOpts);
   try {
     fs.mkdirSync(opts.outdir, { recursive: true });
@@ -685,7 +804,9 @@ const USAGE = `Usage: node render-segment.mjs --page <path-or-url> [options]
   --crf <n>               libx264 crf for the intermediate, default 12
   --preset <name>         libx264 preset, default veryfast
   --tune <name>           optional x264 tune (e.g. animation)
-  --format <jpeg|png>     frame format, default jpeg
+  --format <raw|png|jpeg>  frame format, default png (raw = lossless RGBA straight to
+                          ffmpeg rawvideo, ~3-7x faster than png and equally exact;
+                          falls back to png when the canvas is not a 2D same-size one)
   --quality <n>           jpeg quality, default 92
   --capture <auto|canvas|cdp>  frame capture path, default auto
   --vars <file|json>      expose as window.__vars (also ?vars=<base64url>)

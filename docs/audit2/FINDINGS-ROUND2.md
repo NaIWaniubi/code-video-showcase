@@ -101,3 +101,44 @@
 | 150 | 0.805 | 0.869 | 87.5% | PASS |
 
 强 onset（鼓点脉冲 amp 0.4–1.0）几乎全在网格；离网格的全是 amp<0.31 的装饰 FX。节拍由强 onset 定义，加权是感知正确的度量，非刷分。
+
+### R2-11c 去掉 PNG 的代价：raw 捕获（v2.7.2）
+
+PNG 虽然确定，但**代价被严重低估**。逐层计时（`out/_audit/profile-capture.mjs`，24 帧、暖机 160 帧）：
+
+| 环节 | 耗时 |
+|---|---|
+| `renderFrame(t)`（全部页面绘制） | **0.7 ms** |
+| `toDataURL('image/png')` | **378.3 ms**（5.0 MB base64） |
+| `toDataURL('image/jpeg')` | 51.2 ms |
+
+PNG 的 zlib 编码占每帧路径的 **100%**，把 52 ms 拖到 379 ms——不是先前说的 ~1.7×，是 **7.3×**。`renderFrame` 本身快得可以忽略。
+
+**方案**：删掉编码器。页面 `getImageData` 取原始 RGBA（纯内存拷贝，无编码）→ `fetch POST /__frame` 送到渲染自带静态服务器 → 直接灌进 `ffmpeg -f rawvideo -pix_fmt rgba`。无损（无编码器）且确定性天然成立。
+
+**实测（`out/_audit/`）**：
+
+| 指标 | PNG | raw |
+|---|---|---|
+| 3s 段（90 帧） | ~91 s（0.7 fps） | **23.2 s（3.9 fps）** |
+| 提速 | — | **5.6×** |
+| 确定性 | sha256 相同 | sha256 相同 |
+
+四次**独立 Chrome 会话**的 raw 渲染 sha256 全为 `7a53f1ff…637efd` → 跨会话幂等成立。
+
+**像素等价性实证**（这是关键，不能靠“应该是”）：
+
+| 检验 | 结果 |
+|---|---|
+| `getImageData` 两次取同像素 | 哈希相同 `STABLE` |
+| canvas alpha 全扫描（207 万像素） | `minAlpha 255, semiTransparent 0` → RGBA 丢 alpha 无影响 |
+| 浏览器内 `getImageData` vs `toDataURL(png)` 解码 | **`maxDiff 0`, `over2 0`**（622 万通道值逐个相同） |
+| 同一份 RGB 像素喂两条 ffmpeg 链 | sha256 相同 → 色彩链完全等价 |
+
+**踩过的坑（如实记录）**：
+
+1. `POST /__frame` 复用 keep-alive，踩 Node 默认 5 s `keepAliveTimeout`，页面侧 `Failed to fetch`（第 ~60 帧必现）。修：响应用 `Connection: close` + 服务端 `keepAliveTimeout 60s / requestTimeout 0`；页面侧 5 次指数退避重试（成本近零）。
+2. 期间我一度怀疑 alpha、色彩范围导致画质差（PSNR 44.7 dB / SSIM 0.981）。加了 `format=rgb24`、`-color_range pc` 两处“修法”，**输出 sha256 一字未变**——说明全是冗余。真正的差异是 **PNG 段与 raw 段是两次独立 Chrome 会话**（swiftshader 跨会话微差），与色彩链无关。两处冗余 flag 已移除，避免假修复留在代码里。
+3. `renderStills` 必须强制回 PNG（静帧要落图片文件，golden 基线是 PNG）；`resolveCaptureMode` 在非 2D 画布/尺寸不符/回退 CDP 时自动落 png。
+
+**回退语义**：`--format png` 显式慢速但确定；`--format jpeg` 快但**不确定**（Chrome JPEG 编码器），仅供预览。默认 raw。
