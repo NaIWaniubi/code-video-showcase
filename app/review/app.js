@@ -335,7 +335,15 @@ async function poll() {
       el.emptyReason.textContent = `API 中找不到 job ${job}。确认 id 后刷新页面。`;
       return;
     }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      // 服务器在但查询失败（5xx）：不能误导为「不可达」。
+      setConn('bad', `API 返回 HTTP ${res.status}`);
+      setStatus('unknown');
+      el.empty.hidden = false;
+      el.emptyReason.textContent = `API ${api} 响应 ${res.status}（服务在跑但查询出错）。看 API 终端日志排障；页面会继续重试。`;
+      schedulePoll();
+      return;
+    }
     setConn('ok', `API ${api}`);
     renderJob(body || {});
     if (!TERMINAL.has((body && body.status) || '')) schedulePoll();
@@ -343,7 +351,8 @@ async function poll() {
     setConn('bad', 'API 不可达');
     setStatus('unknown');
     el.empty.hidden = false;
-    el.emptyReason.textContent = `无法连接 ${api}：${e.message || e}。确认 \`node server/api.mjs\` 已启动。`;
+    document.querySelector('#empty h1').textContent = 'API 没连上';
+    el.emptyReason.textContent = `无法连接 ${api}：${e.message || e}。确认 \`node bin/cvs.mjs api\` 已启动；页面会自动重试。`;
     schedulePoll();
   }
 }

@@ -287,7 +287,7 @@ W16 └ M4 ◀──────────────────────
 
 | Mission | 所有权 | 验证命令 |
 |---|---|---|
-| M-C0 | `schema/`、`templates/spec.mjs`、`templates/plan.mjs`、`scripts/spec-lint.mjs`、`scripts/compile.mjs` | `npm run spec:lint && npm run plan` |
+| M-C0 | `schema/`、`templates/spec.mjs`、`templates/plan.mjs`、`scripts/spec-lint.mjs`、`scripts/compile.mjs` | `npm run spec:lint && npm run plan:legacy` |
 | M-C1 | `app/wizard/`、`scripts/nl2spec.mjs`、`content/presets.json` | `node scripts/test-nl2spec.mjs` |
 | M-C2a | `app/canvas/`、`templates/edit-bridge.mjs` | `node scripts/test-inspect.mjs` |
 | M-C2b | `app/script/`、`app/versions/` | `node scripts/test-script.mjs` |
@@ -394,7 +394,7 @@ W16 └ M4 ◀──────────────────────
 
 ```bash
 npm run spec:lint
-npm run plan
+npm run plan:legacy
 npm run render
 npm run determinism
 npm run qa

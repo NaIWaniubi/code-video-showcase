@@ -3,6 +3,24 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v2.8.1] - 2026-11-15 — 审计尾巴清零 + 全链 e2e 实证
+
+### P1 收尾（v2.8.0 遗留清单）
+- 评审页 5xx 与「API 不可达」分文案：服务在跑但查询出错时显示「API 返回 HTTP xxx（服务在跑但查询出错）」，不再误导去重启服务。
+- 帧预览：点击画面（iframe 获得焦点）后快捷键失效——首次聚焦时状态栏提示「点击页面空白处恢复 ←/→/空格」。
+- 向导 24 个领域平铺改为「8 个常用 + 搜索框 + 更多领域」：搜索命中 label/id/hint，选中的领域永远可见；空命中给中文提示。
+- npm 同名异义脚本归位：`new`→`scaffold`（项目脚手架，与 `cvs new` 文本生成 spec 区分）、`plan`→`plan:legacy`（legacy timeline 示例）；删除与 `api` 完全重复的 `dev:api`；`spec:lint` 补默认 `--spec project.spec.json`（无 spec 时退出码 10 而非裸 ENOENT 堆栈语义）。CLUSTER-PLAN 引用同步。
+
+### 全链 e2e 实证（真实产物，非 mock）
+`cvs new "做一个 20 秒国风宣传片，青瓷主题"` → lint（0 error 1 warn）→
+`cvs build --outdir out/_e2e-run`（master.mp4 600 帧 + qa-video 18 pass / qa-audio 7 pass，
+bilibili.mp4 附加）→ 帧预览：video 源 600 帧逐帧可看、plan live 源 600 帧实时渲染
+（播放实测 28 fps @ 0.7ms/帧）→ **live 模式下载第 62 帧 PNG（1920×1080）成功** →
+`cvs deliver`（delivery.json + master.srt/vtt 5 cues）。
+
+### 测试
+test:all 22 套件 / 450 通过。版本 2.8.1。
+
 ## [v2.8.0] - 2026-11-15 — 八视角集群审计：体验收口
 
 用 8 个评审视角（新手 / 键盘可达性 / CLI 一致性 / 错误恢复 / 性能感知 / 窄屏 /

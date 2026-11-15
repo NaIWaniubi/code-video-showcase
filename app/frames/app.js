@@ -358,6 +358,12 @@ function activateLive(entry) {
   entry.used = Date.now();
   entry.el.classList.remove('off');
   fitLiveFrames();
+  // 点击画面（iframe 获得焦点）后，宿主键盘快捷键会失效——HUD 提示一次。
+  try {
+    entry.el.contentWindow.addEventListener('focus', () => {
+      setStatus('快捷键在画面外生效；点击页面空白处（如侧栏）即可恢复 ←/→/空格', 'warn');
+    }, { once: true });
+  } catch { /* 跨域或尚未就绪 */ }
 }
 
 function renderLive(idx) {

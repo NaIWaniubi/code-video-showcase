@@ -497,6 +497,54 @@ function makeChip({ label, hint, value, selected, disabled, disabledReason, reco
   return btn;
 }
 
+// —— 01 kind 领域选择：搜索 + 折叠（24 个平铺没法选） ——
+const KIND_POPULAR = new Set(['promo', 'launch', 'knowledge', 'ecommerce', 'brand-story', 'data-report', 'recruiting', 'annual']);
+let kindSearch = '';
+let kindExpanded = false;
+
+function renderKindChips() {
+  const host = document.querySelector('#chips-kind');
+  if (!host) return;
+  const q = kindSearch.trim().toLowerCase();
+  const match = (o) => !q || o.label.toLowerCase().includes(q) || o.id.toLowerCase().includes(q) || (o.hint || '').toLowerCase().includes(q);
+  const visible = KIND_OPTIONS.filter((o) => match(o) || o.id === state.kind);
+  const collapsed = !kindExpanded && !q;
+  const shown = collapsed ? visible.filter((o) => KIND_POPULAR.has(o.id) || o.id === state.kind) : visible;
+
+  host.textContent = '';
+  for (const o of shown) {
+    host.append(makeChip({
+      label: o.label,
+      hint: o.hint,
+      value: o.id,
+      selected: state.kind === o.id,
+      onPick: (v) => {
+        state.kind = v;
+        if (!ctaCustom) state.cta = KIND_CTA[v] || state.cta;
+        setModeCustom();
+        renderCustom();
+        renderPresets();
+        generateNow();
+      },
+    }));
+  }
+  if (collapsed && visible.length > shown.length) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'chip ghost';
+    more.textContent = `更多领域（还有 ${visible.length - shown.length} 个）…`;
+    more.addEventListener('click', () => { kindExpanded = true; renderKindChips(); });
+    host.append(more);
+  }
+  if (q && !visible.length) {
+    const none = document.createElement('span');
+    none.className = 'muted';
+    none.style.fontSize = '12px';
+    none.textContent = '没有匹配的领域，换个词试试';
+    host.append(none);
+  }
+}
+
 function fillGroup(selector, chips) {
   const host = $(selector);
   host.replaceChildren(...chips);
@@ -505,26 +553,8 @@ function fillGroup(selector, chips) {
 function renderCustom() {
   const styleCopy = $('#style-count-copy');
   if (styleCopy) styleCopy.textContent = `${styleOptions.length} 种配方；灰色虚线 = 与当前主题冲突（avoid），不可选`;
-  // 01 kind
-  fillGroup(
-    '#chips-kind',
-    KIND_OPTIONS.map((o) =>
-      makeChip({
-        label: o.label,
-        hint: o.hint,
-        value: o.id,
-        selected: state.kind === o.id,
-        onPick: (v) => {
-          state.kind = v;
-          if (!ctaCustom) state.cta = KIND_CTA[v] || state.cta;
-          setModeCustom();
-          renderCustom();
-          renderPresets();
-          generateNow();
-        },
-      }),
-    ),
-  );
+  // 01 kind：24 个领域先收起只显 8 个常用 + 搜索框；选中的永远可见。
+  renderKindChips();
 
   // 02 style — avoid 组合不可选
   fillGroup(
@@ -1047,7 +1077,15 @@ function bindEvents() {
     refDrop.addEventListener('dragleave', () => {
       refDrop.style.borderColor = 'rgba(255,255,255,.22)';
     });
-    refDrop.addEventListener('drop', async (e) => {
+    
+  const kindSearchInput = document.querySelector('#kind-search');
+  if (kindSearchInput) {
+    kindSearchInput.addEventListener('input', () => {
+      kindSearch = kindSearchInput.value;
+      renderKindChips();
+    });
+  }
+refDrop.addEventListener('drop', async (e) => {
       e.preventDefault();
       refDrop.style.borderColor = 'rgba(255,255,255,.22)';
       const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
