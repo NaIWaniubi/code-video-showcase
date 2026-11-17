@@ -3,6 +3,40 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v3.0.0] - 2026-11-18 — 断层领先三件套：参考片反推 / 旁白声道 / 程序化生成画面
+
+在 v2.9.0（十视角审计收口）之上，一次性交付三个竞品没有的能力。
+
+### 旗舰一 · 参考片反推引擎（`cvs ref video <mp4>`）
+- 新模块 `scripts/lib/ref-video-core.mjs`（结构拟合纯函数）+ `scripts/ref-video.mjs`（CLI）。
+- 管线：ffprobe 元数据 → showinfo 场景切点 → 逐秒像素采样（96×96 area）→ k-means/主题匹配（复用 ref-core）→ numpy BPM 自相关（八度折叠）→ 结构拟合 → 规范报告。
+- 结构模型把典型卡点模板（opening → rounds(card+style) → more → flash 簇 → ending）拟合到实测切点：flash 簇按「连续 <0.6s 切点」自动检出；**BPM 在场时 flash.each 一拍派生**（R2-25 硬约束）；card<round、round 上下限等结构闸全部保留。
+- 置信度三分量加权（如实混合不虚高）；拟合残差 >1.5s 必进 notes；退化输入（无卡点/无切点）走模板默认兜底，**绝不产 NaN 进 spec**。
+- `--apply` 把 look/audio/bpm/structure patch 并入既有 spec，深合并不毁用户内容。
+- e2e：合成片全链反推 + --apply 保内容回归均通过（test-ref-video 套件 7 项）。
+
+### 旗舰二 · 旁白声道（VO）
+- 新模块 `templates/synth_voice.py`：文案行 → 语音 + 词级时间戳 JSON；piper 在场优先真实 TTS，否则离线共振峰合成（四声调轮廓 + 三共振峰，机械音色如实标注为排版验证用）。
+- compile 接线：`spec.audio.vo=[{text,start,duration}]` 自动合成 vo.wav 并 **sidechaincompress 闪避混音**（说话时音乐让位，广播标准做法），词级时间戳落 `vo-timings.json` 供字幕对齐消费；混音失败回落纯音乐并如实 warn，不毁整片。
+- spec 校验：`E_VO_TYPE/E_VO_ENTRY` 让 lint 与 build 同尺；超长片外 start 有 W_VO_LONG 提醒。
+- 实测：7 秒短片全链出片（vo.wav/mix-vo.wav/timings 齐全，QA 响度闭环 −14 LUFS）。
+
+### 旗舰三 · 程序化生成画面引擎
+- 新模块 `templates/generative.mjs`：swarm（curl-noise 流场粒子，固定步数闭式积分，同 t 同像素）/ orbitSystem（多层椭圆轨道相位独立）/ pulseRings（向外传播冲击环）/ bounceChars（逐字简谐弹道）四族纯核 + 画布包装（document 守卫，Node 可测）。
+- 目录式注册 GENERATIVE + generativeProbe 自检；与 effects.mjs 同构铁律（禁随机源/日期/rAF，种子哈希闭式求解）。
+
+### 工程面
+- 错误码 139 → 143（E_REF_VIDEO_UNREADABLE / E_VO_*），registry 覆盖 100%。
+- CLI：33 子命令（ref 升 verb：`cvs ref video|image`）；help 同步。
+- 测试：test-ref-video（7）+ test-generative（5）进 test-all UNIT；bash -n 已含。
+- 文档：README 旗舰段、SKILL §1/§5/音频章、themes/qa 口径同步。
+- `.gitignore` 补 analysis/（反推产物目录）。
+
+### 诚实边界（如实留账）
+- 离线共振峰 VO 是机械音色——配音排版与混音验证够用，交付级请装 piper（代码已接 priority）。
+- 反推是启发式：不承诺像素级还原，主题置信 <0.15 会明说 low-confidence。
+- generative 四族暂未注册为独立配方页（复用走 import 直调）；帧工作台剪辑交互、平台新预设列为后续波次。
+
 ## [v2.9.0] - 2026-11-18 — 第三轮十视角集群审计收口：内容寻址缓存闭合 + 无障碍矩阵 + 用户链路断点清零
 
 第三轮以 10 个只读审计员（新手全流程 / frames 深审 / 入口数据面 / CLI+增量 /

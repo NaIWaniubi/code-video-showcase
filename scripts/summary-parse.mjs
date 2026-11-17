@@ -31,6 +31,7 @@ export function parseSummary(text) {
     { re: /(\d+)\s+tests?\s+passed/i, kind: 'all' },
     // 分数（test-nl2spec 成功行）："✓ 20/20"。锚定行尾，避免误匹配用例名。
     { re: /^✓?\s*(\d+)\s*\/\s*(\d+)(?:\s+passed)?$/i, kind: 'fraction' },
+    { re: /^(\d+)\s+checks?\s+passed$/i, kind: 'all' },
     { re: /^(\d+)\s+passed$/i, kind: 'all' },
   ];
   // **从后往前**逐行找，而不是在整段尾部文本里取第一个匹配：

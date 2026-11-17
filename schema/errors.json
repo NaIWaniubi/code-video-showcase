@@ -900,6 +900,32 @@
       "exit": 2,
       "meaning": "qa-audio 的 --plan 是合法 JSON 但缺 audio.bpm/cues（旧行为直接 KeyError 崩溃，脚本无法路由）",
       "action": "重新跑 `cvs plan` 生成完整 plan；残缺 plan 下 cue/tempo/HF 门禁无法执行"
+    },
+    "E_REF_VIDEO_UNREADABLE": {
+      "phase": "ingest",
+      "exit": 15,
+      "auto": true,
+      "meaning": "参考片反推无法读取（路径不存在或 ffmpeg 不可用）",
+      "action": "检查文件路径；FFMPEG/FFPROBE/PYTHON 可用环境变量覆盖"
+    },
+    "E_VO_TYPE": {
+      "phase": "spec",
+      "exit": 10,
+      "meaning": "spec.audio.vo 不是 {text,start,duration} 条目数组",
+      "action": "改成数组；每条含非空 text（start/duration 可缺省）"
+    },
+    "E_VO_ENTRY": {
+      "phase": "spec",
+      "exit": 10,
+      "meaning": "audio.vo[i] 条目不合法（缺 text / start 为负 / duration 非正）",
+      "action": "按报错 path 修对应字段；duration 省略则按字数估速"
+    },
+    "E_VO_FAILED": {
+      "phase": "env",
+      "exit": 14,
+      "auto": true,
+      "meaning": "旁白合成失败（synth_voice 退出非 0 或产物缺失）",
+      "action": "检查 spec.audio.vo 文案与行 JSON；或删除该字段退回纯音乐"
     }
   }
 }

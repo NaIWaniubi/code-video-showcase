@@ -17,7 +17,7 @@
 
 脚本可以用退出码做粗分流，用 `--json` / `error.json` 的 `code` 做精确重试。
 
-## 已注册错误码（139）
+## 已注册错误码（143）
 
 | 错误码 | 阶段 | 退出码 | 含义 | 唯一动作 |
 |---|---|---|---|---|
@@ -95,6 +95,8 @@
 | `E_UNSUPPORTED` | spec | 10 | E_UNSUPPORTED：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_VALIDATOR` | spec | 10 | E_VALIDATOR：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_VERSION` | spec | 10 | specVersion 不受支持 | 使用 specVersion=1，或先迁移 timeline v1 |
+| `E_VO_ENTRY` | spec | 10 | audio.vo[i] 条目不合法（缺 text / start 为负 / duration 非正） | 按报错 path 修对应字段；duration 省略则按字数估速 |
+| `E_VO_TYPE` | spec | 10 | spec.audio.vo 不是 {text,start,duration} 条目数组 | 改成数组；每条含非空 text（start/duration 可缺省） |
 | `E_RENDER` | render | 11 | 段渲染失败 | 看 failedSegments + render-manifest.json，修该段后重跑 |
 | `E_CONCAT` | concat | 12 | 拼接/转码失败 | 看 segments.txt 与 ffmpeg 输出 |
 | `E_BURN_SUBTITLES` | qa | 13 | 字幕烧录失败 | 检查 ffmpeg 是否带 libass/subtitles 滤镜 |
@@ -114,6 +116,7 @@
 | `E_JOB` | env | 14 | job 失败但没有 error.json（旧 job 或非编译失败） | 看 build.log 与 job.error |
 | `E_NO_FONT_LOCK` | env | 14 | 缺少 shared/fonts.lock.json 或与磁盘不一致 | node scripts/bundle-fonts.mjs --lock-only |
 | `E_SPAWN` | env | 127 | 子进程启动失败 | 检查脚本路径与权限 |
+| `E_VO_FAILED` | env | 14 | 旁白合成失败（synth_voice 退出非 0 或产物缺失） | 检查 spec.audio.vo 文案与行 JSON；或删除该字段退回纯音乐 |
 | `E_AUTH` | api | 401 | 缺 Bearer token | 带 Authorization: Bearer <token> |
 | `E_BODY_TOO_LARGE` | api | 400 | E_BODY_TOO_LARGE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_CONTENT_TYPE` | api | 415 | POST 不是 application/json | 设置 Content-Type: application/json |
@@ -155,6 +158,7 @@
 | `E_NO_FFPROBE` | ingest | 15 | E_NO_FFPROBE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_PATH` | preview | 0 | 预览路径非法（穿越/隐藏目录） | 路径必须落在仓库根内 |
 | `E_PAYLOAD_TOO_LARGE` | preview | 413 | 反代请求体超过 1MB 上限（源头掐断，不向上游灌数据） | 缩小提交体：拆小 spec 或分次评论 |
+| `E_REF_VIDEO_UNREADABLE` | ingest | 15 | 参考片反推无法读取（路径不存在或 ffmpeg 不可用） | 检查文件路径；FFMPEG/FFPROBE/PYTHON 可用环境变量覆盖 |
 | `E_ROUTE` | preview | 0 | 未知帧 API 路由 | 见 app/frames/README.md 的 API 表 |
 | `E_SCRIPT_COVER` | ui | 2 | E_SCRIPT_COVER：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_SCRIPT_GAP` | ui | 2 | E_SCRIPT_GAP：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
@@ -163,8 +167,8 @@
 
 ## 覆盖情况
 
-- 代码中出现的 `E_*`：139
-- 已注册且被使用：139
+- 代码中出现的 `E_*`：143
+- 已注册且被使用：143
 - 未注册：0
 
 - 已注册但当前未使用：0

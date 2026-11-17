@@ -65,7 +65,11 @@ usage: cvs ${name} [--port <n>]
 
 const commands = {
   new:      (a) => node('scripts/nl2spec.mjs', a),
-  ref:      (a) => node('scripts/from-reference.mjs', a.length && !a[0].startsWith('--') ? ['--img', ...a] : a),
+  // R4 旗舰：`cvs ref video <mp4>`——参考片反推（结构/节拍/主题→spec patch）。
+  // `cvs ref <image>` 保持旧图入口（R1 审计槽位同构：brand/motion/versions 的 verb 先例）。
+  ref:      (a) => (a[0] === 'video' || a[0] === 'v')
+    ? node('scripts/ref-video.mjs', ['--video', ...a.slice(1)])
+    : node('scripts/from-reference.mjs', a.length && !a[0].startsWith('--') ? ['--img', ...a] : a),
   lint:     (a) => node('scripts/spec-lint.mjs', specArgs(a)),
   plan:     (a) => node('templates/plan.mjs', specArgs(a)),
   build:    (a) => node('scripts/compile.mjs', specArgs(a)),
@@ -104,6 +108,7 @@ usage: cvs <command> [args]
 
   new "<text>" [--out spec.json]         natural language -> spec (deterministic rules)
   ref <image> [--spec spec] [--out f]    reference image -> theme / accent / density
+  ref video <mp4> [--apply spec.json]     reference film -> structure / BPM / theme -> spec patch
   lint <spec> [--root .] [--strict]      pages / theme / APCA / placeholder gates
   plan <spec> [--print]                  spec -> plan.json with per-segment hashes
   build <spec> [--audio f|--no-audio] [--platform douyin] [--strict] [--burn-subtitles] [--cover]

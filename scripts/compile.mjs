@@ -290,6 +290,45 @@ if (args.audio) {
 }
 console.log(audioPath ? `[audio]   ${audioPath}` : '[audio]   (silent by --no-audio)');
 
+// ── 3.5 旁白声道（R4 旗舰）：spec.audio.vo = [{text,start,duration}] → 语音 +
+//    侧链闪避混音。音乐让路给配音（sidechaincompress，广播标准做法），词级
+//    时间戳落 vo-timings.json 供字幕对齐与 flash 避让消费。
+const voLines = Array.isArray(spec.audio?.vo) ? spec.audio.vo.filter((l) => l && l.text) : [];
+if (voLines.length && audioPath) {
+  const cvsDir = path.join(outDir, '.cvs');
+  fs.mkdirSync(cvsDir, { recursive: true });
+  const linesFile = path.join(cvsDir, 'vo-lines.json');
+  fs.writeFileSync(linesFile, JSON.stringify(voLines, null, 2) + '\n');
+  const py = process.env.PYTHON || 'python';
+  const voWav = path.join(outDir, 'audio', 'vo.wav');
+  console.log(`[vo]      synthesizing ${voWav}`);
+  const vsynth = spawnSync(py, [
+    path.join(root, 'templates', 'synth_voice.py'),
+    '--lines', linesFile, '--out', voWav,
+    '--timing', path.join(outDir, 'audio', 'vo-timings.json'),
+  ], { cwd: root, stdio: 'inherit', windowsHide: true });
+  if (vsynth.status !== 0 || !fs.existsSync(voWav)) {
+    fail('env', 'E_VO_FAILED', `voice-over synthesis failed (exit ${vsynth.status}); fix lines JSON or unset spec.audio.vo`, { raw });
+  }
+  // 侧链混音：music 为 main、VO 为 sidechain——说话时音乐自动压缩让位。
+  const ffmpeg = process.env.FFMPEG || 'ffmpeg';
+  const mixed = path.join(outDir, 'audio', 'mix-vo.wav');
+  const vmix = spawnSync(ffmpeg, [
+    '-y', '-hide_banner', '-loglevel', 'error',
+    '-i', audioPath, '-i', voWav,
+    '-filter_complex',
+    '[0:a][1:a]sidechaincompress=threshold=0.04:ratio=10:attack=15:release=350[mduck];[mduck][1:a]amix=inputs=2:duration=longest:normalize=0[aout]',
+    '-map', '[aout]', mixed,
+  ], { cwd: root, stdio: 'inherit', windowsHide: true });
+  if (vmix.status !== 0 || !fs.existsSync(mixed)) {
+    // 混音失败不毁整片：回落纯音乐（原行为），但如实记一条 warn。
+    console.error('[warn] vo mix failed; using music-only soundtrack');
+  } else {
+    audioPath = mixed;
+    console.log(`[vo]      duck-mixed -> ${audioPath}`);
+  }
+}
+
 // ── 4. render ───────────────────────────────────────────────────────────────
 const renderer = path.join(root, 'templates', 'render-farm.mjs');
 const renderArgs = [renderer, '--plan', planPath, '--concurrency', String(args.concurrency || spec.render?.concurrency || 4)];

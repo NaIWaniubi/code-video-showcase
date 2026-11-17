@@ -42,6 +42,8 @@ const UNIT_SUITES = [
   'scripts/test-compiler-contract.mjs',
   'scripts/test-versioning.mjs',
   'scripts/test-summary-parse.mjs',
+  'scripts/test-ref-video.mjs',
+  'scripts/test-generative.mjs',
   'scripts/test-transitions.mjs',
   'scripts/test-effects.mjs',
   'scripts/test-domains.mjs',

@@ -18,6 +18,12 @@ An Agent Skill for producing 30–90 s "style showcase" films: an 8 s opening, e
 [![No generative models](https://img.shields.io/badge/generative%20models-none-d97757?style=flat-square)](#design-constraints)
 [![Latest release](https://img.shields.io/github/v/release/Moessif/code-video-showcase?style=flat-square&color=d97757)](https://github.com/Moessif/code-video-showcase/releases)
 
+**v3.0 flagship（断层领先三件套）**
+
+- **参考片反推 `cvs ref video demo.mp4`**：拖一条成片进来 → 结构模型 + BPM 自相关 + k-means 主题匹配 → 可直接 `--apply` patch 进你的 spec。启发式结果带 confidence/残差/notes，不假装精确。
+- **旁白声道**：spec 里给文案行，编译时自动语音合成（piper 优先）+ sidechain 闪避混音 + 词级时间戳，配音不再需要外部 DAW。
+- **程序化生成画面引擎**：种子化流场群游 / 轨道环系 / 脉冲波 / 弹跳字——全部 (t, seed) 纯函数，逐帧确定性不破例。
+
 **Changelog / 更新历史**：[CHANGELOG.md](CHANGELOG.md) · [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)
 
 > **Credits / 致谢**：This skill started from a prompt by the creator **Mixx.ftr** — this repository is an independent engineering reconstruction and extension of that prompt into runnable templates, themes and a deterministic render pipeline.

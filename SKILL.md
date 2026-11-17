@@ -31,7 +31,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 
 **四条硬断言**：`build` 自动合成 `spec.audio`（无音轨必须显式 `--no-audio`，不静默出默片）；`--resume` 同时校验帧数 + manifest hash（`cache hit` 才代表内容没变）；`--root` 默认 **cwd**（`E_PAGE_MISSING` 多半是 root 错了）；交付态加 `--strict`（QA warning 也算失败），迭代态可不加但要知道自己在迭代。
 
-**报错 → 唯一动作**（完整表 139 码见 `docs/ERRORS.md`）：
+**报错 → 唯一动作**（完整表 143 码见 `docs/ERRORS.md`）：
 
 | 前缀 | 唯一动作 |
 |---|---|
@@ -76,8 +76,11 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
 - **渲染器恢复**：`--timeout`(120s) 与 `--launch-timeout`(30s) 独立；页面抛错杀 ffmpeg + 浏览器进程树，重启换全新 profile——失败不挂住、不留孤儿。
 - **失败对象**：`logPath` 恒指构建日志；`detailPath` 是阶段诊断产物（render/concat/deliver 各自的清单或日志）。
 - **确定性检测**：`golden` manifest 记 Chrome/Node/字体指纹；环境不一致跳过哈希比对并告警（`--strict-env` 改失败）。跨机可比前提 = 同一镜像 + 同一字体锁。
-- **统一入口**：`node bin/cvs.mjs`（30 个子命令，`cvs --help` 全列）。`cvs ui` 一个端口起齐六个界面（5180，`/app/` 是首页）。
-- **参考图**：`cvs ref poster.jpg --spec project.spec.json` 只提取色板/强调色/密度与 top-3 主题候选（不复制像素），写 `meta.reference`。
+- **统一入口**：`node bin/cvs.mjs`（33 个子命令，`cvs --help` 全列）。`cvs ui` 一个端口起齐六个界面（5180，`/app/` 是首页）。
+- **参考图/参考片**：`cvs ref poster.jpg`（图：色板/强调色/密度与 top-3 主题候选，不复制像素）；
+  **`cvs ref video demo.mp4`（片，旗舰反推）**：ffprobe+切点+逐秒采样+k-means 主题匹配+BPM 自相关
+  → 结构模型（opening/rounds/card/flash…）+ spec patch，`--apply` 直接并入既有 spec（不毁用户内容）。
+  启发式结果带 confidence/notes/残差，**不承诺像素级还原**。
 - **动效档位**：`look.motion` 选 `calm|standard|dynamic|maximal`，不写按「类型 × 画风」推导；换档位改变画面并触发重渲染（进段哈希），写 `standard` 与旧成片逐像素一致。
 - **画风 → 页面**：`templates/style-pages.mjs` 是唯一真值（20 画风 → 渲染页）；生成端按表填 `style.page`，未知画风回落通用场景页，新增配方页只加一行。
 - **强调色覆盖**：`look.accentOverride` 展开成段 URL 的 `?accent=/accentInk=/accentSoft=`，进 `segmentHash`（换品牌色必重渲染）；没有覆盖时 URL 不变。
@@ -251,6 +254,8 @@ Three.js 片段：`renderer` 必须 `{ preserveDrawingBuffer: true }`；启动�
 ## 8. 配乐合成（120 BPM，A 小调，纯 numpy/scipy）
 
 - 可运行骨架 `templates/synth_audio.py`：无参 = 8 s demo；`--plan out/plan.json` = 全片长度，并把每个 `audio.cues` 落成鼓点（61 s 实测 cue 命中 100% ±30 ms）。
+- **旁白声道（v3.0）**：`spec.audio.vo = [{text, start, duration}]` → `synth_voice.py` 出语音 + 词级时间戳（piper 在场则优先真实 TTS，否则离线共振峰合成，机械音色仅供排版验证），compile 自动 **sidechain 闪避混音**（说话时音乐让位），QA 响度闭环仍守 −14 LUFS。
+- **程序化生成画面（v3.0）**：`templates/generative.mjs` 提供流场群游/轨道环系/脉冲波/弹跳字四族确定性纯核（种子哈希闭式粒子，同 t 同像素），目录式注册可直接被配方页复用——与「No generative models」一致：无扩散模型，全部是 (t, seed) 纯函数。
 - 结构：开场铺底 + 逐字键盘咔哒 → 4.55 s sub boom + 底鼓渐强 → 军鼓滚奏 → 反向镲；大字卡 drop-out（音乐压到 6%）；风格段 6 拍律动 + 专属乐器。
 - 混音链：kick 侧链（闪避 55%）→ 2.2 s 合成混响 → tanh 软削波 → 母版峰值 −1.5 dBFS（留余量给 loudnorm 与 QA 门限）。
 - **高频克制（必读）**：金属音色（FM 钟声/拨弦/亮 stab/coin/高八度琶音）只作关键节点点缀，**全片 2–3 处**；统计与数字段用 sub+tom+kick+clap，不用铃音代替鼓点；切掉 <200 Hz 只剩「叮叮叮」= 过量；8–16 kHz 非点缀段应比点缀段低 ≥6 dB。

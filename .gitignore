@@ -4,6 +4,7 @@ node_modules/
 
 # build products / rendered media
 out/
+analysis/
 tmp/
 *.mp4
 *.mov

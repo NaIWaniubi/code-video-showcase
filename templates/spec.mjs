@@ -526,6 +526,23 @@ export function validateSpec(spec) {
   }
   if (!(Number(spec.audio?.bpm) > 0)) err('E_BPM', 'audio.bpm', 'bpm must be > 0');
   if (spec.audio?.mood && !MOODS.includes(spec.audio.mood)) err('E_MOOD', 'audio.mood', `mood must be one of ${MOODS.join('|')}`);
+  // R4 旁白（R4-W3）：可选字段——给了就要能用。lint 与 build 用同一把尺子。
+  const vo = spec.audio?.vo;
+  if (vo != null) {
+    if (!Array.isArray(vo)) {
+      err('E_VO_TYPE', 'audio.vo', 'must be an array of {text,start,duration}');
+    } else {
+      for (let i = 0; i < vo.length; i++) {
+        const v = vo[i];
+        if (!v || typeof v !== 'object') { err('E_VO_ENTRY', `audio.vo[${i}]`, 'entry must be an object'); continue; }
+        if (typeof v.text !== 'string' || !v.text.trim()) err('E_VO_ENTRY', `audio.vo[${i}].text`, 'needs a non-empty text');
+        const st = Number(v.start), du = Number(v.duration);
+        if (!Number.isFinite(st) || st < 0) err('E_VO_ENTRY', `audio.vo[${i}].start`, `start must be finite >= 0, got ${v.start}`);
+        if (v.duration != null && !(Number.isFinite(du) && du > 0)) err('E_VO_ENTRY', `audio.vo[${i}].duration`, `duration must be finite > 0, got ${v.duration}`);
+        if (st > 600) warn('W_VO_LONG', `audio.vo[${i}].start`, `start=${st}s 超出常规片长（${specDuration(spec)}s）——确认是刻意的`);
+      }
+    }
+  }
   if (spec.render?.preset && !PRESETS.includes(spec.render.preset)) err('E_PRESET', 'render.preset', `preset must be one of ${PRESETS.join('|')}`);
   if (spec.render?.concurrency !== undefined && !(Number.isInteger(Number(spec.render.concurrency)) && Number(spec.render.concurrency) >= 1 && Number(spec.render.concurrency) <= 16)) {
     // 非整数（如 2.5）会让 farm 分片 k % workers 漏掉段；NaN 会让 worker 数为 0。
