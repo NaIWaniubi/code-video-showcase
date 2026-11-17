@@ -91,6 +91,22 @@ export function deepMerge(base, over) {
 
 const isHex = (v) => typeof v === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v);
 
+// R3-审计（RT-07 P1-2）：legacy timeline 入口曾缺 spec.mjs 那套三查——远程 URL
+// 让无头 Chrome 直接导航（残余 SSRF），绝对/`..` page 与 outDir 可读写仓库外。
+// 与 templates/spec.mjs 同款语义；纯正则，保持本模块浏览器可导入。
+function assertLocalPage(err, raw, label) {
+  const forms = [String(raw ?? '')];
+  try { forms.push(decodeURIComponent(String(raw ?? ''))); } catch { /* bad %xx */ }
+  for (const f of forms) {
+    const bare = f.split('?')[0].split('#')[0];
+    if (!bare) { err(`${label} missing page`); return; }
+    if (/^[a-z][a-z0-9+.\-]*:\/\//i.test(f)) { err(`${label} must be a local page, not a URL: ${f}`); return; }
+    if (/^(?:[\\/]|[A-Za-z]:[\\/])/.test(bare)) { err(`${label} must be relative to project root: ${bare}`); return; }
+    if (bare.split(/[\\/]+/).some((seg) => seg === '..')) { err(`${label} must not contain "..": ${bare}`); return; }
+    if (!/\.(html?|htm)$/i.test(bare)) { err(`${label} must be an .html page: ${bare}`); return; }
+  }
+}
+
 // ── validation ──────────────────────────────────────────────────────────────
 
 /** Validate a timeline spec. Returns { errors, warnings }. */
@@ -104,6 +120,13 @@ export function validateComposition(spec) {
   if (spec.version !== undefined && spec.version !== 1) warn(`unknown version ${spec.version}, assuming 1`);
 
   const meta = spec.meta || {};
+  // R3-审计（RT-07 P1-2）：outDir 与页面同批三查——以前直接 resolve 后写 plan/concat。
+  // 只拦 `..` 段与控制字符；绝对/盘符路径由 CLI 显式传入（--outdir）时属操作者意图，
+  // compile/timeline CLI 会先 resolve 再 containment 双保险，不在这里误伤。
+  const outDirRaw = String(meta.outDir ?? '');
+  if (outDirRaw.split(/[\\/]+/).includes('..') || /[\x00-\x1f]/.test(outDirRaw)) {
+    err(`meta.outDir must stay inside project root: ${meta.outDir}`);
+  }
   const fps = Number(meta.fps ?? 30);
   if (!Number.isFinite(fps) || fps <= 0 || fps > 120) err(`meta.fps must be 1..120, got ${meta.fps}`);
   if (fps % 1 !== 0) warn(`meta.fps=${fps} is not an integer; frame rounding will drift`);
@@ -123,7 +146,9 @@ export function validateComposition(spec) {
         err(`rounds[${i}].id "${r.id}" must be a safe filename (letters/digits/dash/underscore, <=64 chars)`);
       }
       if (!r.style || !r.style.page) err(`rounds[${i}] (${id}) missing style.page`);
+      else assertLocalPage(err, r.style.page, `rounds[${i}] (${id}).style.page`);
       if (!r.card) warn(`rounds[${i}] (${id}) has no card; a default card page will be used`);
+      if (r.card?.page) assertLocalPage(err, r.card.page, `rounds[${i}] (${id}).card.page`);
       if (r.card && r.card.color && !isHex(r.card.color)) warn(`rounds[${i}].card.color "${r.card.color}" is not #rrggbb`);
       if (r.style && r.style.speed !== undefined && !(Number(r.style.speed) > 0)) err(`rounds[${i}].style.speed must be > 0`);
     });
@@ -141,6 +166,13 @@ export function validateComposition(spec) {
   if (!(Number(st.flash.count) >= 0)) err('structure.flash.count must be >= 0');
   if (!(Number(st.flash.each) > 0)) err('structure.flash.each must be > 0');
   if (Number(st.card) >= Number(st.round)) err('structure.card must be smaller than structure.round');
+
+  // R3-审计（RT-07 P1-2）：五个固定页位同样过三查（缺省页由 DEFAULT_PAGES 提供，
+  // 未写 page 的 spec 不算错）。
+  if (spec.opening?.page != null) assertLocalPage(err, spec.opening.page, 'opening');
+  if (spec.moreCard?.page != null) assertLocalPage(err, spec.moreCard.page, 'moreCard');
+  if (spec.flash?.page != null) assertLocalPage(err, spec.flash.page, 'flash');
+  if (spec.ending?.page != null) assertLocalPage(err, spec.ending.page, 'ending');
 
   if (rounds && Array.isArray(rounds)) {
     const total = totalDuration(spec);

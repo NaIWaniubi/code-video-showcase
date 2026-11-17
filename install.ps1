@@ -32,13 +32,21 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ''
+Write-Host '→ 生成字体 shared/fonts（CJK 版式与 golden 预览一致的前提）'
+node scripts/build-fonts.mjs
+if ($LASTEXITCODE -ne 0) {
+  Write-Host '✗ 字体构建失败。确认 npm ci 已成功；离线环境见 docs/OFFLINE.md。' -ForegroundColor Red
+  exit 14
+}
+Write-Host '✓ 字体已就位'
+Write-Host ''
 Write-Host '→ 环境探测（doctor）'
 node scripts/doctor.mjs
 $doc = $LASTEXITCODE
 
 Write-Host ''
 if ($doc -ne 0) {
-  Write-Host '下一步（先补齐 doctor 报缺失的项，每条 fix 都有命令）：' -ForegroundColor Yellow
+  Write-Host '⚠ doctor 有未通过项（上面 ✗ 的 required 条目）：按 fix 命令补齐后重跑本脚本。' -ForegroundColor Yellow
 } else {
   Write-Host '下一步：'
 }

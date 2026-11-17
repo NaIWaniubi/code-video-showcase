@@ -1,6 +1,6 @@
 {
   "name": "code-video-showcase",
-  "version": "2.8.1",
+  "version": "2.9.0",
   "description": "Pure-code, beat-synced showcase video skill: deterministic HTML/Canvas frames, synthesized score, FFmpeg assembly.",
   "type": "module",
   "license": "MIT",
@@ -20,6 +20,7 @@
     "fixture:lint": "node scripts/spec-lint.mjs --spec fixtures/mini-41s/spec.json --root .",
     "fixture:plan": "node templates/plan.mjs --spec fixtures/mini-41s/spec.json --root . --print",
     "fixture:compile": "node scripts/compile.mjs --spec fixtures/mini-41s/spec.json --root . --no-qa --concurrency 4",
+    "fixture:e2e": "node bin/cvs.mjs build fixtures/mini-41s/spec.json --root . --platform douyin --strict --concurrency 2",
     "test:all": "node scripts/test-all.mjs",
     "test:brand": "node scripts/test-brand.mjs",
     "test:golden": "node scripts/test-golden.mjs",

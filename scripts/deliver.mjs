@@ -17,20 +17,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { parseStrict, rejectUnknown } from './lib/strict-flags.mjs';
 
-function parse(argv) {
-  const a = {};
-  for (let i = 0; i < argv.length; i++) {
-    const k = argv[i];
-    if (!k.startsWith('--')) continue;
-    const next = argv[i + 1];
-    if (!next || next.startsWith('--')) a[k.slice(2)] = true;
-    else { a[k.slice(2)] = next; i++; }
-  }
-  return a;
-}
-
-const args = parse(process.argv.slice(2));
+const PROG = 'node scripts/deliver.mjs';
+// R3-审计（RT-04 #1）：以前宽容解析静默吞未知 flag；`--coer`/`--specx` 一律照跑 exit 0。
+const KNOWN_FLAGS = ['spec', 'outdir', 'root', 'out', 'cover', 'no-subs', 'json', 'help'];
+const parsed = parseStrict(process.argv.slice(2), KNOWN_FLAGS);
+if (parsed.unknown.length) rejectUnknown(PROG, parsed.unknown, KNOWN_FLAGS);
+const args = parsed.args;
 if (args.help || !args.spec) {
   console.log(`Usage: node scripts/deliver.mjs --spec <spec> [options]
   --outdir <dir>   output dir (default spec.render.outDir)
@@ -71,8 +65,12 @@ function readImageManifest() {
   const candidates = [
     path.join(outDir, 'image-manifest.json'),
     path.join(outDir, 'images', 'image-manifest.json'),
-    path.join(root, 'out', 'images', 'image-manifest.json'),
   ];
+  // R3-审计（RT-04 #9）：仓库根回退只在本次 outDir 就是仓库默认 out/ 时才启用——
+  // 两个项目共用同一 ROOT 时，项目 B 曾会把项目 A 的封面写进自己的 delivery.json。
+  if (path.resolve(outDir) === path.join(root, 'out')) {
+    candidates.push(path.join(root, 'out', 'images', 'image-manifest.json'));
+  }
   for (const p of candidates) {
     if (fs.existsSync(p)) {
       try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { /* ignore */ }
@@ -129,6 +127,18 @@ for (const platform of PLATFORMS) {
     subtitles: hasBurnedSubs ? 'master.srt' : null,
     burned: hasBurnedSubs,
   });
+}
+
+// R3-审计（RT-04 #8）：交付清单以前对缺席的平台件一声不吭——「生成了但你漏看」
+// 与「根本没生成」输出完全一样，投放前核对只能靠人眼。按上次 build 的 render.preset
+// 求差集，缺件进 warnings（清单里带出，不再只靠 stdout）。
+const warnings = [];
+const intendedPreset = String(spec.render?.preset || 'master').toLowerCase();
+if (intendedPreset !== 'master') {
+  const wantName = intendedPreset === 'wechat' ? 'weixin' : intendedPreset;
+  if (!rows.some((r) => r.platform === wantName)) {
+    warnings.push(`${wantName}.mp4 declared by spec.render.preset "${spec.render.preset}" is missing in ${path.relative(root, outDir)}; run \`node bin/cvs.mjs build <spec> --platform ${intendedPreset}\``);
+  }
 }
 
 if (!rows.length) {
@@ -207,6 +217,7 @@ const manifest = {
   title,
   cta,
   cover: relOrNull(coverFile),
+  warnings,
   subtitles: {
     srt: fs.existsSync(path.join(outDir, 'master.srt')) ? relOrNull(path.join(outDir, 'master.srt')) : null,
     vtt: fs.existsSync(path.join(outDir, 'master.vtt')) ? relOrNull(path.join(outDir, 'master.vtt')) : null,
@@ -221,4 +232,5 @@ fs.mkdirSync(path.dirname(outPath), { recursive: true });
 fs.writeFileSync(outPath, JSON.stringify(manifest, null, 2) + '\n');
 // R2-14：--json 时 stdout 只有这一行 JSON；其余全部 stderr。
 if (args.json) process.stdout.write(JSON.stringify(manifest) + '\n');
+for (const w of warnings) console.error(`[warn] ${w}`);
 console.error(`[deliver] ${rows.length} file(s) -> ${outPath}`);

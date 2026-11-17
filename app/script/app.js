@@ -251,6 +251,13 @@ async function copyJson() {
 }
 
 function downloadJson() {
+  // R3-审计（RT-01）：当前表格若仍是示例片，直接下载等于拿示例覆盖自己编辑过的
+  // project.spec.json —— 这是本界面唯一的编辑出口，必须二次确认。
+  if (state.source === FIXTURE_URL && typeof window.confirm === 'function' &&
+      !window.confirm('当前载入的是示例片（fixtures/mini-41s）。下载会把这份示例覆盖成仓库根的 project.spec.json，确定继续？')) {
+    toast('已取消下载。想接着改自己的片，先点「载入仓库根的 project.spec.json」。');
+    return;
+  }
   const blob = new Blob([JSON.stringify(state.spec, null, 2) + '\n'], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -261,6 +268,29 @@ function downloadJson() {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   setStatus(`已下载 project.spec.json · hash ${specHash(state.spec)}`);
+}
+
+/** 载入仓库根的 project.spec.json（向导下载、或 build 前的设计稿都在这里）。 */
+async function loadProjectSpec() {
+  try {
+    const res = await fetch(PROJECT_URL, { cache: 'no-store' });
+    if (!res.ok) {
+      if (res.status === 404 || res.status === 403) throw new Error('仓库根还没有 project.spec.json');
+      throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    }
+    const spec = await res.json();
+    state.spec = spec;
+    state.original = JSON.parse(JSON.stringify(spec));
+    state.source = PROJECT_URL;
+    state.dirty.clear();
+    render();
+    setStatus(`已加载 ${PROJECT_URL}`);
+  } catch (err) {
+    els.stats.textContent = '加载失败';
+    els.empty.hidden = false;
+    els.empty.textContent = `无法载入仓库根的 project.spec.json：${err.message}。可以先在示例上改，或去向导生成后再载。`;
+    toast(`加载失败：${err.message}`);
+  }
 }
 
 async function load(source = FIXTURE_URL) {
@@ -311,6 +341,7 @@ els.issues.addEventListener('keydown', (e) => {
   if (li) { e.preventDefault(); jumpToRow(li); }
 });
 
+$('btn-load-spec').addEventListener('click', loadProjectSpec);
 $('btn-download').addEventListener('click', downloadJson);
 $('btn-copy').addEventListener('click', copyJson);
 $('btn-reset').addEventListener('click', () => {

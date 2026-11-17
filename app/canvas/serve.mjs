@@ -13,6 +13,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseByteRange } from '../shared/range.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_ROOT = path.resolve(HERE, '..', '..');
@@ -94,13 +95,30 @@ export function createStaticServer(root = DEFAULT_ROOT, opts = {}) {
           return;
         }
         if (!st.isFile()) { res.writeHead(404).end('404'); return; }
-        const headers = {
-          'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
-          'Content-Length': st.size,
-          'Cache-Control': cacheFor(file, pathname),
+        const mime = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
+        const cache = cacheFor(file, pathname);
+        // R3-审计（RT-03 #2）：静态服务以前没有 Range 支持，评审页/帧预览的 <video>
+        // 拖到未缓冲区只能卡住等全量顺序读。成片动辄上百 MB，206 分段是拖动定位的前提。
+        const head = (status, extra, len) => res.writeHead(status, {
+          'Content-Type': mime,
+          'Content-Length': String(len),
+          'Cache-Control': cache,
           'X-Content-Type-Options': 'nosniff',
-        };
-        res.writeHead(200, headers);
+          ...extra,
+        });
+        const range = parseByteRange(req.headers.range, st.size);
+        if (range && range !== 'unsat') {
+          head(206, { 'Content-Range': `bytes ${range.start}-${range.end}/${st.size}`, 'Accept-Ranges': 'bytes' }, range.end - range.start + 1);
+          if (req.method === 'HEAD') { res.end(); return; }
+          fs.createReadStream(file, { start: range.start, end: range.end }).on('error', () => res.destroy()).pipe(res);
+          return;
+        }
+        if (range === 'unsat') {
+          head(416, { 'Content-Range': `bytes */${st.size}` }, 23);
+          res.end('416 Range Not Satisfiable');
+          return;
+        }
+        head(200, { 'Accept-Ranges': 'bytes' }, st.size);
         if (req.method === 'HEAD') { res.end(); return; }
         fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
       });
@@ -156,5 +174,12 @@ if (isMain) {
       process.on('SIGINT', stop);
       process.on('SIGTERM', stop);
     })
-    .catch((e) => { console.error('[canvas] failed:', e && e.message || e); process.exit(1); });
+    .catch((e) => {
+      if (e && e.code === 'EADDRINUSE') {
+        console.error(`[canvas] failed: 端口 ${p} 被占（可能已开着另一个 cvs 界面或统一入口）。换一个：node app/canvas/serve.mjs --port 5183`);
+      } else {
+        console.error('[canvas] failed:', e && e.message || e);
+      }
+      process.exit(1);
+    });
 }

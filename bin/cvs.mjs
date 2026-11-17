@@ -35,6 +35,20 @@ const specArgs = (args) => {
   return args;
 };
 
+// R3-审计（RT-01×RT-08 交叉）：首页「从零到成片」第 5 步教的 `cvs qa …` 是死路
+// （E_UNKNOWN_COMMAND）。沿用 specArgs 同款默认值口径：仓库根有 out/master.mp4 就
+// 直接拿它当视频，有 out/plan.json 就带上 --plan。
+const hasMaster = fs.existsSync(path.join(process.cwd(), 'out', 'master.mp4'));
+const hasOutPlan = fs.existsSync(path.join(process.cwd(), 'out', 'plan.json'));
+const qaArgs = (args) => {
+  if (args.length && !args[0].startsWith('--')) return args;
+  const out = hasMaster ? ['out/master.mp4', ...args] : [...args];
+  if (!out.includes('--plan') && !out.some((x) => String(x).startsWith('--plan=')) && hasOutPlan) {
+    out.splice(1, 0, '--plan', 'out/plan.json');
+  }
+  return out;
+};
+
 // R2-35（N01-F5）：`cvs wizard --help` 以前不打印帮助反而起服务占住 5181。
 // surface 命令统一：--help/-h 只打一行用法+URL 就退出，端口绝不进入 LISTENING。
 const SURFACES = { wizard: 5181, canvas: 5182, script: 5183, versions: 5184, review: 5185 };
@@ -58,6 +72,7 @@ const commands = {
   compile:  (a) => node('scripts/compile.mjs', specArgs(a)),
   again:    (a) => node('scripts/again.mjs', a),
   deliver:  (a) => node('scripts/deliver.mjs', specArgs(a)),
+  qa:      (a) => node('scripts/qa-video.mjs', qaArgs(a)),
   snapshot: (a) => node('scripts/versions.mjs', ['snapshot', ...specArgs(a)]),
   rollback: (a) => node('scripts/versions.mjs', ['rollback', ...a]),
   history:  (a) => node('scripts/versions.mjs', ['list', ...a]),
@@ -93,11 +108,15 @@ usage: cvs <command> [args]
   plan <spec> [--print]                  spec -> plan.json with per-segment hashes
   build <spec> [--audio f|--no-audio] [--platform douyin] [--strict] [--burn-subtitles] [--cover]
                [--transition fade|wipeleft|circleopen|...] [--transition-duration 0.4]
-                                         validate -> plan -> incremental render -> concat(xfade) -> qa
+               [--concurrency n] [--resume] [--no-qa] [--json] [--dry-run]
+                                        validate -> plan -> incremental render -> concat(xfade) -> qa
+  qa [video] [--plan f]                quality gates on master / platform cuts
+                                        (default video out/master.mp4, plan out/plan.json)
   again [--set k=v] [--no-build]         edit last spec + rebuild only dirty segments
   deliver [--spec f] [--json] [--cover img]  delivery.json + master.srt/.vtt + cover
-  snapshot [--spec f] [--label name]     version snapshot of master/spec/plan/qa (+ review.json)
-  history [--spec f] [--json]            list version snapshots in <outDir>/versions
+  snapshot [--spec f] [--label name] [--outdir d]
+                                        version snapshot of master/spec/plan/qa (+ review.json)
+  history [--spec f] [--json] [--outdir d]    list version snapshots in <outDir>/versions
   verify <version> [--spec f]            re-hash a snapshot against its record
   rollback <version> [--spec f]          restore a verified snapshot to outDir
   variant <spec> --axes <file> [--out d] cartesian variants + manifest (one outDir per variant)

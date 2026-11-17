@@ -1,0 +1,51 @@
+name: test-browser-nightly
+
+# R3-审计（RT-09 F1，P0）：主 CI 从不跑浏览器套件——逐像素验收（frames）
+# 与真实编译 e2e（server/test-api）全靠人肉。nightly + 手动触发补上门禁。
+on:
+  schedule:
+    # 每天 03:17 UTC（错峰整点，避开整点排队洪峰）
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Chrome
+        run: |
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt-get install -y ./google-chrome-stable_current_amd64.deb || \
+            sudo apt-get install -y -f && sudo apt-get install -y google-chrome-stable_current_amd64.deb
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build local fonts
+        run: node scripts/build-fonts.mjs
+
+      - name: Browser suites (frames / api / recipes / inspect / style pages)
+        env:
+          CHROME_EXE: google-chrome
+        run: |
+          mkdir -p out
+          node scripts/test-all.mjs --browser --json | tee out/test-browser.json
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-browser-report
+          path: out/test-browser.json
+          if-no-files-found: ignore

@@ -240,7 +240,13 @@ export function resolveAssetsReport(spec, opts = {}) {
       issues.push({ code: 'E_ASSET_REMOTE', path: `${at}.path`, message: `remote URLs are not resolved locally: ${asset.path}`, level: 'error' });
       return;
     }
-    const abs = path.isAbsolute(asset.path) ? asset.path : path.resolve(rootDir, asset.path);
+    // R3-审计（RT-07 P2-4）：以前绝对路径照单全收、只查 `..` 相对形态——
+    // /etc/passwd、../../x 都能被 hash/ffprobe 读出元数据。与 spec.mjs 同款三查。
+    if (path.isAbsolute(asset.path) || asset.path.split(/[\\/]+/).includes('..')) {
+      issues.push({ code: 'E_ASSET_PATH', path: `${at}.path`, message: `asset path must stay inside project root: ${asset.path}`, level: 'error' });
+      return;
+    }
+    const abs = path.resolve(rootDir, asset.path);
     let stat = null;
     try { stat = fs.statSync(abs); } catch { stat = null; }
     if (!stat || !stat.isFile()) {

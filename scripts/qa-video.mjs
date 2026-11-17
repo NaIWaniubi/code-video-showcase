@@ -275,7 +275,32 @@ if (au) {
   }
 }
 
-// ── 4. optional VMAF/SSIM against a reference ───────────────────────────────
+// ── 4. GOP / keyint spacing（R3-审计 RT-06 P1-3） ────────────────────────────
+// R2-21 宣称「GOP≤2s 全链路受控」，但 QA 从不验证。旧版成片实测最大 GOP
+// 242 帧（8s）——平台必判二转。此处按 I 帧时间戳测最大间隔。
+{
+  const gp = run(FFPROBE, ['-v', 'error', '-select_streams', 'v:0',
+    '-show_entries', 'frame=pict_type,pkt_pts_time', '-of', 'csv=p=0', VIDEO]);
+  const iTimes = [];
+  if (gp.status === 0) {
+    for (const line of String(gp.stdout || '').split('\n')) {
+      const m = /^I,(\d+(?:\.\d+)?)/.exec(String(line).trim());
+      if (m) iTimes.push(Number(m[1]));
+    }
+  }
+  if (iTimes.length >= 2) {
+    let maxGap = 0;
+    for (let i = 1; i < iTimes.length; i++) maxGap = Math.max(maxGap, iTimes[i] - iTimes[i - 1]);
+    const limit = 3 / fps;   // keyint=2×fps + 一帧容差
+    report.metrics.gop = { iFrames: iTimes.length, maxGapSec: +maxGap.toFixed(3), limitSec: +limit.toFixed(3) };
+    add('gop spacing', maxGap <= limit ? 'PASS' : 'WARN',
+      `max I-frame gap ${maxGap.toFixed(2)}s over ${iTimes.length} I-frames (limit ${limit.toFixed(2)}s ≈ keyint 2×fps; platforms re-transcode larger GOPs)`);
+  } else {
+    add('gop spacing', 'ADVISORY', `could not enumerate I-frame timestamps (ffprobe exit ${gp && gp.status})`);
+  }
+}
+
+// ── 5. optional VMAF/SSIM against a reference ───────────────────────────────
 if (args.ref) {
   const ref = path.resolve(String(args.ref));
   const refProbe = ffprobeJson(ref, ['-count_frames', '-show_streams']);
@@ -307,6 +332,20 @@ if (!args['no-contact']) {
   fs.mkdirSync(path.dirname(CONTACT), { recursive: true });
   const cs = run(FFMPEG, ['-y', '-hide_banner', '-loglevel', 'error', '-i', VIDEO, '-vf', 'fps=1,scale=320:-2,tile=8x8:padding=4:margin=8', '-frames:v', '1', CONTACT]);
   add('contact sheet', cs.status === 0 ? 'PASS' : 'ADVISORY', cs.status === 0 ? CONTACT : String(cs.stderr).slice(0, 200));
+}
+
+// ── 检查齐全性（R3-审计 RT-06 P1-2） ────────────────────────────────────────
+// flash / silence / loudness 等检测在 probe 失败时会整项缺席，报告照样全绿。
+// 交付级（带 plan）质检把「必备项没跑成」与「跑过了没问题」严格分开。
+if (plan) {
+  const seen = new Set(report.checks.map((c) => c.name));
+  const required = ['pages exist', 'codec', 'pix_fmt', 'size', 'fps', 'frames', 'duration'];
+  if (au) required.push('audio codec', 'loudness');
+  for (const name of required) {
+    if (!seen.has(name)) {
+      add(`check "${name}"`, 'FAIL', `expected check did not run — treat as probe failure, not "all green"`);
+    }
+  }
 }
 
 // ── summary ────────────────────────────────────────────────────────────────

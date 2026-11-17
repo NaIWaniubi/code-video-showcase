@@ -12,6 +12,8 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { staticCacheControl } from '../shared/static-cache.mjs';
+import { parseByteRange } from '../shared/range.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(HERE, '..', '..');
@@ -65,10 +67,12 @@ export function resolveInside(root, pathname) {
 }
 
 /**
- * @param {{root?:string, redirect?:string, noCache?:boolean}} opts
+ * @param {{root?:string, redirect?:string, cacheFor?:(file:string, pathname:string)=>string}} opts
+ *   cacheFor 默认与 ui/frames 同一套策略（RT-03 #7 收敛：以前单起时全资源 no-store，
+ *   字体与 1MB 的 fonts.css 每次开页重下）。
  * @returns {http.Server}
  */
-export function createStaticServer({ root = REPO_ROOT, redirect = '/app/script/', noCache = true } = {}) {
+export function createStaticServer({ root = REPO_ROOT, redirect = '/app/script/', cacheFor = staticCacheControl } = {}) {
   const base = path.resolve(root);
 
   return http.createServer((req, res) => {
@@ -116,22 +120,42 @@ export function createStaticServer({ root = REPO_ROOT, redirect = '/app/script/'
           return;
         }
       }
-      const headers = {
-        'Content-Type': contentType(target),
-        'Cache-Control': noCache ? 'no-store' : 'public, max-age=60',
-      };
-      if (method === 'HEAD') {
-        res.writeHead(200, headers);
-        res.end();
-        return;
-      }
-      const stream = fs.createReadStream(target);
-      stream.on('error', () => {
-        if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end('500 Internal Server Error\n');
+      // R3-审计（RT-03 #2）：与 canvas/frames 同款 Range/206——评审页与帧预览的
+      // <video> 拖动定位依赖它，成片上百 MB 时顺序读不可接受。
+      fs.stat(target, (err2, tst) => {
+        if (err2 || !tst.isFile()) {
+          res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end('500 Internal Server Error\n');
+          return;
+        }
+        const mime = contentType(target);
+        const cache = cacheFor(target, pathname);
+        const head = (status, extra, len) => res.writeHead(status, {
+          'Content-Type': mime,
+          'Content-Length': String(len),
+          'Cache-Control': cache,
+          ...extra,
+        });
+        const range = parseByteRange(req.headers.range, tst.size);
+        const streamError = () => {
+          if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end('500 Internal Server Error\n');
+        };
+        if (range && range !== 'unsat') {
+          head(206, { 'Content-Range': `bytes ${range.start}-${range.end}/${tst.size}`, 'Accept-Ranges': 'bytes' }, range.end - range.start + 1);
+          if (method === 'HEAD') { res.end(); return; }
+          fs.createReadStream(target, { start: range.start, end: range.end }).on('error', streamError).pipe(res);
+          return;
+        }
+        if (range === 'unsat') {
+          head(416, { 'Content-Range': `bytes */${tst.size}` }, 23);
+          res.end('416 Range Not Satisfiable');
+          return;
+        }
+        head(200, { 'Accept-Ranges': 'bytes' }, tst.size);
+        if (method === 'HEAD') { res.end(); return; }
+        fs.createReadStream(target).on('error', streamError).pipe(res);
       });
-      res.writeHead(200, headers);
-      stream.pipe(res);
     });
   });
 }

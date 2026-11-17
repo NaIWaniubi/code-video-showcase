@@ -3,6 +3,108 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v2.9.0] - 2026-11-18 — 第三轮十视角集群审计收口：内容寻址缓存闭合 + 无障碍矩阵 + 用户链路断点清零
+
+第三轮以 10 个只读审计员（新手全流程 / frames 深审 / 入口数据面 / CLI+增量 /
+渲染确定性 / 音频质检 / 安全纵深 / 文档漂移 / 测试盲区 / 前端稳健性）对 v2.8.1
+做全量审计，约 150 条 finding 去重后按 10 个波次落地。交叉印证规则不变：
+≥2 视角独立命中 → 置信 ×2。
+
+### 波1 用户可见断点
+- **首页教的 `cvs qa …` 是死路**（实测 E_UNKNOWN_COMMAND）：bin/cvs.mjs 补 `qa`
+  薄封装，沿 specArgs 同款默认值口径（仓库根有 out/master.mp4、out/plan.json 即自动带）。
+- **剧本表格下载覆盖真 spec**：界面曾只能载入 fixtures 示例，「下载」会把示例片
+  直接覆盖成 project.spec.json。现在新增「载入仓库根的 project.spec.json」按钮，
+  来源是示例时下载前二次确认。
+- **install 不建字体且吞 doctor 失败**：全新 clone 缺 shared/fonts 时 doctor 报
+  E_NO_FONTS 被 `|| true` 吞掉、install.sh 以 0 收尾，且 doctor 给的修复命令本身是
+  死路。现在安装期自动 build-fonts，doctor 退出码原样透传，两脚本同语义。
+- EADDRINUSE 提示统一为可操作文案（ui/frames/review/canvas 补齐，修正过期示例端口）。
+
+### 波2 serve 层收敛
+- `/` 根路径 302 → `/app/`（此前裸 404，违反「一个端口跑齐」承诺）。
+- 静态服务全部支持 HTTP Range/206（此前 `<video>` 拖动定位退化）；Range 解析抽成
+  app/shared/range.mjs 共享助手。
+- 缓存策略收敛到 app/shared/static-cache.mjs：fonts.css（约 1MB）此前被漏出短缓存、
+  wizard/script/versions 单起时全资源 no-store——同一 URL 两套行为终结。
+- /jobs 反代加固：8s 超时、客户端断连销毁上游、方法收窄 GET/HEAD/POST、请求体 1MB 上限、
+  502 结构化错误码 E_API_UNREACHABLE。
+- wizard 的 .well-known 白名单删除（与其余面口径不齐）。
+
+### 波3 frames 工作台
+- image-manifest 条目突破项目根（`../../任意路径` 可读仓库外文件）→ resolveUnderRoot 同款闸门。
+- A-B 循环区间跨帧源泄漏 → clearSource 重置并隐藏区间条。
+- 在途 iframe 被 LRU 逐出后 ensureLive 空等 26s 卡死串行预载队列 → 出池即快速失败。
+- 驱逐后取帧的 404 文案给出出路；`?q=abc` 的 NaN 穿透 → 400；下载扩展名优先取源文件名。
+- 换源/关页现在真的调 /frames/api/close 释放 ffmpeg 与帧缓存目录（此前磁盘无界增长）。
+- 性能读数 interval 随 clearSource 停表，后台标签不每秒写 DOM。
+
+### 波4 安全闸门
+- versions snapshot/rollback 把 spec.render.outDir 当可信输入 → 仓库外任意目录写入；
+  与 compile errorDir 同款闸门 + 索引条目名消毒。
+- legacy timeline 入口缺 outDir/page 双闸门 → validateComposition 补三查，构建路径
+  校验错误不再丢弃继续写盘。
+- assets.mjs verify/add 绝对素材路径照单全收 → 三查对齐。
+- allowRemotePages opt-in 后残余 SSRF：渲染器侧私网段硬拦；withSegmentParams 剥掉
+  page 自带的其它查询参数。
+
+### 波5 内容寻址缓存闭合（本轮核心能力升级）
+- localRefs 补 CSS url() 与 <img src>：页面内嵌样式引用的素材换掉不再假绿命中旧字节。
+- **素材字节重算**：segmentHash 不再只信 spec 自报 hash——声明与实测不符 → E_ASSET_HASH。
+- **工具链指纹**（Node + ffmpeg 版本）进段哈希 payload：升级编码器后缓存自然失效。
+- render-manifest cached 条目补齐 expected/framesVerified/seconds，legacy 与默认路径同构。
+
+### 波6 CLI 契约
+- 未知 flag 白名单推广到 plan / deliver / versions / render-farm（R2-16 只修了
+  build|compile 一半，`--coer`/`--resum` 仍静默照跑 exit 0）——含 did-you-mean。
+- `--concurrency abc` 传导为 NaN → 现在 usage exit 2。
+- deliver：声明平台件缺席进 delivery.json.warnings；封面仓库根回退仅在 outDir=out 时启用。
+- help 文案与真实 flag 对齐（build 行补 --concurrency/--resume/--no-qa/--json/--dry-run）。
+
+### 波7 质检强化
+- qa-video：**检查齐全性断言**（probe 失败整项缺席不再全绿）+ **GOP 间距检查**
+  （keyint=2×fps，此前「GOP 全链路受控」无任何验证）。
+- qa-audio：残缺 plan 从 traceback 崩成 E_PLAN_INCOMPLETE exit 2；EXTENSIBLE 头
+  位深手工解 fmt 块（24-bit 不再全表错 18 dB）。
+- theme-audit 落地 R2-28「上屏组合矩阵」：点缀色/HUD 印在底/表面的真实对比，
+  双指标不可读按 FAIL（发现 8 处真实低对比，如实记录，设计调色留后续）。
+- loudnorm 量测不可用从静默降级 → strict 下 exit 12。
+
+### 波8 渲染确定性细节
+- dom-overlay 无兜底：页面存在可见非 canvas DOM 而未标 data-dom-overlay 时整层丢像素
+  且无告警 → 现自动走 CDP 或至少留 warn。
+- raw POST 退避改指数 + 3s 超时；image2pipe（PNG 回退链）补 -s；xfade 中间层补 bitexact；
+  muxer timescale 与段级同口径钉死 90000；无音轨平台重排补齐 keyint/level/色彩标签。
+
+### 波9 测试体系
+- CI 加 shell 语法门禁（bash -n install.sh arm.sh concat-and-encode.sh）。
+- 新增 nightly + workflow_dispatch 的浏览器套件工作流（此前 CI 从不跑浏览器套件，逐像素
+  验收与真实编译 e2e 全靠人肉）。
+- 新钉子：strict-flags 单测（进 test-all）、clampConcurrency 边界、deliver SRT BOM/CRLF
+  字节级、--no-subs/warnings 分支、golden envCompare 纯函数（probe-failed ≠ 相符）、
+  launchRetry 重试语义。
+- determinism-check 加 --video 整段 mp4 双跑（容器级幂等此前零覆盖）。
+- fixture:e2e script（41s strict 全链可复跑入口）。
+- 错误码注册表 136 → 139，覆盖率回到 100%。
+
+### 波10 文档同步
+README 主题数 13→17（中英一致）、字体清单订正（随包 7 个 OFL 字族）、Surfaces 补
+frames/ui 两行、低级路线补脚手架提示；SKILL §1「13 选 1」→17、错误表 125→139、
+配方页编号体系订正、qa-audio 路径订正；references/qa.md 按代码重写（新增 flash/GOP/
+检查齐全性与 8× 过采样口径）；themes.md APCA 声明改如实口径；ARMED/CLUSTER-PLAN/
+OFFLINE/Dockerfile/BACKLOG 幽灵码显式退役标注；IMPLEMENTATION-STATUS 加快照注记。
+
+### 修复过程中自查出的回归（如实记录）
+- fonts.css 索引再递归：把新增的 url() 引用面用到 fonts.css 上，1187 个 woff2 子集
+  被逐页递归哈希（实测每页 +5s、全链 >2min）。命中 fonts.css 即早退、用 lock 指纹代表
+  字体集合变更——原注释里警告过的坑，落地时自己踩了一次，已堵。
+- plan.mjs CLI 解析误伤库进程：本模块被 compile 当库 import，顶层白名单解析会用
+  compile 的 argv 拒掉 --dry-run 等（把 build 全链打红）。CLI 解析收进 main()。
+
+### 测试
+test:all 23 套件全绿（contract 32/32 含新增 5 组）；theme-audit --strict 转绿前提
+是 8 处矩阵硬失败已如实暴露。版本 2.9.0。
+
 ## [v2.8.1] - 2026-11-15 — 审计尾巴清零 + 全链 e2e 实证
 
 ### P1 收尾（v2.8.0 遗留清单）

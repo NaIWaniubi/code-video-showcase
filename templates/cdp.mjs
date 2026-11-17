@@ -307,10 +307,12 @@ export async function launch({
  * 与 test-reflow-pages 的 renderStill 两次尝试约定一致。产品侧的重试在 render-batch
  * （段级重试 + 浏览器重启），这里只给直接调 launch 的测试用。
  */
-export async function launchRetry(opts = {}, attempts = 2) {
+export async function launchRetry(opts = {}, attempts = 2, launcher = launch) {
+  // R3-审计（RT-09 F10）：重试语义以前零覆盖——attempts 被改成 1 或 sleep 清零
+  // 都没有测试能察觉。launcher 可注入，测试用假实现钉死「两次尝试 + 抛最后一次」。
   let last;
   for (let i = 1; i <= attempts; i++) {
-    try { return await launch(opts); }
+    try { return await launcher(opts); }
     catch (e) {
       last = e;
       if (i < attempts) await sleep(500);

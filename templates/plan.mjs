@@ -13,6 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { buildPlan as buildLegacyPlan, concatList, formatPlan } from './timeline.mjs';
 import { normalizeSpec, validateSpec, specToTimeline, specDuration, SPEC_VERSION, ENGINE_VERSION } from './spec.mjs';
 
@@ -20,7 +21,8 @@ export const PLAN_VERSION = 2;
 
 const isAbsoluteUrl = (s) => /^https?:\/\//i.test(String(s || ''));
 
-/** 从 HTML/JS/CSS 文本里抽本地依赖（import / @import / link / script src）。 */
+/** 从 HTML/JS/CSS 文本里抽本地依赖（import / @import / link / script src /
+ *  CSS url() / <img src>）。 */
 function localRefs(text) {
   const refs = new Set();
   const patterns = [
@@ -29,6 +31,11 @@ function localRefs(text) {
     /@import\s+(?:url\()?['"]?([^'")\s]+)['"]?\)?/g,
     /<link[^>]+href=["']([^"']+)["']/gi,
     /<script[^>]+src=["']([^"']+)["']/gi,
+    // R3-审计（RT-04 #2）：CSS `url()` 与 `<img src>` 以前不在引用面——页面里
+    // background-image 指向的素材被换掉，路径不变 hash 不变，缓存命中出旧画面。
+    // 二进制按 utf8 读会得到稳定的乱码哈希，足以让缓存失效（不追求字节精确）。
+    /url\(\s*['"]?([^'")\s]+)['"]?\)/g,
+    /<img[^>]+src=["']([^"']+)["']/gi,
   ];
   for (const re of patterns) for (const m of text.matchAll(re)) refs.add(m[1]);
   return [...refs];
@@ -64,10 +71,13 @@ export function pageContentHash(root, pagePath, seen = new Set(), depth = 0) {
   // 段缓存失效。修「字体换了但缓存命中出旧字形」的假绿。
   const normRel = path.relative(root, abs).split(path.sep).join('/');
   if (normRel === 'shared/fonts.css') {
+    // R3 回归自检：fonts.css 是**索引**不是依赖图——localRefs 的 url() 会把它
+    // 的 1187 个 woff2 子集全部递归哈希（实测每页 +5s、16 页全链 >2min）。
+    // 命中即早退：own + lock 指纹足以代表字体集合变更。
     const lockAbs = path.join(root, 'shared', 'fonts.lock.json');
     if (fs.existsSync(lockAbs)) {
       const lh = crypto.createHash('sha256').update(fs.readFileSync(lockAbs)).digest('hex').slice(0, 16);
-      deps.push(`shared/fonts.lock.json:${lh}`);
+      return crypto.createHash('sha256').update(`${own}|shared/fonts.lock.json:${lh}`).digest('hex').slice(0, 16);
     }
   }
   for (const ref of localRefs(text)) {
@@ -84,16 +94,64 @@ export function pageContentHash(root, pagePath, seen = new Set(), depth = 0) {
   return crypto.createHash('sha256').update(`${own}|${deps.join('|')}`).digest('hex').slice(0, 16);
 }
 
+/** 工具链指纹：Node 主版本 + ffmpeg 一行版本。升级编码器后旧段缓存自然失效，
+ *  不再把上一个 ffmpeg 的字节当「同内容」交付（R3-审计 RT-04 #4）。 */
+let buildFpCache = null;
+function toolchainFingerprint() {
+  if (buildFpCache !== null) return buildFpCache;
+  let ffmpeg = 'no-ffmpeg';
+  try {
+    const r = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] });
+    ffmpeg = String((r && r.stdout) || '').split('\n')[0].replace(/^ffmpeg version\s*/i, '').trim().slice(0, 40);
+  } catch { /* keep default */ }
+  buildFpCache = `node${process.versions.node}|ffmpeg${ffmpeg}`;
+  return buildFpCache;
+}
+
+/** 重算本地素材字节哈希。
+ * R3-审计（RT-04 #3）：segmentHash 以前只信 spec 里自报的 hash——同路径换素材、
+ * 声明 hash 不更新，内容寻址就命中旧字节。实测优先：声明的与实测不符 → E_ASSET_HASH；
+ * 无声明时把实测值并入，返回的 Map 按 path 索引，供段哈希与 plan.spec.assets 使用。 */
+export function resolveAssetHashes(spec, root) {
+  const issues = [];
+  const hashes = new Map();
+  for (const [i, a] of (spec.assets || []).entries()) {
+    if (!a || typeof a.path !== 'string' || isAbsoluteUrl(a.path)) continue;
+    const bare = String(a.path).split('?')[0].split('#')[0];
+    const abs = path.resolve(root, bare);
+    let stat = null;
+    try { stat = fs.statSync(abs); } catch { /* missing 已由 assertPages/E_ASSET_MISSING 报 */ }
+    if (!stat || !stat.isFile()) continue;
+    const h = crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex').slice(0, 16);
+    hashes.set(String(a.path), h);
+    const declared = a.hash || a.sha256;
+    if (declared && String(declared).toLowerCase() !== h) {
+      issues.push({
+        code: 'E_ASSET_HASH', path: `assets[${i}].path`, level: 'error',
+        message: `asset bytes changed since the recorded hash (${bare}): declared ${String(declared).toLowerCase().slice(0, 16)}, actual ${h}`,
+      });
+    }
+  }
+  return { issues, hashes };
+}
+
 /** 段哈希：任何影响该段像素的输入都必须进来。 */
 export function segmentHash(segment, meta, spec, opts = {}) {
-  const assetHashes = (spec.assets || [])
-    .map((a) => a.hash || a.sha256 || null)
-    .filter(Boolean)
-    .sort();
+  // R3（RT-04 #3/#4）：素材用实测哈希（与 spec.assets 同序对齐），再垫工具链指纹。
+  const assetList = Array.isArray(spec.assets) ? spec.assets : [];
+  let hashes;
+  if (opts.assetHashes && Array.isArray(opts.assetHashes) && opts.assetHashes.length === assetList.length) {
+    hashes = opts.assetHashes;
+  } else {
+    hashes = assetList.map((a) => a.hash || a.sha256 || null);
+  }
+  const assetHashes = hashes.filter(Boolean).sort();
   const scopedPatches = (spec.patches || []).filter((p) => !p.scope || p.scope === segment.id);
   const payload = JSON.stringify({
     plan: PLAN_VERSION,
     engine: ENGINE_VERSION,
+    // R3（RT-04 #4）：Node/ffmpeg 版本进 payload，换工具链后缓存自然全量失效。
+    toolchain: opts.root ? toolchainFingerprint() : '',
     id: segment.id,
     kind: segment.kind,
     page: segment.page,
@@ -158,6 +216,9 @@ export function buildPlanFromSpec(input, opts = {}) {
   const root = path.resolve(opts.root || process.env.CVS_ROOT || process.cwd());
   const issues = validateSpec(spec);
   if (opts.checkPages !== false) issues.push(...assertPages(spec, root));
+  // R3（RT-04 #3）：素材字节哈希重算并入校验——声明与实测不符即 E_ASSET_HASH。
+  const assetRes = resolveAssetHashes(spec, root);
+  issues.push(...assetRes.issues);
 
   const errors = issues.filter((i) => i.level === 'error');
   const warnings = issues.filter((i) => i.level === 'warn');
@@ -188,7 +249,10 @@ export function buildPlanFromSpec(input, opts = {}) {
       sub: plan.meta.copySub || null,
       cta: plan.meta.copyCta || null,
     },
-    assets: (spec.assets || []).map((a) => ({ id: a.id, hash: a.hash || a.sha256 || null, kind: a.kind || null, path: a.path || null })),
+    assets: (spec.assets || []).map((a) => {
+      const actual = assetRes.hashes.get(String(a.path)) || null;
+      return { id: a.id, hash: actual || a.hash || a.sha256 || null, kind: a.kind || null, path: a.path || null };
+    }),
     patches: spec.patches || [],
   };
   plan.warnings = warnings.map((w) => ({ code: w.code, path: w.path, message: w.message }));
@@ -196,7 +260,10 @@ export function buildPlanFromSpec(input, opts = {}) {
   for (const s of plan.segments) {
     // 页面哈希同时写进段对象，便于排查「hash 为什么变了」。
     s.pageHash = pageContentHash(root, s.page);
-    s.hash = segmentHash(s, plan.meta, spec, { root });
+    s.hash = segmentHash(s, plan.meta, spec, {
+      root,
+      assetHashes: (spec.assets || []).map((a) => assetRes.hashes.get(String(a.path)) || a.hash || a.sha256 || null),
+    });
   }
   plan.stats.hashed = plan.segments.length;
 
@@ -204,21 +271,17 @@ export function buildPlanFromSpec(input, opts = {}) {
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
-
-function parseArgs(argv) {
-  const a = {};
-  for (let i = 0; i < argv.length; i++) {
-    const k = argv[i];
-    if (!k.startsWith('--')) continue;
-    const next = argv[i + 1];
-    if (!next || next.startsWith('--')) a[k.slice(2)] = true;
-    else { a[k.slice(2)] = next; i++; }
-  }
-  return a;
-}
+// 注意：本模块同时被 compile.mjs 当库 import——CLI 解析必须收在 main() 里，
+// 模块顶层解析会在库进程里拿 compile 的 argv 去查 plan 白名单（--dry-run 等
+// 一律被拒），这是把 build 全链打红的回归点。
+import { parseStrict, rejectUnknown } from '../scripts/lib/strict-flags.mjs';
+const PROG_PLAN = 'node templates/plan.mjs';
+const PLAN_KNOWN = new Set(['spec', 'out', 'concat', 'root', 'outdir', 'check', 'print', 'json', 'help']);
 
 function main() {
-  const args = parseArgs(process.argv.slice(2));
+  // CLI 解析收在这里（本模块也作为库被 compile.mjs import，顶层解析会误伤）。
+  const { args, unknown } = parseStrict(process.argv.slice(2), PLAN_KNOWN);
+  if (unknown.length) rejectUnknown(PROG_PLAN, unknown, PLAN_KNOWN);
   // R2-15（N04-F3）：SKILL §0.0 的退出码表只有 0/2/10/11/12/13/14。
   // 此前 spec 错误一律 exit 1——agent 路由表没有这一支，用户写错 spec
   // 会被上报成"编译器坏了"。usage→2、spec 类错误→10、崩溃才是 1。

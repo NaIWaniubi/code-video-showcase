@@ -101,6 +101,13 @@ async function main() {
 
   const specPath = path.resolve(String(args.spec));
   const spec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
+  // R3-审计（RT-07 P1-2）：构建路径以前丢弃校验错误继续写盘——outDir/page 三查
+  // 只挂在 --check 上等于没有。错误一律 exit 1，不落盘。
+  const valErrors = validateComposition(spec).errors;
+  if (valErrors.length) {
+    for (const e of valErrors) console.error(`[error] ${e}`);
+    process.exit(1);
+  }
   const root = path.resolve(String(args.root || spec.meta?.root || process.cwd()));
   const outDir = args.outdir ? String(args.outdir) : spec.meta?.outDir;
 

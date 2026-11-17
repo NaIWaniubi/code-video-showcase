@@ -419,7 +419,12 @@ if (audioPath) {
     const ffmpeg = process.env.FFMPEG || 'ffmpeg';
     const c = spawnSync(ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-i', master,
       '-vf', `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black`,
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '24', '-pix_fmt', 'yuv420p', '-an', platformFile], {
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '24',
+      // R3-审计（RT-06 P1-3）：这条无音轨平台重排以前缺 keyint/level/色彩标签——
+      // GOP 用 x264 默认 250 帧（8s+）、level 让 x264 自推，与 master 的受控参数打架。
+      '-x264-params', `keyint=${Math.round((plan.stats.fps || 30) * 2)}:min-keyint=1:threads=2`,
+      '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
+      '-pix_fmt', 'yuv420p', '-an', platformFile], {
       cwd: root, stdio: 'inherit', windowsHide: true,
     });
     if (c.status !== 0) fail('concat', 'E_CONCAT', `platform encode failed: ${platform} (exit ${c.status})`, { platform, raw });

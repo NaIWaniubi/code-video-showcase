@@ -31,6 +31,7 @@ import { ENGINE_VERSION } from '../templates/spec.mjs';
 import { browserCandidates } from '../templates/cdp.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+import { buildEnvCompare } from './lib/env-compare.mjs';
 const REPO = path.resolve(HERE, '..');
 
 function parseArgs(argv) {
@@ -363,25 +364,7 @@ function doCheck() {
   }
   const manifest = readJson(MANIFEST);
   const env = currentEnv();
-  const envCompare = {
-    chrome: {
-      expected: manifest.chrome ?? null,
-      actual: env.chrome ?? null,
-      // R2-12（N09-F2）：旧逻辑 `!env.chrome → match:true` 让探测失败变假绿灯。
-      // manifest 记了版本而本机探不到 = 环境**未知**，必须按不匹配处理
-      // （非 strict 下打 W_ENV_MISMATCH 并跳过哈希比对，而不是拿它当相符）。
-      match: !manifest.chrome || (env.chrome != null && manifest.chrome === env.chrome),
-      reason: !manifest.chrome ? 'not-recorded' : (env.chrome == null ? 'probe-failed' : (manifest.chrome === env.chrome ? 'equal' : 'differs')),
-    },
-    fonts: {
-      expected: manifest.fonts ?? null,
-      actual: env.fonts ?? null,
-      match: !manifest.fonts || (env.fonts != null && manifest.fonts === env.fonts),
-      reason: !manifest.fonts ? 'not-recorded' : (env.fonts == null ? 'probe-failed' : (manifest.fonts === env.fonts ? 'equal' : 'differs')),
-    },
-    node: { expected: manifest.node ?? null, actual: env.node },
-    platform: { expected: manifest.platform ?? null, actual: env.platform },
-  };
+  const envCompare = buildEnvCompare(manifest, env);
   const envMatch = envCompare.chrome.match && envCompare.fonts.match;
   if (!envMatch) {
     const detail = {

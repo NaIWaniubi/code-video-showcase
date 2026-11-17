@@ -3,7 +3,7 @@
  * api.mjs — 零依赖本地编译 API：spec → job → 成片。
  *
  *   node server/api.mjs                       # http://127.0.0.1:5190
- *   node server/api.mjs --port 5191
+ *   node server/api.mjs --port 5190
  *   node server/api.mjs --concurrency 2
  *
  * 契约（C7-03）：

@@ -14,7 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { THEME_LIST, getTheme, auditTheme, contrastRatio } from '../templates/themes.js';
-import { auditApca } from '../templates/color.js';
+import { auditApca, apcaLc } from '../templates/color.js';
 
 const args = process.argv.slice(2);
 const strict = args.includes('--strict');
@@ -47,6 +47,34 @@ for (const theme of themes) {
     entry.apca.push(row);
     say(`  [${mark}] APCA ${row.label.padEnd(16, ' ')} ${row.pair.padEnd(22, ' ')} ${String(row.lc).padStart(6)} Lc  (min ${row.need})`);
   }
+  // R3-审计（RT-06 F1 / R2-28 落地）：token 对之外补「上屏组合」矩阵——点缀色、
+  // 倒计时直接印在 bg/surface 上的真实组合。以前 accents×bg 最低 1.00:1 时
+  // theme-audit 仍可全绿，等于无障碍门禁只审了没人看的 token 对。
+  // 分两档：WCAG<2 且 APCA<20 → 双指标都不可读，硬失败；其余低对比 → 提示级，
+  // 可见但不拦交付（浅色主题的粉彩点缀是设计取舍，需人工复核而非自动改色）。
+  const matrix = [];
+  let matrixWarns = 0;
+  for (const [fgHex, fgLabel] of [
+    ...theme.accents.map((a) => [a.hex, `点缀·${a.name}`]),
+    [theme.hud.countdown, 'HUD 倒计时'],
+  ]) {
+    for (const [bgLabel, bgHex] of [['底', theme.colors.bg], ['表面', theme.colors.surface]]) {
+      if (!fgHex || !bgHex) continue;
+      // countdown 是半透明 token，按该底色合成后再比（与 HUD 胶囊同一口径）。
+      const fg = composite(String(fgHex), String(bgHex));
+      const ratio = contrastRatio(fg, String(bgHex));
+      const lc = Math.abs(apcaLc(fgHex, String(bgHex)));
+      const hard = ratio < 2 && lc < 20;                    // 双指标都不可读
+      const soft = !hard && !(ratio >= 3 || lc >= 30);       // 大字口径不达标
+      const row = { pair: `${fgLabel} / ${bgLabel}`, ratio: +ratio.toFixed(2), lc: +lc.toFixed(1), hard, soft };
+      matrix.push(row);
+      say(`  [${hard ? 'FAIL' : soft ? 'WARN' : 'PASS'}] 矩阵 ${row.pair.padEnd(24, ' ')} ${String(ratio).padStart(6)} : 1 · Lc ${String(lc).padStart(5)}`);
+      if (hard) failures++;
+      else if (soft) matrixWarns++;
+    }
+  }
+  apcaWarnings += matrixWarns;
+  entry.matrix = matrix;
   // HUD capsule: composite the rgba capsule over the theme background.
   const capsule = composite(theme.hud.capsuleBg, theme.colors.bg);
   const numRatio = contrastRatio(theme.hud.capsuleNumber, capsule);
@@ -70,7 +98,7 @@ function composite(fg, bg) {
   return `#${to(r * a + br * (1 - a))}${to(g * a + bgc * (1 - a))}${to(b * a + bb * (1 - a))}`;
 }
 
-report.summary = { themes: themes.length, wcagFailures: failures, apcaWarnings };
+report.summary = { themes: themes.length, failures, apcaWarnings };
 if (jsonPath) {
   fs.mkdirSync(path.dirname(path.resolve(jsonPath)), { recursive: true });
   fs.writeFileSync(path.resolve(jsonPath), JSON.stringify(report, null, 2));
@@ -83,5 +111,5 @@ if (args.includes('--json') && !jsonPath) {
   if (strict && failures > 0) process.exit(1);
   process.exit(0);
 }
-console.log(`\n${failures === 0 ? '✓ WCAG 全部通过' : `✗ ${failures} 项 WCAG 不合格`}${apcaWarnings ? `  ·  ${apcaWarnings} 项 APCA 提醒` : ''}`);
+console.log(`\n${failures === 0 ? '✓ WCAG + 上屏组合矩阵全部通过' : `✗ ${failures} 项不合格（含上屏组合矩阵）`}${apcaWarnings ? `  ·  ${apcaWarnings} 项 APCA 提醒（仅提示，--strict 不拦）` : ''}`);
 if (strict && failures > 0) process.exit(1);

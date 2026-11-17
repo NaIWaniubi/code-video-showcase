@@ -228,6 +228,47 @@ test('deliver 产出 delivery.json + master.srt/.vtt', () => {
   assert.match(srt, /想做 宣传片？/);
   assert.match(srt, /扁平插画/);
   assert.ok(fs.existsSync(path.join(outDir, 'master.vtt')));
+  // R3-审计（RT-09 F4）：SRT 必须 UTF-8 BOM + CRLF——Windows 记事本/国产剪辑器
+  // 对无 BOM 的 UTF-8 按本地代码页猜，中文 cue 会变乱码。钉死字节级口径。
+  assert.equal(srt.charCodeAt(0), 0xfeff, 'SRT 应以 UTF-8 BOM 开头');
+  assert.match(srt, /\r\n/, 'SRT 行分隔符应为 CRLF');
+  const vtt = fs.readFileSync(path.join(outDir, 'master.vtt'), 'utf8');
+  assert.match(vtt, /^WEBVTT\r?\nLanguage: zh/m);
+});
+
+test('R3 deliver：--no-subs 不写 srt/vtt；声明平台件缺席进 warnings（RT-04 #8）', () => {
+  const dir = tmp();
+  const outDir = path.join(dir, 'out');
+  fs.mkdirSync(outDir, { recursive: true });
+  fs.writeFileSync(path.join(outDir, 'master.mp4'), Buffer.from('m'));
+  // 无 plan 时字幕无从生成（cue 源是 plan 的段文案）——这里给最小 plan 验证 --no-subs。
+  writeJson(path.join(outDir, 'plan.json'), {
+    segments: [{ id: 'r01-card', kind: 'card', start: 0, end: 1, card: { first: '想做', keyword: '宣传片？' } }],
+    stats: { duration: 1 },
+    spec: { copy: {} },
+  });
+  // render.preset=wechat 但 outDir 没有 weixin.mp4 → 清单点名缺失，不再静默。
+  const spec = specWith((s) => { s.render.outDir = outDir; s.render.preset = 'wechat'; });
+  const specPath = path.join(dir, 'spec.json');
+  writeJson(specPath, spec);
+  const r = run([path.join(ROOT, 'scripts', 'deliver.mjs'), '--spec', specPath]);
+  assert.equal(r.status, 0, r.stderr);
+  const manifest = readJson(path.join(outDir, 'delivery.json'));
+  assert.ok(fs.existsSync(path.join(outDir, 'master.srt')), '默认应写 srt');
+
+  // --no-subs：cue=0 且字节不落盘。
+  fs.rmSync(path.join(outDir, 'master.srt'));
+  fs.rmSync(path.join(outDir, 'master.vtt'));
+  const r2 = run([path.join(ROOT, 'scripts', 'deliver.mjs'), '--spec', specPath, '--no-subs']);
+  assert.equal(r2.status, 0, r2.stderr);
+  assert.ok(!fs.existsSync(path.join(outDir, 'master.srt')), '--no-subs 不应写 srt');
+  const m2 = readJson(path.join(outDir, 'delivery.json'));
+  assert.equal(m2.subtitles.cues, 0);
+
+  // 缺失平台件：warnings 数组点名。
+  assert.ok(Array.isArray(m2.warnings) && m2.warnings.length >= 1,
+    `warnings 应含 missing platform 件：${JSON.stringify(m2.warnings)}`);
+  assert.match(m2.warnings.join(' '), /weixin/);
 });
 
 // ── 质检三档语义：ADVISORY 永不拦交付，FAIL 一定拦 ──────────────────────────
@@ -506,4 +547,28 @@ test('R2-07：page 含 .. 穿越被拒（E_PAGE_TRAVERSAL），非 HTML 被拒�
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
+
+test('R3 并发钳制：--concurrency 超 cap 被钳并告警（RT-09 F3）', () => {
+  const dir = tmp();
+  // render-farm 顶层即跑 CLI（无 --plan 退出），必须给一份可解析的假 plan。
+  const planPath = path.join(dir, 'plan.json');
+  fs.writeFileSync(planPath, JSON.stringify({ meta: { outDir: dir }, segments: [] }));
+  const cap = Math.max(2, Math.floor(Math.max(1, Math.floor(os.cpus().length / 2)) / 2));
+  // 空 plan 选择段数为 0 → farm 退 1（另一条既有语义）；本用例只钉钳制告警本身。
+  const r = run([path.join(ROOT, 'templates', 'render-farm.mjs'), '--plan', planPath,
+    '--concurrency', '9999', '--dry-run'], { timeout: 30000 });
+  assert.ok([0, 1].includes(r.status), `退出码应为 0 或 1，实际 ${r.status}：${r.stderr}`);
+  assert.match(r.stdout + r.stderr, new RegExp('clamped to ' + cap), `应钳到 ${cap}，实际输出未含钳制告警`);
+});
+
+test('R3 并发钳制：--concurrency 非数字 → usage exit 2（RT-04 #14）', () => {
+  const dir = tmp();
+  const planPath = path.join(dir, 'plan.json');
+  fs.writeFileSync(planPath, JSON.stringify({ meta: { outDir: dir }, segments: [] }));
+  const r = run([path.join(ROOT, 'templates', 'render-farm.mjs'), '--plan', planPath,
+    '--concurrency', 'abc', '--dry-run']);
+  assert.equal(r.status, 2, `NaN 应退 2，实际 ${r.status}：${r.stderr}`);
+  assert.match(r.stderr, /E_USAGE/);
+});
+
 if (failed) process.exit(1);

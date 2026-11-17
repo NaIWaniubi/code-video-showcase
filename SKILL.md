@@ -31,7 +31,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 
 **四条硬断言**：`build` 自动合成 `spec.audio`（无音轨必须显式 `--no-audio`，不静默出默片）；`--resume` 同时校验帧数 + manifest hash（`cache hit` 才代表内容没变）；`--root` 默认 **cwd**（`E_PAGE_MISSING` 多半是 root 错了）；交付态加 `--strict`（QA warning 也算失败），迭代态可不加但要知道自己在迭代。
 
-**报错 → 唯一动作**（完整表 125 码见 `docs/ERRORS.md`）：
+**报错 → 唯一动作**（完整表 139 码见 `docs/ERRORS.md`）：
 
 | 前缀 | 唯一动作 |
 |---|---|
@@ -87,7 +87,7 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
 - **界面**：`cvs ui`(5180) 一个端口挂齐六个界面（`app/index.html` 是首页）；也可单独 `app/wizard/`(5181)、`app/canvas/`(5182)、`app/script/`(5183)、`app/versions/`(5184)、`app/review/`(5185)、`app/frames/`(5186)、`server/api.mjs`(5190)。
 - **旧项目**：timeline v1 仍完全可用，`spec.mjs` 自动迁移；`render-farm` 默认 batch 模式（一个 worker 一个浏览器跑一个 shard），`--legacy` 回退逐段进程。页面按视口自适应（横/竖/方真重排），16:9 输出位级不变。
 - **质量闸门**：`npm run test:all`（纯 Node）、`npm run test:browser`、`npm run golden`（静帧位级回归）、`npm run brand -- check …`。
-- **配方页**：13–29 号在 `templates/recipe-*.html`（清单见 `templates/style-pages.mjs`）；**实拍素材** `cvs ingest` 出 EDL + spec 草稿（启发式，需人工审）。
+- **配方页**：20 种画风中 18 种有专属页（`templates/recipe-*.html` + `cyber-pixel.html`），映射单一真值 `templates/style-pages.mjs`；**实拍素材** `cvs ingest` 出 EDL + spec 草稿（启发式，需人工审）。
 - **覆盖扩展（v2.5）**：段间转场 35 种（`--transition`，xfade 在拼接层做，默认关闭逐字节不变）、确定性效果库 26 个（`templates/effects.mjs`）、风格 20 种、领域 24 种。覆盖矩阵单一真值 `docs/COVERAGE.md`。
 - **禁止**：让 LLM 直接生成 HTML/CSS/JS，或绕过 spec 直接改像素。模型只填枚举与文案。
 ## 0. 适用与不适用
@@ -107,8 +107,8 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
 | 音频 | 48 kHz 立体声 AAC 192–320 kbps，EBU R128 −14 LUFS |
 | 视频 | H.264 High，yuv420p，bt709，CRF 21（母版）/22–24（平台），maxrate 限峰，+faststart |
 | 节拍 | 120 BPM：1 拍 = 0.5 s，1 小节 = 2 s |
-| 主题配色 | 13 选 1，默认 `coral-noir`（原版：珊瑚 `#d97757` + 深底 `#0e0e0d`）；OKLCH token + APCA 审计，见 §5、`references/themes.md` |
-| 字体 | 全部 OFL（Noto Sans/Serif CJK SC、Ma Shan Zheng、ZCOOL、Press Start 2P、JetBrains Mono、Inter、Orbitron、Playfair Display…）；集合与许可见 `references/themes.md` |
+| 主题配色 | 17 选 1，默认 `coral-noir`（原版：珊瑚 `#d97757` + 深底 `#0e0e0d`）；OKLCH token + APCA/WCAG 审计（含上屏组合矩阵），见 §5、`references/themes.md` |
+| 字体 | 分发的 7 个 OFL 字族（Noto Sans/Serif CJK SC、ZCOOL KuaiLe、JetBrains Mono、Inter、Orbitron、Playfair Display）；另 4 个（马善政/Long Cang/ZCOOL QingKe/Press Start 2P）文档曾列但未随包分发，`paper-journal` 的 `Ma Shan Zheng` 会回退系统字体。集合与许可见 `references/themes.md`、`THIRD-PARTY-NOTICES.md` |
 | 字幕 | 不要底部字幕；信息都做成画面内的胶囊/HUD/注释 |
 | 确定性 | 画面是 `t` 的纯函数，禁止 CSS transition/animation、rAF、Date.now、Math.random |
 
@@ -277,10 +277,10 @@ Three.js 片段：`renderer` 必须 `{ preserveDrawingBuffer: true }`；启动�
 
 **一条命令**
 ```bash
-node scripts/qa-video.mjs out/master.mp4 --plan out/plan.json  # 三档：FAIL 拦 / WARN strict 拦 / ADVISORY 永不拦
-python scripts/qa-audio.py audio/mix.wav --plan out/plan.json --strict
+node scripts/qa-video.mjs out/master.mp4 --plan out/plan.json  # 三档：FAIL 拦 / WARN strict 拦 / ADVISORY 永不拦（含检查齐全性断言与 GOP 间距）
+python scripts/qa-audio.py out/audio/mix.wav --plan out/plan.json --strict  # 音频件是 build 产物在 out/audio/mix.wav；也可直测成片 mp4
 node scripts/theme-audit.mjs --strict
-node scripts/determinism-check.mjs --page "segments/01.html?theme=coral-noir" --t 0.5
+node scripts/determinism-check.mjs --page "segments/01.html?theme=coral-noir" --t 0.5  # 静帧位级；--video 加跑整段 mp4（全编码链幂等）
 ```
 自动覆盖（工具强制，阈值表见 `references/qa.md`）：帧数/尺寸/fps/bt709 四元标签；黑帧、冻结、静音；−14 ±1 LUFS / TP ≤ −1 dBTP / LRA ≤ 14；cue 对齐 ≥80% ±30 ms、BPM 误差 ≤2、网格命中 ≥70%；高频克制 ≥6 dB；17 套主题 WCAG 全绿。
 

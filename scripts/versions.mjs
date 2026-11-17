@@ -17,20 +17,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { parseStrict, rejectUnknown } from './lib/strict-flags.mjs';
 
-function parseArgs(argv) {
-  const a = { _: [] };
-  for (let i = 0; i < argv.length; i++) {
-    const k = argv[i];
-    if (!k.startsWith('--')) { a._.push(k); continue; }
-    const next = argv[i + 1];
-    if (!next || next.startsWith('--')) a[k.slice(2)] = true;
-    else { a[k.slice(2)] = next; i++; }
-  }
-  return a;
-}
-
-const args = parseArgs(process.argv.slice(2));
+const PROG = 'node scripts/versions.mjs';
+// R3-审计（RT-04 #1）：宽容解析曾让 `--labell 初版` 静默照跑。
+const KNOWN_FLAGS = new Set(['spec', 'outdir', 'root', 'label', 'json', 'help']);
+const parsed = parseStrict(process.argv.slice(2), KNOWN_FLAGS);
+if (parsed.unknown.length) rejectUnknown(PROG, parsed.unknown, KNOWN_FLAGS);
+// 位置参数（子命令与版本号）单独收进 args._，保持既有消费点不变。
+const args = { ...parsed.args, _: process.argv.slice(2).filter((a) => !String(a).startsWith('--')) };
 const cmd = args._[0] || null;
 const ROOT = path.resolve(String(args.root || process.cwd()));
 const USAGE = `Usage:
@@ -63,8 +58,15 @@ function readSpec(file) {
 }
 
 function resolveOutDir(spec, explicit) {
-  const raw = explicit || spec?.render?.outDir || 'out';
-  return path.resolve(ROOT, String(raw));
+  const raw = String(explicit || spec?.render?.outDir || 'out');
+  // R3-审计（RT-07 P1-1）：snapshot/rollback 不经 validateSpec，`../..` outDir
+  // 曾能把 master/spec 全量复制到仓库外。与 compile errorDir 同款闸门。
+  if (/^(?:[/\\]|[A-Za-z]:)/.test(raw) || raw.split(/[\\/]+/).includes('..') || /[\x00-\x1f]/.test(raw)) {
+    return path.join(ROOT, 'out');
+  }
+  const dir = path.resolve(ROOT, raw);
+  const rel = path.relative(ROOT, dir);
+  return (rel.startsWith('..') || path.isAbsolute(rel)) ? path.join(ROOT, 'out') : dir;
 }
 
 function indexPath(outDir) { return path.join(outDir, 'versions', 'versions.json'); }
@@ -152,6 +154,17 @@ function snapshot() {
   for (const [f, meta] of Object.entries(files)) console.log(`  ${f.padEnd(26)} ${meta.sha256.slice(0, 12)}  ${meta.bytes} B`);
 }
 
+/** 快照文件清单的回滚白名单（R3-审计 RT-07 P2-6）：防止被改写的索引条目
+ *  把 verify/rollback 引到项目外路径。只收 SNAPSHOT_FILES 里的名与 spec。 */
+const ROLLBACK_FILES = ['master.mp4', 'delivery.json', 'plan.json', 'master.srt', 'master.vtt'];
+/** 条目名必须是根内相对路径（无绝对、无反斜杠、无 `..`/`.` 段）；
+ * 嵌套目录（qa/qa-video.json）是合法快照内容，放行。 */
+const isSafeRel = (rel) => {
+  const s = String(rel || '');
+  if (!s || s.length > 200 || path.isAbsolute(s)) return false;
+  if (/[\\]/.test(s) || /[\x00-\x1f]/.test(s)) return false;
+  return !s.split('/').some((p) => p === '..' || p === '.');
+};
 function loadEntry(outDir, version) {
   const index = readIndex(outDir);
   const entry = index.versions.find((v) => v.version === version || v.version.startsWith(`${version}-`));
@@ -159,12 +172,25 @@ function loadEntry(outDir, version) {
     console.error(`[error] [E_VERSION_UNKNOWN] ${version} not found in ${toPosix(path.relative(ROOT, indexPath(outDir)))}`);
     process.exit(13);
   }
-  return { index, entry, dir: path.join(outDir, 'versions', entry.version) };
+  // R3-审计（RT-07 P2-6）：entry.version 直接进 join——索引被改写后可把
+  // rollback 的复制源引到项目外。按穿越语义拦截（分隔符/../ 前缀），不按
+  // 字符集——合法 label 可以是中文（v001-初版）。
+  const nameOk = typeof entry.version === 'string' && entry.version.length < 200 &&
+    !/[\\/]/.test(entry.version) && entry.version !== '.' && entry.version !== '..' &&
+    !entry.version.startsWith('..') && !path.isAbsolute(entry.version);
+  if (nameOk) {
+    return { index, entry, dir: path.join(outDir, 'versions', entry.version) };
+  }
+  console.error(`[error] [E_SNAPSHOT_TAMPERED] ${version}: versions.json 条目名非法 (${String(entry.version).slice(0, 80)})`);
+  process.exit(13);
 }
 
 function verifyEntry(entry, dir) {
   const bad = [];
   for (const [rel, meta] of Object.entries(entry.files || {})) {
+    // R3-审计（RT-07 P2-6）：条目名直接进 join，索引被改写时可读项目外文件并
+    // 报 mismatch 误导排障。无分隔/无 ../ 的单段名才放行。
+    if (!isSafeRel(rel)) { bad.push(`${String(rel).slice(0, 80)}: unsafe entry name`); continue; }
     const file = path.join(dir, rel);
     if (!fs.existsSync(file)) { bad.push(`${rel}: missing`); continue; }
     if (sha256(file) !== meta.sha256) bad.push(`${rel}: sha256 mismatch`);
@@ -223,9 +249,13 @@ function rollback() {
   }
 
   const restored = [];
-  for (const rel of ['master.mp4', 'delivery.json', 'plan.json', 'master.srt', 'master.vtt']) {
+  for (const rel of ROLLBACK_FILES) {
+    // R3-审计（RT-07 P2-6 / RT-04 #11）：恢复集收敛到白名单；恢复后逐件复核
+    // sha256——快照集与恢复集以前不对称（只复验 master），审计口径有洞。
     const src = path.join(dir, rel);
     if (!fs.existsSync(src)) continue;
+    if (!isSafeRel(rel)) { console.error(`[error] [E_SNAPSHOT_TAMPERED] 条目文件名非法：${rel}`); process.exit(13); }
+    if (!(entry.files || {})[rel]) { console.error(`[error] [E_SNAPSHOT_TAMPERED] versions.json 未登记该文件：${rel}`); process.exit(13); }
     const dst = path.join(outDir, rel);
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     const tmp = `${dst}.rollback-${process.pid}`;

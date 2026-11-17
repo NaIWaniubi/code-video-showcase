@@ -27,6 +27,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStaticServer } from '../canvas/serve.mjs';
 import { openSource, defaultCacheRoot, timecodeOf } from './source.mjs';
+import { staticCacheControl } from '../shared/static-cache.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_ROOT = path.resolve(HERE, '..', '..');
@@ -109,7 +110,12 @@ export function candidates(root) {
   const out = path.join(root, 'out');
   const videos = listByMtime(out, root, ['.mp4', '.webm', '.mov'], 24);
   const plans = listByMtime(out, root, ['plan.json'], 24);
-  const specs = listByMtime(out, root, ['.spec.json'], 24);
+  // R3-审计（RT-01 #8）：向导刚下载到仓库根的 project.spec.json 不在 out/ 下，
+  // 以前不进候选，用户得手输。并入根级 *.spec.json（仍排除点目录）。
+  const specs = [
+    ...listByMtime(out, root, ['.spec.json'], 24),
+    ...listByMtime(root, root, ['project.spec.json'], 8),
+  ];
   const images = [];
   let dirsVisited = 0;
   const walkDirs = (d, depth) => {
@@ -147,14 +153,7 @@ export function createFrameServer(root = DEFAULT_ROOT, opts = {}) {
   let nextId = 1;
 
   const staticServer = createStaticServer(ROOT, {
-    cacheControl: (file, pathname) => {
-      // iframe 池会反复载同一批模板/模块/字体。默认 no-store 会让每开一页都
-      // 重新下载并解析（1920×1080 页面首帧 1–3s 的主因）。HTML 仍 no-store，
-      // 保证改了页面刷新即见；资源给 2 分钟缓存（字体 10 分钟）。
-      if (/\.(woff2?|ttf|otf)$/i.test(pathname)) return 'public, max-age=600';
-      if (/^\/(templates|node_modules|assets)\//.test(pathname)) return 'public, max-age=120';
-      return 'no-store';
-    },
+    cacheControl: staticCacheControl,
   });
   const staticHandler = staticServer.listeners('request')[0];
 
@@ -172,7 +171,11 @@ export function createFrameServer(root = DEFAULT_ROOT, opts = {}) {
 
   function getSource(id) {
     const rec = sources.get(String(id || ''));
-    if (!rec) throw httpError(404, `source ${id} not found (open one first)`, 'E_SOURCE');
+    if (!rec) {
+      // R3-审计（RT-03 #14）：源超过 MAX_SOURCES 被 LRU 清理后，正在翻帧的页面
+      // 下一张图就 404——文案要能直接指向出路，而不是一句英文 "not found"。
+      throw httpError(404, `帧源 ${id} 已关闭或已过期（同时最多 ${MAX_SOURCES} 个，被清理后需重新打开）。先调用 open 再取帧。`, 'E_SOURCE');
+    }
     return rec.source;
   }
 
@@ -258,14 +261,31 @@ export function createFrameServer(root = DEFAULT_ROOT, opts = {}) {
       const n = Number(raw);
       if (!Number.isInteger(n)) throw httpError(400, 'n must be an integer frame index', 'E_FRAME');
       const fmt = q.get('fmt') === 'png' ? 'png' : 'jpeg';
-      const quality = q.get('q') ? Number(q.get('q')) : null;
+      const qRaw = q.get('q');
+      let quality = qRaw === null ? null : Number(qRaw);
+      // R3-审计（RT-02 F8）：?q=abc 以前 NaN 一路穿到 Chromium toDataURL，行为不可归因。
+      if (quality !== null && !Number.isFinite(quality)) {
+        throw httpError(400, 'q must be a number (e.g. 95)', 'E_BAD_REQUEST');
+      }
 
       const started = Date.now();
       let frame;
       try {
         frame = await source.getFrame(n, { fmt, q: quality });
       } catch (e) {
-        if (Number(e && e.status)) throw e;
+        if (Number(e && e.status)) {
+          // R3-审计（RT-02 F5）：以前英文原文直穿 UI，与 open 路由的中文包装不一致。
+          const msg = String((e && e.message) || e);
+          let zh = msg;
+          if (/out of range/i.test(msg)) {
+            zh = `帧号超出范围：请使用 0..${source.meta().frames - 1} 之间的整数帧号。[${msg.slice(0, 120)}]`;
+            e.message = zh;
+          } else if (/not covered by any segment/i.test(msg)) {
+            zh = `该帧不在任何段内：检查 plan 的段覆盖，或换一个帧号。[${msg.slice(0, 120)}]`;
+            e.message = zh;
+          }
+          throw e;
+        }
         throw httpError(502, String((e && e.message) || e), 'E_FRAME');
       }
       const meta = source.meta();
@@ -387,7 +407,8 @@ if (isMain) {
         if (args.height) qs.set('height', String(args.height));
         if (args.refresh) qs.set('refresh', '1');
         try {
-          const res = await fetch(`${url}/frames/api/open?${qs}`);
+        // R3-审计（RT-03 #12）：预打开的裸 fetch 以前无超时，API hang 时启动阶段无限等待。
+        const res = await fetch(`${url}/frames/api/open?${qs}`, { signal: AbortSignal.timeout(15000) });
           const body = await res.json();
           if (!res.ok) throw new Error(body.error || res.statusText);
           console.log(`[frames] source ${body.id}: ${body.meta.kind} · ${body.meta.frames} frames @ ${body.meta.fps}fps · ${body.meta.width}×${body.meta.height}`);
@@ -400,5 +421,12 @@ if (isMain) {
       process.on('SIGINT', stop);
       process.on('SIGTERM', stop);
     })
-    .catch((e) => { console.error('[frames] failed:', e && e.message || e); process.exit(1); });
+    .catch((e) => {
+      if (e && e.code === 'EADDRINUSE') {
+        console.error(`[frames] failed: 端口 ${port} 被占（可能已开着另一个 cvs 界面或统一入口）。换一个：node app/frames/serve.mjs --port 5187`);
+      } else {
+        console.error('[frames] failed:', e && e.message || e);
+      }
+      process.exit(1);
+    });
 }

@@ -102,12 +102,14 @@ segment. Error codes live in `schema/errors.json` and are documented in
 
 | Surface | Port | Purpose |
 |---|---|---|
-| `app/wizard/` | 5181 | 16 presets + 7 cards + reference-image upload → valid `spec.json` |
+| `app/wizard/` | 5181 | 20 presets + 8 cards + reference-image upload → valid `spec.json` |
 | `app/canvas/` | 5182 | scrub + click-to-inspect + Shift-drag marquee + live patch |
 | `app/script/` | 5183 | storyboard table editing with overflow checks |
 | `app/versions/` | 5184 | localStorage version tree + side-by-side diff |
 | `server/api.mjs` | 5190 | job queue: `POST /jobs` → compile → `master.mp4` |
 | `app/review/` | 5185 | review page: player + frame-level comments (localStorage) |
+| `app/frames/` | 5186 | per-frame realtime preview workbench (`cvs frames`) |
+| `app/ui/` (recommended) | 5180 | one server for all six surfaces + `/frames/api/*` + `/jobs` proxy; open `http://127.0.0.1:5180/app/` |
 
 **Guards**
 
@@ -177,8 +179,8 @@ The skill is a production recipe, not a model. It packages the structure measure
 | Video | H.264 High, `yuv420p`, bt709, CRF 21 master / 22–24 delivery | maxrate-capped; +faststart; intermediate CRF 12 |
 | Audio | 48 kHz stereo AAC 192–320 kbps, −14 LUFS | synthesized, no samples; two-pass loudnorm |
 | Tempo | 120 BPM — 0.5 s per beat, 2 s per bar | 1 s card = 2 beats, 3 s style segment = 6 beats |
-| Theme | 13 palettes, default `coral-noir` | omitting `?theme=` keeps the original coral `#d97757` on `#0e0e0d` visuals; see [Themes](#themes) |
-| Type | OFL fonts only, served locally | Noto Sans/Serif CJK SC, Inter, JetBrains Mono, Orbitron, Playfair Display, Ma Shan Zheng, Long Cang, ZCOOL KuaiLe, ZCOOL QingKe HuangYou, Press Start 2P |
+| Theme | 17 palettes, default `coral-noir` | omitting `?theme=` keeps the original coral `#d97757` on `#0e0e0d` visuals; see [Themes](#themes) |
+| Type | OFL fonts only, served locally | Noto Sans/Serif CJK SC · Inter · JetBrains Mono · Orbitron · Playfair Display · ZCOOL KuaiLe（随包分发 7 个 OFL 字族；Ma Shan Zheng/Long Cang/ZCOOL QingKe/Press Start 2P 未随包） |
 | Determinism | frame = f(t) | no CSS animation, rAF, `Date.now`, `Math.random`; no burned-in subtitles |
 
 Measured on the reference sample: container 61.013 s / video 61.000 s, 1830 frames, 60 scene cuts, H.264 ≈ 3.53 Mbps, AAC 48 kHz stereo ≈ 196.8 kbps, 26.9 MB. Source data in `assets/scene-cuts.txt` and `assets/audio-analysis.json`.
@@ -263,7 +265,7 @@ node scripts/determinism-check.mjs --page "segments/01.html?theme=coral-noir" --
 
 ## Themes
 
-A theme is not three swapped colours: it is a role palette (14 tokens), one background material, HUD specs and four accent colours. Thirteen themes ship in `templates/themes.js`; **omitting `?theme=` renders the original `coral-noir` visuals, pixel for pixel**. The five v2 themes are derived in OKLCH and audited with both WCAG 2 and APCA (`node scripts/theme-audit.mjs`).
+A theme is not three swapped colours: it is a role palette (14 tokens), one background material, HUD specs and four accent colours. Seventeen themes ship in `templates/themes.js`; **omitting `?theme=` renders the original `coral-noir` visuals, pixel for pixel**. The five v2 themes are derived in OKLCH and audited with both WCAG 2 and APCA (`node scripts/theme-audit.mjs`).
 
 | # | id | Name | Mode | Material | Best for |
 |---|---|---|---|---|---|
@@ -339,7 +341,9 @@ copy is an *additional* file — it never replaces the master, and QA always mea
 master. `delivery.json` records platform, bytes, sha256, duration, cover, title, and
 which files carry burned subtitles.
 
-Low-level route (still supported; `cvs build` is a wrapper around it):
+Low-level route (still supported; `cvs build` is a wrapper around it).
+`segments/01.html` 等页面由 `node scripts/new-project.mjs` 脚手架生成——仓库内的
+示例页在 `templates/`（见下表映射）；直接跑本段命令前先 scaffold：
 
 ```bash
 node templates/render-segment.mjs --page "segments/01.html?theme=cyber-neon" \
@@ -406,7 +410,7 @@ code-video-showcase/
 ├─ SKILL.md                          # the skill itself — workflow, constraints, index
 ├─ install.sh / install.ps1          # v2.4: one-command setup (Node >=22 gate → npm ci → doctor)
 ├─ README.md / CHANGELOG.md          # this file / release notes
-├─ package.json                     # npm scripts: test, doctor, plan, render, qa, theme:audit
+├─ package.json                     # npm scripts: test, doctor, spec:plan / plan:legacy, render, qa, theme:audit
 ├─ .github/workflows/render-smoke.yml# CI: 2 s render + concat + QA
 ├─ references/
 │  ├─ timeline-schema.md             # v2: timeline.json → plan.json, frame snapping, render farm
@@ -539,7 +543,7 @@ This README is bilingual: English first, Chinese below. `SKILL.md` itself is wri
 
 仓库里**没有**提交成片视频，参考样片文件也不随仓库分发。预览素材是样片拆解图和模板占位实拍帧，图注与说明见上方英文 [Preview](#preview) 一节：`assets/contact-1fps.jpg`（全片 1 fps 接触表）、`style-tiles.jpg`（11 种风格各取一帧）、`card-tiles.jpg`（12 张大字卡）、`audio-spectrogram.png`（音频频谱）、`template-demo-card.jpg`（模板占位实拍）。
 
-主题预览图单独放在 `assets/theme-previews/`：三拼对比 `theme-three-up.jpg`、全集联系表 `theme-contact-sheet.jpg`、单主题 `01-coral-noir.jpg`–`08-crimson-theater.jpg`，见下文 [主题配色](#主题配色)。
+主题预览图单独放在 `assets/theme-previews/`：三拼对比 `theme-three-up.jpg`、全集联系表 `theme-contact-sheet.jpg`、单主题 `01-coral-noir.jpg`–`17-sand-linen.jpg`，见下文 [主题配色](#主题配色)。
 
 ### 主题配色
 

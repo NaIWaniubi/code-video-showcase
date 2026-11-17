@@ -434,6 +434,16 @@ export class SpecSource {
       await this._rendererReady;
       return;
     }
+    this._startRenderer();
+    await this._rendererReady;
+  }
+
+  /**
+   * 启动常驻渲染器。R3-审计（RT-10 F10）：以前失败一次就把错误永久缓存——
+   * CHROME_EXE 等环境修好后每次取帧仍抛旧错。留 _launchFailures 次数，
+   * getFrame 遇到错误时允许重建重试一次。
+   */
+  _startRenderer() {
     const self = this;
     let readyResolve;
     let readyReject;
@@ -458,8 +468,8 @@ export class SpecSource {
     this._runner.catch((e) => {
       self.error = e;
       readyReject(e);
+      self._launchFailures = (self._launchFailures || 0) + 1;
     });
-    await this._rendererReady;
   }
 
   /** 串行化所有渲染请求（单页一次只能 renderFrame 一个 t）。 */
@@ -567,7 +577,18 @@ export class SpecSource {
       e.status = 400;
       throw e;
     }
-    if (this.error) throw this.error;
+    if (this.error) {
+      // R3-审计（RT-10 F10）：启动失败不再永久缓存——首次遇到错误时重建渲染器重试一次。
+      if ((this._launchFailures || 0) > 0 && !this._retriedLaunch) {
+        this._retriedLaunch = true;
+        this.error = null;
+        try {
+          await this._startRenderer();
+          await this._rendererReady;
+        } catch (e) { this.error = e; }
+      }
+      if (this.error) throw this.error;
+    }
     const variant = fmt === 'png' ? 'png' : 'jpeg';
     const quality = Math.min(1, Math.max(0.3, (Number(q) || this.quality) / 100));
     return this._enqueue(async () => {
@@ -674,7 +695,16 @@ export class ImageSource {
         try {
           const man = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
           listed = (man.images || [])
-            .map((img) => (img && img.file ? path.resolve(this.root, img.file) : null))
+            .map((img) => {
+              if (!img || !img.file) return null;
+              // R3-审计（RT-02 F1）：清单条目以前可写 "../../任意路径" 突破项目根，
+              // 把仓库外文件内容读进响应。与 serve.mjs resolveUnderRoot 同一道闸。
+              const abs = path.resolve(this.root, String(img.file));
+              const rel = path.relative(this.root, abs);
+              if (/^[a-z]+:\/\//i.test(String(img.file)) ||
+                  rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+              return exists(abs) ? abs : null;
+            })
             .filter((p) => p && exists(p));
         } catch { listed = null; }
       }

@@ -197,4 +197,39 @@ test('accentOverride keeps contrast on a brand colour', () => {
   assert.ok(color.contrastRatio(t.colors.accentInk, t.colors.accent) >= 4.5);
 });
 
+// ── R3（RT-09 F10）：launchRetry 重试语义（launcher 可注入，纯逻辑钉死） ─────
+const cdp = await load('templates/cdp.mjs');
+test('launchRetry：首次失败第二次成功 → 返回结果；两次都失败 → 抛最后一次', async () => {
+  let calls = 0;
+  const flaky = async () => { calls++; if (calls === 1) throw new Error('cold start'); return 'browser'; };
+  assert.equal(await cdp.launchRetry({}, 2, flaky), 'browser');
+  assert.equal(calls, 2, '应尝试两次');
+
+  calls = 0;
+  const alwaysFail = async () => { calls++; throw new Error('boom'); };
+  await assert.rejects(cdp.launchRetry({}, 3, alwaysFail), /boom/);
+  assert.equal(calls, 3, 'attempts=3 应打满三次');
+});
+
 console.log(`\n${passed} passed${process.exitCode ? ' (with failures)' : ''}`);
+
+// ── R3（RT-09 F2）：golden 环境比对纯函数（probe 失败 ≠ 相符） ──────────────
+const envCmp = await load('scripts/lib/env-compare.mjs');
+test('buildEnvCompare：manifest 未记录 → not-recorded 且 match=true', () => {
+  const c = envCmp.buildEnvCompare({}, { chrome: '120', fonts: 'abc', node: '22' });
+  assert.equal(c.chrome.reason, 'not-recorded');
+  assert.equal(c.chrome.match, true);
+});
+test('buildEnvCompare：探不到（probe-failed）→ 不匹配，不能假绿（R2-12 钉）', () => {
+  const c = envCmp.buildEnvCompare({ chrome: '141.0.7396.0', fonts: 'setA' }, { chrome: null, fonts: 'setB' });
+  assert.equal(c.chrome.reason, 'probe-failed');
+  assert.equal(c.chrome.match, false, '探测失败必须按不匹配处理');
+  assert.equal(c.fonts.reason, 'differs');
+  assert.equal(c.fonts.match, false);
+});
+test('buildEnvCompare：版本相等 → equal/match；node/platform 原样透出', () => {
+  const c = envCmp.buildEnvCompare({ chrome: 'x', node: '22' }, { chrome: 'x', node: '24' });
+  assert.equal(c.chrome.reason, 'equal');
+  assert.equal(c.chrome.match, true);
+  assert.deepEqual(c.node, { expected: '22', actual: '24' });
+});

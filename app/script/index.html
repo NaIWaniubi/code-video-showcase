@@ -19,6 +19,7 @@
   </header>
 
   <section class="toolbar">
+    <button id="btn-load-spec" type="button" class="ghost">载入仓库根的 project.spec.json</button>
     <button id="btn-download" type="button">下载 project.spec.json</button>
     <button id="btn-copy" type="button">复制 JSON</button>
     <button id="btn-reset" type="button" class="ghost">恢复原始</button>
@@ -27,7 +28,9 @@
   </section>
   <p class="toolbar-hint">
     默认载入 <code>fixtures/mini-41s/spec.json</code> 示例；改完点「下载」覆盖仓库根的
-    <code>project.spec.json</code> 即生效。第一次用可先去 <a href="/app/wizard/">向导</a> 生成。
+    <code>project.spec.json</code> 即生效（下载前会二次确认，避免把示例当自己的片存盘）。
+    已有设计稿时点「载入仓库根的 project.spec.json」直接接着改。第一次用可先去
+    <a href="/app/wizard/">向导</a> 生成。
   </p>
 
   <main class="layout">

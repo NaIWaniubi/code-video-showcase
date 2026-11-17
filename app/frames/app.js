@@ -345,6 +345,9 @@ async function ensureLive(url) {
   if (entry.ready) return entry;
   const started = Date.now();
   while (!entry.ready && !entry.error) {
+    // R3-审计（RT-02 F3）：载入中的条目被 LRU 逐出后，entry 的 ready/error 永不变，
+    // 这里会空等满 26s 并卡死整条串行预载队列。条目已出池即快速失败。
+    if (!livePool.has(url)) throw new Error('iframe 载入中被逐出（池满），稍候自动重试');
     if (Date.now() - started > 26000) throw new Error('iframe 载入超时');
     await new Promise((r) => setTimeout(r, 40));
   }
@@ -359,11 +362,15 @@ function activateLive(entry) {
   entry.el.classList.remove('off');
   fitLiveFrames();
   // 点击画面（iframe 获得焦点）后，宿主键盘快捷键会失效——HUD 提示一次。
-  try {
-    entry.el.contentWindow.addEventListener('focus', () => {
-      setStatus('快捷键在画面外生效；点击页面空白处（如侧栏）即可恢复 ←/→/空格', 'warn');
-    }, { once: true });
-  } catch { /* 跨域或尚未就绪 */ }
+  // R3-审计（RT-02 F6b）：同一条目反复激活时不再叠加监听（once + 标记）。
+  if (!entry._focusHinted) {
+    entry._focusHinted = true;
+    try {
+      entry.el.contentWindow.addEventListener('focus', () => {
+        setStatus('快捷键在画面外生效；点击页面空白处（如侧栏）即可恢复 ←/→/空格', 'warn');
+      }, { once: true });
+    } catch { /* 跨域或尚未就绪 */ }
+  }
 }
 
 function renderLive(idx) {
@@ -756,11 +763,23 @@ async function loadCandidates() {
 
 // ── 打开 / 挂载帧源 ─────────────────────────────────────────────────────────
 
+/** 把某个源从服务端释放（R3-审计 RT-10 F1：换源/关页不释放则 ffmpeg 与全片 JPEG 常驻磁盘）。 */
+async function releaseServerSource(id) {
+  try {
+    await fetch(`/frames/api/close?id=${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
+  } catch { /* 服务没在跑 */ }
+}
+
+window.addEventListener('pagehide', () => { if (state.id) releaseServerSource(state.id); });
+
 function clearSource() {
+  const prevId = state.id;
   stopPlay();
   clearInterval(state.poll);
   state.poll = 0;
+  if (state.statsTimer) { clearInterval(state.statsTimer); state.statsTimer = 0; }
   revokeAll();
+  if (prevId) releaseServerSource(prevId);
   for (const entry of livePool.values()) { try { entry.el.remove(); } catch { /* ignore */ } }
   livePool.clear();
   state.meta = null;
@@ -772,6 +791,9 @@ function clearSource() {
   state.stats.failures = [];
   state.stats.delivered = [];
   state.live = { url: null, pendingUrl: null, ready: false, token: state.live.token + 1, ms: 0, renders: 0, active: null, segId: null, prefetchQueue: [], prefetching: false };
+  // R3-审计（RT-02 F2）：A-B 循环区间以前不重置，换源后新片被锁进旧区间。
+  state.range = { in: null, out: null, on: false };
+  el.rangebar.hidden = true;
   el.ruler.hidden = true;
   el.ruler.textContent = '';
   el.img.hidden = false;
@@ -803,10 +825,15 @@ function attach(id, meta) {
   buildStrip(0);
   show(0, { force: true });
   startPolling();
+  startStatsTimer();          // clearSource 会停表，这里重新启（R3 RT-02 F9）
 }
+
+let opening = false;   // R3-审计（RT-10 F7）：in-flight 闸门——连按 Enter/连点会双开，
+                       // 先开的源 blob 被 revoke，且服务端并发解码同一文件。
 
 async function openFromForm(ev) {
   if (ev) ev.preventDefault();
+  if (opening) { setStatus('正在打开另一个源，请稍候…', 'warn'); return; }
   const kind = el.kind.value;
   const raw = el.path.value.trim();
   if (!raw) { setStatus('先填路径（或点右侧最近产物）', 'err'); return; }
@@ -818,6 +845,7 @@ async function openFromForm(ev) {
   if (el.fps.value) q.set('fps', el.fps.value);
   setStatus('打开中…');
   el.openBtn.disabled = true;
+  opening = true;
   try {
     const { id, meta } = await api('/frames/api/open?' + q.toString());
     attach(id, meta);
@@ -830,6 +858,7 @@ async function openFromForm(ev) {
     setStatus('打开失败：' + e.message, 'err');
     setStageMsg('打开失败：' + e.message, true);
   } finally {
+    opening = false;
     el.openBtn.disabled = false;
   }
 }
@@ -904,7 +933,14 @@ async function downloadFrame() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const type = res.headers.get('Content-Type') || 'image/png';
     const blob = await res.blob();
-    const ext = /png/.test(type) ? 'png' : /webp/.test(type) ? 'webp' : /gif/.test(type) ? 'gif' : 'jpg';
+    let ext = /png/.test(type) ? 'png' : /webp/.test(type) ? 'webp' : /gif/.test(type) ? 'gif' : 'jpg';
+    // R3-审计（RT-02 F7）：扩展名优先取源文件名（X-Frame-File）——按 Content-Type
+    // 猜会把 .bmp/.avif 的字节存成 .jpg，下游解码器按扩展名失败。
+    const srcName = String(res.headers.get('X-Frame-File') || '');
+    const dot = srcName.lastIndexOf('.');
+    if (dot > 0 && dot < srcName.length - 1) {
+      ext = srcName.slice(dot + 1).toLowerCase().split('?')[0] || ext;
+    }
     const url = URL.createObjectURL(blob);
     triggerDownload(url, `${name}.${ext}`);
     setTimeout(() => URL.revokeObjectURL(url), 4000);
@@ -920,7 +956,13 @@ el.img.addEventListener('load', () => {
   if (state.mode === 'img') state.stats.delivered.push(performance.now());
 });
 
-setInterval(() => {
+// R3-审计（RT-02 F9 / RT-10 F4）：句柄存进 state——clearSource 时停表；
+// 后台标签或无源时不每秒写 DOM（live 下原来还每秒整块重建源信息表）。
+// clearSource 后由 attach() 重新启表。
+function startStatsTimer() {
+  if (state.statsTimer) clearInterval(state.statsTimer);
+  state.statsTimer = setInterval(() => {
+    if (document.hidden || !state.meta) return;
   const now = performance.now();
   state.stats.delivered = state.stats.delivered.filter((t) => now - t < 1000);
   const fps = state.stats.delivered.length;
@@ -939,6 +981,8 @@ setInterval(() => {
   el.perf.style.color = state.playing && m && fps < target * 0.75 ? 'var(--warn)' : '';
   if (state.mode === 'live') renderSourceInfo();
 }, 1000);
+}
+startStatsTimer();
 
 // ── 事件 ────────────────────────────────────────────────────────────────────
 

@@ -282,7 +282,11 @@ function launchFfmpeg(outFile, opts) {
   const input = raw
     ? ['-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', `${opts.width}x${opts.height}`,
        '-framerate', String(opts.fps), '-i', 'pipe:0']
-    : ['-f', 'image2pipe', '-framerate', String(opts.fps), '-i', 'pipe:0'];
+    : ['-f', 'image2pipe', '-s', `${opts.width}x${opts.height}`,
+       '-framerate', String(opts.fps), '-i', 'pipe:0'];
+  // R3-审计（RT-05 F6）：image2pipe（PNG 回退链）以前没有 -s——自写页面画布
+  // 与视口不完全相等时，输出尺寸=画布尺寸而非 plan.meta 画幅（下游 qa 会红，
+  // 但先在源头钉死，成片尺寸与计划一致）。
   // raw 与 png 必须走**同一条**色彩链才能出同一画面：alpha 在进 scale 之前就先
   // 丢掉（PNG 解码出来的 RGB 没有 alpha，rgba 若带着 alpha 进 scale，矩阵分支
   // 与色度下采样的处理会有微差——实测单帧 PSNR 42dB / 边缘最大差 56）。
@@ -331,8 +335,21 @@ function writeAsync(stream, buf) {
 
 // ---------- URL ----------
 
+// R3-审计（RT-07 P2-3）：allowRemotePages opt-in 后的残余 SSRF——回环/私网/
+// 链路本地段与云元数据地址一律硬拦，导航前失败。
+const PRIVATE_HOST_RE = /^(?:127\.|10\.|192\.168\.|169\.254\.|0\.|172\.(?:1[6-9]|2\d|3[01])\.|localhost$|\[(?:::1|fc[0-9a-f]{2}|fd[0-9a-f]{2}))/i;
+
+function isPrivateHost(url) {
+  let host = '';
+  try { host = new URL(url).hostname; } catch { return false; }
+  return !!host && PRIVATE_HOST_RE.test(host);
+}
+
 function withSegmentParams(page, port, t) {
   const u = new URL(`http://127.0.0.1:${port}/${page.replace(/^\/+/, '')}`);
+  // R3-审计（RT-07 P2-2）：页面自带的其它查询参数一律剥掉，只留渲染器显式 set 的
+  // seg/t0/speed/dur（vars 由 buildPageUrl 再追加）——以前 ?logo=… 能原样进成片 URL。
+  for (const k of [...u.searchParams.keys()]) u.searchParams.delete(k);
   u.searchParams.set('seg', '1');
   u.searchParams.set('t0', String(t.t0));
   u.searchParams.set('speed', String(t.speed));
@@ -341,7 +358,12 @@ function withSegmentParams(page, port, t) {
 }
 
 function buildPageUrl(page, port, t) {
-  let pageUrl = /^https?:\/\//.test(page) ? page : withSegmentParams(page, port, t);
+  let pageUrl = /^https?:\/\//i.test(String(page)) ? page : withSegmentParams(page, port, t);
+  if (/^https?:\/\//i.test(String(page))) {
+    if (isPrivateHost(pageUrl)) {
+      throw new Error(`remote page blocked: ${page} points at a loopback/private range (SSRF guard)`);
+    }
+  }
   if (t.vars) {
     const u = new URL(pageUrl);
     u.searchParams.set('vars', Buffer.from(JSON.stringify(t.vars)).toString('base64url'));
@@ -505,6 +527,13 @@ async function resolveCaptureMode(page, opts) {
         const cs = [...document.querySelectorAll('canvas')];
         if (cs.length !== 1) return 'cdp';
         if (document.querySelector('[data-dom-overlay]')) return 'cdp';
+        // R3-审计（RT-05 F2）：页面里只要存在「可见的」非 canvas DOM（HUD/水印/
+        // 角标常见形态）而没标 data-dom-overlay，raw/canvas 只取画布像素 → 这些层
+        // 整块丢帧且无告警。宁可慢走 CDP 截图（含 DOM），不出缺像素的片。
+        const visibleOverlay = [...document.querySelectorAll('body *')].some((el) =>
+          el.tagName !== 'SCRIPT' && el.tagName !== 'STYLE' && el.tagName !== 'NOSCRIPT' &&
+          el.tagName !== 'TEMPLATE' && el.tagName !== 'CANVAS' && el.offsetParent !== null);
+        if (visibleOverlay) return 'cdp';
         const c = cs[0];
         if (raw) {
           // rawvideo 要求画布尺寸与 -s 逐像素一致（否则帧边界错位），且必须是 2D
@@ -516,7 +545,11 @@ async function resolveCaptureMode(page, opts) {
         }
         return c.width >= w * 0.99 && c.height >= h * 0.99 ? 'canvas' : 'cdp';
       }, { w: opts.width, h: opts.height, raw: wantRaw });
-    } catch { mode = 'cdp'; }
+    } catch (e) {
+      // R3-审计（RT-05 F14）：以前静默落 cdp，失败原因不留痕。留一条可查的告警。
+      mode = 'cdp';
+      try { page.log(`[warn] capture-mode probe failed (${String((e && e.message) || e).slice(0, 120)}); using cdp`); } catch { /* ignore */ }
+    }
   }
   if (mode === 'canvas') {
     const can = await page.ev(() => document.querySelectorAll('canvas').length === 1);
@@ -536,16 +569,21 @@ async function grab(page, t, mode, opts) {
       const c = document.querySelector('canvas');
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
       let lastErr = null;
-      for (let attempt = 0; attempt < 5; attempt++) {
-        try {
-          const r = await fetch('/__frame', { method: 'POST', body: d, cache: 'no-store' });
-          if (r.ok) return attempt;
-          lastErr = 'HTTP ' + r.status;
-        } catch (e) {
-          lastErr = (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : String(e));
+        for (let attempt = 0; attempt < 5; attempt++) {
+          try {
+            // R3-审计（RT-05 F3）：退避改指数（25→50→100→200ms），并给每次 POST
+            // 加 3s 上限——以前线性且靠 socket 关闭触发 reject，慢挂最坏拖满 125ms×5。
+            const r = await fetch('/__frame', {
+              method: 'POST', body: d, cache: 'no-store',
+              ...((typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? { signal: AbortSignal.timeout(3000) } : {}),
+            });
+            if (r.ok) return attempt;
+            lastErr = 'HTTP ' + r.status;
+          } catch (e) {
+            lastErr = (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : String(e));
+          }
+          await new Promise((res) => setTimeout(res, 25 * 2 ** attempt));
         }
-        await new Promise((res) => setTimeout(res, 25 * (attempt + 1)));
-      }
       throw new Error('frame post failed after 5 attempts — ' + lastErr);
     }, t);
     const buf = page.frameSink ? page.frameSink.take() : null;

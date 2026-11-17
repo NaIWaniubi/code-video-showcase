@@ -161,6 +161,13 @@ while IFS= read -r line || [ -n "$line" ]; do
 done < "$SEGLIST"
 SAFE_BASE="$(basename "$SAFE_LIST")"
 
+# R3-审计（RT-05 F9）：定义在 xfade 分支之前——此前在文件后段，中间层编码展开成
+# 空数组，「全链路钉死 bitexact」实际只覆盖 master。xfade 中间层一并钉死。
+BITEXACT=(-fflags +bitexact -flags +bitexact)
+# R3-审计（RT-06 P1-3）：GOP 计算同样上移——无音轨走 -c copy 失败后的归一化重编
+# 分支（下方 [1/5]）也受 keyint 约束，旧版该分支用 x264 默认 keyint=250。
+GOP=$((FPS * 2)); KEYMIN=$((FPS / 2)); [ "$KEYMIN" -lt 1 ] && KEYMIN=1
+
 # ── v2.5: xfade transitions ─────────────────────────────────────────────────
 # Offsets come from the plan (templates/transitions.mjs is the single source of
 # truth); the shell only applies them. Each input is normalised to the target
@@ -192,7 +199,8 @@ if [ -n "$TRANSITION" ] && [ "${#SEGS[@]}" -ge 2 ] && [ -n "$OFFSETS" ]; then
       -filter_complex "$GRAPH" -map "[vout]" \
       -c:v libx264 -preset veryfast -crf 12 -pix_fmt yuv420p \
       -x264-params "rc-lookahead=8:sync-lookahead=0:threads=2" \
-      -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv "$CONCAT" 2>"$TMP/concat.err"; then
+      -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv \
+      "${BITEXACT[@]}" "$CONCAT" 2>"$TMP/concat.err"; then
     echo "[concat] xfade failed:" >&2; sed -n '1,5p' "$TMP/concat.err" >&2 || true; exit 12
   fi
 else
@@ -203,7 +211,9 @@ if ! ( cd "$LIST_DIR" && "$FFMPEG" -y -hide_banner -loglevel error -f concat -sa
   ( cd "$LIST_DIR" && "$FFMPEG" -y -hide_banner -loglevel error -f concat -safe 1 -i "$SAFE_BASE" \
     -vf "fps=${FPS},setsar=1,scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black" \
     -c:v libx264 -preset veryfast -crf 12 -pix_fmt yuv420p \
-    -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv "$CONCAT" )
+    -x264-params "keyint=${GOP}:min-keyint=${KEYMIN}:threads=2" \
+    -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv \
+    "${BITEXACT[@]}" "$CONCAT" )
 fi
 fi
 
@@ -236,7 +246,14 @@ print(":measured_I=%s:measured_LRA=%s:measured_TP=%s:measured_thresh=%s:offset=%
 PY
 )
   fi
-  echo "      measured${LOUD_ARGS:- (unavailable; single-pass)}"
+  if [ -z "$LOUD_ARGS" ]; then
+    # R3-审计（RT-06 F9）：声明了响度归一却量测不到（python 缺失 / ffmpeg 无 JSON），
+    # 旧版静默跳过 loudnorm，出片响度可能偏出 -14±1 而没有任何拦截。
+    # strict 下直接失败；非 strict 也把错误级别说清楚，不留「全绿但响度跑偏」。
+    echo "[concat] ERROR: loudnorm measurement unavailable (need python3 and ffmpeg with print_format=json); the track will NOT be normalised" >&2
+    [ "$STRICT" = "1" ] && exit 12
+  fi
+  echo "      measured${LOUD_ARGS}"
 else
   echo "[2/5] loudness normalisation disabled"
 fi
@@ -247,14 +264,14 @@ COLOR_TAGS=(-colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_ran
 # R2-21（N03-F3）：GOP ≤ 2s——旧版无 keyint 控制，成片最大 GOP 242 帧(8s)，
 # 平台必判"需重转"。R2-22（N03-F4）：固定 level，不再让 x264 按 CPB 反推出
 # master 5.0 / douyin 4.0 互相打架（1080p→4.1，更大画幅→5.0）。
-GOP=$((FPS * 2)); KEYMIN=$((FPS / 2)); [ "$KEYMIN" -lt 1 ] && KEYMIN=1
+# （GOP/KEYMIN 已随 BITEXACT 上移到 xfade 分支之前，见文件前段。）
 LEVEL="4.1"; [ $((W * H)) -gt 2211840 ] && LEVEL="5.0"
 LEVEL_ARGS=(-profile:v high -level:v "$LEVEL")
 # R2-11（N04-F1）：固定线程数 + bitexact → 同 spec 同环境逐字节可复现。
 # 旧版 auto 线程数随调度漂移，两次全缓存构建的 master.mp4 sha256 不同，
 # 与 SKILL「确定性」卖点直接矛盾。threads=2 与 xfade 中间层一致。
 X264_PARAMS=(-x264-params "aq-mode=3:deblock=-1,-1:psy-rd=1.0,0.15:keyint=${GOP}:min-keyint=${KEYMIN}:scenecut=40:threads=2:lookahead_threads=1")
-BITEXACT=(-fflags +bitexact -flags +bitexact)
+# BITEXACT 已上移到 xfade 分支之前（见文件前段注释）。
 # R2-01（N03+N07 交叉实证）：loudnorm 之后接**真峰限幅**——4× 过采样让 alimiter
 # 看见 inter-sample 峰。limit=0.562(-5dBFS)：AAC 重建过冲随码率降低而增大
 # （master 320k ~+1.6dB，平台 192k ~+3dB）；-5dBFS 广播级保守天花板留足余量
@@ -279,15 +296,16 @@ if [ "$TWO_PASS" = "1" ]; then
     -vf "$VF" -r "$FPS" -fps_mode cfr -c:v libx264 -preset "$PRESET" -b:v "$BITRATE" \
     -pass 2 -passlogfile "$TMP/passlog" "${X264_PARAMS[@]}" "${COLOR_TAGS[@]}" "${LEVEL_ARGS[@]}" "${BITEXACT[@]}" \
     -c:a aac -b:a "$ABR" -ar 48000 -ac 2 "${AF_ARGS[@]}" \
-    -shortest -t "$DURATION" -movflags +faststart "$OUT"
+    -shortest -t "$DURATION" -video_track_timescale 90000 -movflags +faststart "$OUT"
 else
   "$FFMPEG" -y -hide_banner -loglevel error -i "$CONCAT" -i "$AUDIO" \
     -vf "$VF" -r "$FPS" -fps_mode cfr -c:v libx264 -preset "$PRESET" -crf "$CRF" \
     -maxrate "$MAXRATE" -bufsize "$BUF" \
     "${TUNE_ARGS[@]}" "${X264_PARAMS[@]}" "${COLOR_TAGS[@]}" "${LEVEL_ARGS[@]}" "${BITEXACT[@]}" \
     -c:a aac -b:a "$ABR" -ar 48000 -ac 2 "${AF_ARGS[@]}" \
-    -shortest -t "$DURATION" -movflags +faststart "$OUT"
+    -shortest -t "$DURATION" -video_track_timescale 90000 -movflags +faststart "$OUT"
 fi
+# R3-审计（RT-05 F10）：muxer timescale 与段级同口径钉死，跨 ffmpeg 版本不受默认推算影响。
 
 echo "[4/5] verify"
 "$FFPROBE" -v error -count_frames -select_streams v:0 \

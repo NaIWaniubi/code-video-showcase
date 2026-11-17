@@ -110,10 +110,12 @@ function redirect(res, location) {
 }
 
 function isDenied(pathname) {
+  // R3-审计（RT-03 #9）：以前显式放过 .well-known，与其余四个服务口径不齐；
+  // 仓库若放入密钥类 well-known 文件就是单点暴露面。统一按点段一律拒绝。
   return pathname
     .split('/')
     .filter(Boolean)
-    .some((seg) => seg.startsWith('.') && seg !== '.well-known');
+    .some((seg) => seg.startsWith('.'));
 }
 
 function safeResolve(pathname) {

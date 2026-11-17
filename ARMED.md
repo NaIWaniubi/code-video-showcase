@@ -3,7 +3,10 @@
 上游：[Moessif/code-video-showcase](https://github.com/Moessif/code-video-showcase)（MIT）。
 本文件只记录**在这台机器上实测过的东西**，以及我们为跑通它做的改动。上游 README/SKILL.md 仍是权威工作流文档。
 
-验证时间：2026-11-11（v2.0.0）· 平台：Windows 10 (22631) + Git Bash · 结论：**端到端跑通（零 Playwright 依赖）**。
+验证时间：2026-11-11（v2.0.0）· 2026-11-18 更新至 v2.9.0 · 平台：Windows 10 (22631) + Git Bash · 结论：**端到端跑通（零 Playwright 依赖）**。
+
+> **主线变更**：§3 的 timeline v1 命令是历史路线——新项目一律走 SKILL §0 的 spec 主链路
+> （`cvs new → lint → build`）。timeline 旧路线能出片，但没有增量缓存与品牌色覆盖。
 
 ---
 
@@ -11,7 +14,7 @@
 
 | 组件 | 实测 | 判定 |
 |---|---|---|
-| Node / npm | v24.22.1 / 11.19.1 | ok（要求 ≥20） |
+| Node / npm | v24.22.1 / 11.19.1 | ok（要求 ≥22） |
 | FFmpeg / ffprobe | 7.0.2-full_build（`F:\ffmpeg-7.0.2-full_build`），含 libx264 | ok |
 | Python | 3.12.9（`E:\Anaconda3\python.exe`），numpy 2.5.4 + scipy 1.18.1 | ok |
 | 浏览器 | Chrome `C:\Program Files\Google\Chrome\Application\chrome.exe`（另有 Edge） | ok |

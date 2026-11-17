@@ -3,8 +3,8 @@
 # 为什么固定：README 说「same spec, same bytes on any machine」，但跨机确定性
 # 实际绑定 Node / Chrome / FFmpeg / 字体版本。这个镜像把这些钉死。
 #
-#   docker build -f docker/Dockerfile -t cvs:2.3.5 .
-#   docker run --rm -v "$PWD/out:/app/out" cvs:2.3.5 \
+#   docker build -f docker/Dockerfile -t cvs:<package.json version> .
+#   docker run --rm -v "$PWD/out:/app/out" cvs:<package.json version> \
 #     node bin/cvs.mjs build fixtures/mini-41s/spec.json --root . --no-audio
 #
 # Chrome 用 Debian 的 chromium（版本随镜像 digest 固定）；字体用 fonts-noto-cjk，

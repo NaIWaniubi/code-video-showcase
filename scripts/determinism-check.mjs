@@ -29,6 +29,10 @@ const str = (k, d) => (args[k] === undefined ? d : String(args[k]));
 const page = str('page', 'templates/segment.html?theme=coral-noir');
 const t = Number(str('t', '0.5'));
 const runs = Math.max(2, Number(str('runs', '2')));
+// R3-审计（RT-09 F8）：以前只有静帧双跑——容器级不确定（mux 时间戳、
+// 音视频同步偏移）逃出全部幂等检查。加 --video：整段 mp4 双跑比对全编码链。
+const videoMode = !!args.video;
+const durationSec = Number(str('duration', '1'));
 const renderer = path.join(ROOT, 'templates/render-segment.mjs');
 const projectRoot = path.resolve(str('root', ROOT));
 
@@ -39,15 +43,19 @@ try {
   for (let i = 0; i < runs; i++) {
     const outdir = path.join(tmp, `run-${i}`);
     const r = spawnSync(process.execPath, [
-      renderer, '--page', page, '--still', String(t), '--outdir', outdir,
-      '--root', projectRoot, '--duration', '1',
+      renderer, '--page', page,
+      ...(videoMode ? ['--out', path.join(outdir, 'segment.mp4')] : []),
+      ...(videoMode ? [] : ['--still', String(t)]),
+      '--outdir', outdir,
+      '--root', projectRoot,
+      '--duration', videoMode ? String(durationSec) : '1',
     ], { cwd: projectRoot, encoding: 'utf8' });
     if (r.status !== 0) {
       console.error(`[run ${i + 1}] failed:\n${(r.stderr || r.stdout).slice(-1200)}`);
       process.exit(1);
     }
-    const files = fs.readdirSync(outdir).filter((f) => /^still-/.test(f));
-    if (!files.length) { console.error(`[run ${i + 1}] produced no still`); process.exit(1); }
+    const files = fs.readdirSync(outdir).filter((f) => videoMode ? /\.mp4$/i.test(f) : /^still-/);
+    if (!files.length) { console.error(`[run ${i + 1}] produced no ${videoMode ? 'mp4' : 'still'}`); process.exit(1); }
     const file = path.join(outdir, files[0]);
     const hash = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
     hashes.push({ file, bytes: fs.statSync(file).size, hash });
@@ -60,6 +68,6 @@ try {
 
 const ok = hashes.every((h) => h.hash === hashes[0].hash);
 console.log(ok
-  ? `\n✓ deterministic: ${runs} runs of t=${t} are byte-identical`
+  ? `\n✓ deterministic: ${runs} runs of ${videoMode ? `video ${durationSec}s` : `t=${t}`} are byte-identical`
   : `\n✗ NOT deterministic:\n${hashes.map((h, i) => `  run ${i + 1}: ${h.hash}`).join('\n')}`);
 if (!ok) process.exit(1);

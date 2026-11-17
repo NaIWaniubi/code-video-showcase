@@ -431,6 +431,12 @@ export function validateSpec(spec) {
   // 所以绝对 URL（SSRF）与绝对文件路径（越出项目根）都必须挡掉。
   // 远程页面只有显式 opt-in（render.allowRemotePages）才允许。
   const allowRemote = spec.render?.allowRemotePages === true;
+  if (allowRemote) {
+    // R3-审计（RT-07 P2-3）：opt-in 后任何公网主机都会被无头 Chrome 导航——校验输出里
+    // 留一条明账；渲染器侧回环/私网段仍硬拦（见 render-segment PRIVATE_HOST_RE）。
+    warn('W_PAGE_REMOTE', 'render.allowRemotePages',
+      'remote pages are enabled; the renderer will navigate any public URL (loopback/private ranges stay hard-blocked)');
+  }
   const pageEntries = [
     ['opening.page', spec.opening?.page],
     ...spec.rounds.flatMap((r, i) => [

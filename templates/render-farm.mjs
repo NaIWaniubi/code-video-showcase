@@ -23,23 +23,24 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { parseStrict, rejectUnknown } from '../scripts/lib/strict-flags.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const RENDERER = path.join(HERE, 'render-segment.mjs');
 const BATCH_RENDERER = path.join(HERE, 'render-batch.mjs');
 
-function parseArgs(argv) {
-  const a = {};
-  for (let i = 0; i < argv.length; i++) {
-    const k = argv[i];
-    if (!k.startsWith('--')) continue;
-    const next = argv[i + 1];
-    if (!next || next.startsWith('--')) a[k.slice(2)] = true;
-    else { a[k.slice(2)] = next; i++; }
-  }
-  return a;
-}
-const args = parseArgs(process.argv.slice(2));
+const PROG_FARM = 'node templates/render-farm.mjs';
+// R3-审计（RT-04 #1）：`--resum`/`--no-cach` 一律静默照跑 exit 0，漏 resume 的
+// 增量语义被当成成功结论。未知 flag 现在退出码 2 并给 did-you-mean。
+const FARM_KNOWN = new Set([
+  'plan', 'concurrency', 'retries', 'resume', 'only', 'kinds', 'from', 'to',
+  'shard', 'legacy', 'root', 'browser', 'crf', 'preset', 'capture', 'format',
+  'quality', 'quiet', 'stop-on-error', 'dry-run', 'manifest', 'cache',
+  'no-cache', 'stagger', 'help',
+]);
+const _parsedFarm = parseStrict(process.argv.slice(2), FARM_KNOWN);
+if (_parsedFarm.unknown.length) rejectUnknown(PROG_FARM, _parsedFarm.unknown, FARM_KNOWN);
+const args = _parsedFarm.args;
 const num = (k, d) => (args[k] === undefined ? d : Number(args[k]));
 const str = (k, d) => (args[k] === undefined ? d : String(args[k]));
 const list = (k) => (args[k] ? String(args[k]).split(',').map((s) => s.trim()).filter(Boolean) : null);
@@ -78,11 +79,21 @@ const root = path.resolve(str('root', plan.meta?.root || path.dirname(planPath))
 // CDP 超时失败、且比 c1 更慢（负收益）——SwiftShader 软件光栅下每个 worker
 // 都 CPU 饱和，过订只会互相抢核。上限按物理核估算（逻辑核/2 假设 SMT）再 /2，
 // 16 逻辑核 → 4 worker（实测稳定区）。显式超额请求会被钳并告警，不再静默出残片。
+// R3-审计（RT-09 F3）：抽出纯函数供单测钉边界（8 核请求 8 → 4；请求 9999 → cap）。
+export function clampConcurrency(requested, logicalCoresRaw) {
+  const physicalEst = Math.max(1, Math.floor(Number(logicalCoresRaw) / 2));
+  const cap = Math.max(2, Math.floor(physicalEst / 2));
+  return { requested: Math.max(1, Math.min(requested, cap)), cap };
+}
 const logicalCores = os.cpus().length;
-const physicalEst = Math.max(1, Math.floor(logicalCores / 2));
-const concurrencyCap = Math.max(2, Math.floor(physicalEst / 2));
-const requestedConcurrency = num('concurrency', Math.min(4, Math.max(1, logicalCores - 1)));
-const concurrency = Math.max(1, Math.min(requestedConcurrency, concurrencyCap));
+const requestedConcurrencyRaw = num('concurrency', Math.min(4, Math.max(1, logicalCores - 1)));
+if (!Number.isFinite(requestedConcurrencyRaw)) {
+  console.error('[error] [E_USAGE] --concurrency must be a finite number (R3-审计 RT-04 #14)');
+  process.exit(2);
+}
+const requestedConcurrency = Math.max(1, Math.trunc(requestedConcurrencyRaw));
+const { cap: concurrencyCap, requested: clamped } = clampConcurrency(requestedConcurrency, logicalCores);
+const concurrency = clamped;
 if (requestedConcurrency > concurrency) {
   console.error(`[farm] concurrency ${requestedConcurrency} clamped to ${concurrency} (software raster oversubscribes CPU; cap≈${concurrencyCap} on ${logicalCores} logical cores). Lower --concurrency to silence.`);
 }
@@ -179,7 +190,14 @@ function runOneLegacy(s) {
           if (Number(m.frames) === Number(s.frames)) {
             fs.mkdirSync(path.dirname(outAbs), { recursive: true });
             fs.copyFileSync(cachedMp4, outAbs);
-            manifest.segments[s.id] = { status: 'cached', frames: m.frames, hash: s.hash, out: s.out };
+            // R3-审计（RT-04 #6）：legacy 路径曾只写 {status:'cached',frames,hash,out}——
+            // 「完成定义④ frames===expected」在增量审计里不可执行。补齐与默认路径同构字段。
+            manifest.segments[s.id] = {
+              status: 'cached', frames: m.frames, expected: s.frames,
+              framesVerified: Number(m.frames) === Number(s.frames),
+              hash: s.hash, out: s.out,
+              ...(m.seconds != null ? { seconds: m.seconds } : {}),
+            };
             if (!quiet) console.log(`[${s.id}] ⚡ cache hit ${s.hash}`);
             resolve({ id: s.id, ok: true, cached: true });
             return;

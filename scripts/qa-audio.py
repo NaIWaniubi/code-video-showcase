@@ -34,6 +34,33 @@ EPS = 1e-12
 
 
 # ── loading ────────────────────────────────────────────────────────────────
+def _sampwidth_any(src: str) -> int:
+    """R3-审计（RT-06 F11）：WAVE_FORMAT_EXTENSIBLE（wFormatTag=0xFFFE）会让
+    wave 模块直接拒解析，24-bit 的文件就被回落成 int32 假设 → 全表错 ~18 dB。
+    规范头拿不到 sampwidth 时手工解 fmt 块的 wBitsPerSample。"""
+    try:
+        with wave.open(src, "rb") as w:
+            return w.getsampwidth()
+    except Exception:
+        pass
+    import struct
+    with open(src, "rb") as f:
+        hdr = f.read(12)
+        if len(hdr) < 12 or hdr[:4] != b"RIFF" or hdr[8:12] != b"WAVE":
+            return 4
+        while True:
+            head = f.read(8)
+            if len(head) < 8:
+                return 4
+            cid, size = head[:4], struct.unpack("<I", head[4:8])[0]
+            body = f.read(size)
+            if cid == b"fmt " and len(body) >= 16:
+                bits = struct.unpack("<H", body[14:16])[0]
+                return max(1, bits // 8)
+            if size % 2:
+                f.read(1)
+
+
 def _read_wav_any(src: str):
     """Read PCM *and* IEEE-float WAVs. Returns (float64 samples Nxch, sr)."""
     from scipy.io import wavfile
@@ -48,13 +75,13 @@ def _read_wav_any(src: str):
             # v2.5.2 R2-03：24-bit WAV 被 scipy 返回成 int32（满幅 2^23），
             # 真 32-bit 是 2^31。旧实现拿样本峰 >2^23 猜——低电平 32-bit 素材
             # 被按 2^23 除，全表读数错 18 dB。改为读文件头的实际位宽。
+            # R3（RT-06 F11）：位宽探测走 _sampwidth_any，EXTENSIBLE 头不再回落。
+            sw = _sampwidth_any(src)
             divisor = 2147483648.0
-            try:
-                with wave.open(src, "rb") as w:
-                    if w.getsampwidth() == 3:
-                        divisor = 8388608.0
-            except Exception:
-                pass  # extensible/非规范头：维持 int32 满幅假设
+            if sw * 8 == 24:
+                divisor = 8388608.0
+            elif sw and sw * 8 < 32:
+                divisor = float(1 << (sw * 8 - 1))
             x = x.astype(np.float64) / divisor
         elif x.dtype.kind == "f":
             x = x.astype(np.float64)
@@ -399,9 +426,28 @@ def main():
               "Without a plan the cue/HF/tempo gates silently drop — refusing to fake-green.",
               file=sys.stderr)
         sys.exit(2)
-    plan = json.load(open(args.plan, encoding="utf-8")) if args.plan else None
-    expected_bpm = float(plan["audio"]["bpm"]) if plan else None
-    cues = plan["audio"]["cues"] if plan else []
+    plan = None
+    if args.plan:
+        try:
+            with open(args.plan, encoding="utf-8") as fh:
+                plan = json.load(fh)
+        except json.JSONDecodeError as e:
+            print(f"[error] [E_PLAN_MISSING] --plan {args.plan} is not valid JSON: {e}",
+                  file=sys.stderr)
+            sys.exit(2)
+        try:
+            expected_bpm = float(plan["audio"]["bpm"])
+            cues = list(plan["audio"].get("cues") or [])
+        except (KeyError, TypeError, ValueError):
+            # R3-审计（RT-06 F10）：以前合法但残缺的 plan 直接 KeyError 崩成
+            # traceback、exit 1——脚本无法路由。降级为硬错误退出码 2，如实说明
+            # cue / tempo / HF 这些 gate 无法执行，不再假绿。
+            print(f"[error] [E_PLAN_INCOMPLETE] --plan {args.plan} lacks audio.bpm/cues; "
+                  "the cue / tempo / HF gates cannot run", file=sys.stderr)
+            sys.exit(2)
+    else:
+        expected_bpm = None
+        cues = []
 
     mono, stereo, sr = load_audio(args.audio)
     dur = len(mono) / sr

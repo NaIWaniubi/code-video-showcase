@@ -3,7 +3,7 @@
  * serve.mjs — 评审页的零依赖静态服务器（复用 app/canvas 的 createStaticServer）。
  *
  *   node app/review/serve.mjs                 # http://127.0.0.1:5185/app/review/
- *   node app/review/serve.mjs --port 5195
+ *   node app/review/serve.mjs --port 5185
  *   node app/review/serve.mjs --root .
  *
  * 只读 GET/HEAD；默认服务仓库根，因此评审页可直接读取
@@ -30,20 +30,53 @@ export function createReviewServer(root = DEFAULT_ROOT, opts = {}) {
     let pathname = req.url || '/';
     try { pathname = new URL(req.url, 'http://localhost').pathname; } catch { /* keep raw */ }
     if (pathname === '/health' || pathname === '/jobs' || pathname.startsWith('/jobs/')) {
+      // R3-审计（RT-03 #3/#4）：反代以前无超时、无客户端断连清理、方法/请求体无上限，
+      // API 可连不响应时浏览器的轮询 fetch 无限挂死，Node 侧句柄一直驻留。
+      // 现在：单跳 8s 超时；浏览器断开即销毁上游；方法收窄为 GET/HEAD/POST；
+      // 请求体 1MB 上限（上游 api.mjs 自己的 MAX_BODY_BYTES 同值）。
+      if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'POST') {
+        res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'method not allowed', code: 'E_METHOD' }));
+        return;
+      }
       const target = new URL(API_TARGET);
+      let responded = false;
+      const fail = (status, message, code) => {
+        if (responded || res.headersSent) return;
+        responded = true;
+        res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: message, code }));
+      };
+      const presponds = (pres) => {
+        res.writeHead(pres.statusCode || 502, pres.headers);
+        pres.pipe(res);
+      };
       const preq = http.request({
         hostname: target.hostname, port: target.port || 80,
         path: req.url, method: req.method,
         headers: { ...req.headers, host: target.host },
-      }, (pres) => {
-        res.writeHead(pres.statusCode || 502, pres.headers);
-        pres.pipe(res);
+        timeout: 8000,
+      }, presponds);
+      preq.on('timeout', () => preq.destroy(new Error('upstream timeout')));
+      preq.on('error', (e) => {
+        fail(502, /timeout/i.test(String(e && e.message)) ? `API 超时（${API_TARGET} 8s 无响应）` : `API unreachable at ${API_TARGET}`, 'E_API_UNREACHABLE');
       });
-      preq.on('error', () => {
-        if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'API unreachable at ' + API_TARGET }));
+      // 手动转发请求体并计字节：超限在源头掐断，不再向不可信上游灌数据。
+      let received = 0;
+      let capped = false;
+      req.on('data', (chunk) => {
+        if (capped) return;
+        received += chunk.length;
+        if (received > 1024 * 1024) {
+          capped = true;
+          preq.destroy();
+          fail(413, 'proxy request body exceeds 1MB limit', 'E_PAYLOAD_TOO_LARGE');
+          return;
+        }
+        preq.write(chunk);
       });
-      req.pipe(preq);
+      req.on('end', () => { if (!capped) preq.end(); });
+      req.on('close', () => { if (!req.complete) preq.destroy(); });   // 浏览器断开即收工
       return;
     }
     staticHandler(req, res);
@@ -99,7 +132,11 @@ if (isMain) {
       process.on('SIGTERM', stop);
     })
     .catch((e) => {
-      console.error('[review] failed:', (e && e.message) || e);
+      if (e && e.code === 'EADDRINUSE') {
+        console.error(`[review] failed: 端口 ${port} 被占（可能已开着另一个 cvs 界面或统一入口）。换一个：node app/review/serve.mjs --port 5187`);
+      } else {
+        console.error('[review] failed:', (e && e.message) || e);
+      }
       process.exit(1);
     });
 }

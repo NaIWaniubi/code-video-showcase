@@ -1,6 +1,8 @@
 # 优化方案落地状态（v1.0 → v2.5.2）
 
-> 对照 [BACKLOG.json](BACKLOG.json) 的 26 项，逐项说明落地情况。
+> **快照注记**（v2.9.0 更新）：本文写于 v2.5.2 时点；此后三轮审计（R2/R3）的修复清单以 CHANGELOG 与 [../audit2/FINDINGS-ROUND2.md](../audit2/FINDINGS-ROUND2.md) 为准。原第 8 条「未 commit」已过时——本仓改动均已按版本提交。
+>
+对照 [BACKLOG.json](BACKLOG.json) 的 26 项，逐项说明落地情况。
 > 判定口径：**已落地** = 代码 + 回归测试 + 文档齐；**部分** = 主路径可用但仍有明确缺口；**未做** = 未开始。
 > 统计：**已落地 26 · 部分 0 · 未做 0**（v2.3.5 时为 15 / 7 / 4）。
 > 终验：`test-all --browser --json` **28 套 / 670 passed / 0 failed**；**41s 全片 strict 全链路 BUILD=0**；`golden --check` **9/9 相符**；快照/校验/回滚闭环全过。

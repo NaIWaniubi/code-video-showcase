@@ -57,7 +57,8 @@ v3 的 4 套不只是换色：每套配一种**新材质 kind**（`scanline` / `
 | `abyss-teal` | 天蓝 `#7fb8ef` | 三条天蓝正弦光脊从上方缓慢漂移 + 底部深水渐暗 | 不要气泡/鱼群具象；不要整屏青紫渐变 |
 | `sand-linen` | 靛蓝 `#3f5a8a` | 经纬双向 12/10px 极淡细线 + 纸边压色；静态、不随 t 变化 | 不要玻璃/金属/光晕；线宽固定 1px |
 
-4 套的 14 角色全部手写定稿后过 `theme-audit --strict`（WCAG 全 PASS、APCA 零 WARN、HUD 胶囊达标）。
+4 套的 14 角色全部手写定稿后过 `theme-audit --strict`（WCAG 全 PASS、HUD 胶囊达标；
+APCA 提醒不拦 CI，另有上屏组合矩阵——点缀×底/表面的双指标低对比按硬失败计）。
 `content/combos.json` 的行与 `scripts/nl2spec.mjs` 的 `THEME_IDS` 由 `test-core.mjs` 交叉校验，任一处漂移即测试失败。
 
 ### 2.2 v2 新增 5 套（OKLCH 派生）
@@ -221,7 +222,9 @@ const colors = derivePalette({ mode: 'dark', accent: '#00dadd' }); // 14 角色
 | `cardDarkInk` | 暗卡字 | 深色卡上的字 | 对比 cardDark ≥ 7:1 |
 | `flash` | 闪白 | 转场闪白 | 深色主题用纯白，浅色主题用更亮的暖白 |
 
-所有值由 `scripts/theme-audit.mjs` 自动校验（WCAG + APCA），`--strict` 可进 CI。当前 17 套 WCAG 全部通过、APCA 零 WARN。
+所有值由 `scripts/theme-audit.mjs` 自动校验（WCAG + APCA + **上屏组合矩阵**：点缀色/HUD
+文字印在底/表面上的真实对比，WCAG<2 且 Lc<20 双指标不可读按 FAIL）。`--strict` 可进 CI。
+当前 17 套 WCAG 与矩阵硬失败全过；token 对的 APCA 旧提醒约 9 项仅提示不拦。
 
 ```bash
 node scripts/theme-audit.mjs            # 全部

@@ -21,6 +21,13 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Shell scripts parse (R3/RT-09 F9 — install.sh 等无语法门禁曾被 CRLF/引用坑过)
+        run: |
+          for f in install.sh arm.sh templates/concat-and-encode.sh; do
+            bash -n "$f" || exit 1
+            echo "$f BASH_N_OK"
+          done
+
       - name: Error-code registry
         run: node scripts/errors.mjs --check
 

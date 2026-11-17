@@ -72,8 +72,8 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
 ## 4. 容器形态（可选，推荐）
 
 ```bash
-docker build -f docker/Dockerfile -t cvs:2.3.5 .
-docker run --rm -v "$PWD/out:/app/out" cvs:2.3.5 \
+docker build -f docker/Dockerfile -t cvs:<package.json version> .
+docker run --rm -v "$PWD/out:/app/out" cvs:<package.json version> \
   node bin/cvs.mjs build fixtures/mini-41s/spec.json --root . --no-audio
 ```
 

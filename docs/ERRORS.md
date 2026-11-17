@@ -17,11 +17,12 @@
 
 脚本可以用退出码做粗分流，用 `--json` / `error.json` 的 `code` 做精确重试。
 
-## 已注册错误码（136）
+## 已注册错误码（139）
 
 | 错误码 | 阶段 | 退出码 | 含义 | 唯一动作 |
 |---|---|---|---|---|
 | `E_COMMAND` | usage | 2 | 未知子命令 | cvs --help |
+| `E_PLAN_INCOMPLETE` | usage | 2 | qa-audio 的 --plan 是合法 JSON 但缺 audio.bpm/cues（旧行为直接 KeyError 崩溃，脚本无法路由） | 重新跑 `cvs plan` 生成完整 plan；残缺 plan 下 cue/tempo/HF 门禁无法执行 |
 | `E_PLAN_MISSING` | usage | 2 | qa-audio 的 --plan 指向不存在的文件（旧行为静默丢掉 cue/HF 门禁假绿） | 先跑 `cvs plan` 生成 plan.json，或修正 --plan 路径 |
 | `E_UNKNOWN_COMMAND` | usage | 2 | 未知子命令 | 运行 `cvs --help` |
 | `E_UNKNOWN_FLAG` | usage | 2 | 未知命令行 flag（拼错的 --strict 等不再被静默忽略） | 按报错里的 did-you-mean 修正；`cvs <cmd> --help` 看全表 |
@@ -124,6 +125,7 @@
 | `E_ORIGIN` | api | 403 | 跨源写请求被拒 | 用同源页面，或启动时 --cors <origin> |
 | `E_QUEUE_FULL` | api | 429 | 队列已满（32） | 稍后重试或提高并发 |
 | `E_URL` | api | 400 | URL 非法 | 检查路径编码 |
+| `E_API_UNREACHABLE` | preview | 502 | 评审页 /jobs 反代到编译 API 失败（不可达或 8s 超时） | 确认 `cvs api` 已启动；目标地址可经 REVIEW_API/--api-target 覆盖 |
 | `E_ASR_BAD_JSON` | ingest | 15 | E_ASR_BAD_JSON：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_ASR_FAILED` | ingest | 15 | E_ASR_FAILED：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_ASR_NO_OUTPUT` | ingest | 15 | E_ASR_NO_OUTPUT：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
@@ -152,6 +154,7 @@
 | `E_NO_FFMPEG` | ingest | 15 | E_NO_FFMPEG：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_NO_FFPROBE` | ingest | 15 | E_NO_FFPROBE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_PATH` | preview | 0 | 预览路径非法（穿越/隐藏目录） | 路径必须落在仓库根内 |
+| `E_PAYLOAD_TOO_LARGE` | preview | 413 | 反代请求体超过 1MB 上限（源头掐断，不向上游灌数据） | 缩小提交体：拆小 spec 或分次评论 |
 | `E_ROUTE` | preview | 0 | 未知帧 API 路由 | 见 app/frames/README.md 的 API 表 |
 | `E_SCRIPT_COVER` | ui | 2 | E_SCRIPT_COVER：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_SCRIPT_GAP` | ui | 2 | E_SCRIPT_GAP：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
@@ -160,8 +163,8 @@
 
 ## 覆盖情况
 
-- 代码中出现的 `E_*`：136
-- 已注册且被使用：136
+- 代码中出现的 `E_*`：139
+- 已注册且被使用：139
 - 未注册：0
 
 - 已注册但当前未使用：0

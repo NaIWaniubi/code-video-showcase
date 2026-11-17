@@ -33,6 +33,12 @@ export function createUiServer(root = DEFAULT_ROOT, opts = {}) {
   const server = http.createServer((req, res) => {
     let pathname;
     try { pathname = new URL(req.url || '/', 'http://localhost').pathname; } catch { res.writeHead(400).end('bad request'); return; }
+    // R3-审计（RT-03 #8）：仓库根没有 index.html，直敲 http://127.0.0.1:5180/ 会吃到裸 404。
+    // 「一个端口跑齐」的承诺要求第一眼就落在首页。
+    if (pathname === '/') {
+      res.writeHead(302, { Location: '/app/' }).end();
+      return;
+    }
     if (pathname === '/frames/api' || pathname.startsWith('/frames/api/')) { frameHandler(req, res); return; }
     if (pathname === '/health' || pathname === '/jobs' || pathname.startsWith('/jobs/')) { reviewHandler(req, res); return; }
     frameHandler(req, res);   // 静态资源 + 404，与单独起 frames 时一致
@@ -98,5 +104,12 @@ if (isMain) {
       process.on('SIGINT', stop);
       process.on('SIGTERM', stop);
     })
-    .catch((e) => { console.error('[ui] failed:', e && e.message || e); process.exit(1); });
+    .catch((e) => {
+      if (e && e.code === 'EADDRINUSE') {
+        console.error(`[ui] failed: 端口 ${port} 被占（可能已开着另一个 cvs 界面或统一入口）。换一个：node app/ui/serve.mjs --port 5199`);
+      } else {
+        console.error('[ui] failed:', e && e.message || e);
+      }
+      process.exit(1);
+    });
 }

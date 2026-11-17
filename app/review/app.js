@@ -351,7 +351,7 @@ async function poll() {
     setConn('bad', 'API 不可达');
     setStatus('unknown');
     el.empty.hidden = false;
-    document.querySelector('#empty h1').textContent = 'API 没连上';
+    // R3-审计（RT-10 F6）：失败文案只写 emptyReason，不再永久改写空态标题。
     el.emptyReason.textContent = `无法连接 ${api}：${e.message || e}。确认 \`node bin/cvs.mjs api\` 已启动；页面会自动重试。`;
     schedulePoll();
   }

@@ -882,6 +882,24 @@
       "exit": 0,
       "meaning": "帧 API 请求参数缺失/非法",
       "action": "补齐 id/n 查询参数"
+    },
+    "E_API_UNREACHABLE": {
+      "phase": "preview",
+      "exit": 502,
+      "meaning": "评审页 /jobs 反代到编译 API 失败（不可达或 8s 超时）",
+      "action": "确认 `cvs api` 已启动；目标地址可经 REVIEW_API/--api-target 覆盖"
+    },
+    "E_PAYLOAD_TOO_LARGE": {
+      "phase": "preview",
+      "exit": 413,
+      "meaning": "反代请求体超过 1MB 上限（源头掐断，不向上游灌数据）",
+      "action": "缩小提交体：拆小 spec 或分次评论"
+    },
+    "E_PLAN_INCOMPLETE": {
+      "phase": "usage",
+      "exit": 2,
+      "meaning": "qa-audio 的 --plan 是合法 JSON 但缺 audio.bpm/cues（旧行为直接 KeyError 崩溃，脚本无法路由）",
+      "action": "重新跑 `cvs plan` 生成完整 plan；残缺 plan 下 cue/tempo/HF 门禁无法执行"
     }
   }
 }
