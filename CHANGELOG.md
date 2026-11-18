@@ -3,6 +3,26 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v3.7.0] - 2026-11-18 — ship --check · cvs health · 主题候选可视化 · 版本一致性钉子
+
+### R11-W1 ship --check：打包前质检
+- `cvs ship <spec> --check`：打包前对 master.mp4 跑双闸（带 outDir 内 plan.json），
+  未过拒绝打包并指引 --force；--force 可强出，结果字段 qaChecked/qaPass 如实标注。
+- 实测：对合规成片预检通过 → 正常出包。
+
+### R11-W2 cvs health：一键全身体检
+- `scripts/health.mjs`：doctor + 错误码注册表覆盖 + combos 矩阵 + golden 位级自检，
+  四项串成一份带时间戳的健康报告（--json 出机器可读版）；任一失败退出 13。
+- 实测四项全绿（本机版本 3.6.0→3.7.0）。实施中自查出并堵掉 path.join 把 CLI flag 拼进路径的同款坑。
+
+### R11-W3 向导主题候选可视化
+- 参考片反推报告里的 top-3 主题候选渲染为可点小色块（bg×accent 渐变 swatch）：
+  点谁切谁——换气质不必重新分析整片；combos avoid 由 chip 同款自愈逻辑兜底。
+
+### R11-W4 版本一致性钉子
+- 新 `scripts/test-version-sync.mjs`：package.json / SKILL.md frontmatter /
+  cvs --version / CHANGELOG 最新条目头四方必须同值；SKILL 补齐缺失的 version 字段。
+
 ## [v3.6.0] - 2026-11-18 — cvs ship 交付打包 · cvs qa 双闸聚合 · doctor 编码器探测 · npm run gate
 
 ### R10-W1 cvs ship：开箱即用的交付包

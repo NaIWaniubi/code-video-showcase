@@ -1218,6 +1218,27 @@ function bindEvents() {
         applyReferenceVideo(j);
         const v = j.visual && j.visual.theme;
         const t = j.tempo || {};
+        // R11-W3：top-3 候选主题做可点小色块——想换气质不必重新分析整片
+        const candBox = document.querySelector('#ref-candidates');
+        if (candBox && Array.isArray(v?.candidates) && v.candidates.length > 1) {
+          candBox.replaceChildren();
+          for (const c of v.candidates.slice(1)) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'tag swatch-tag';
+            btn.title = '备选：' + c.name;
+            const tmeta = themeMeta(c.id);
+            const sw = document.createElement('span');
+            sw.className = 'swatch';
+            sw.style.background = 'linear-gradient(135deg, ' + tmeta.bg + ' 0 52%, ' + tmeta.accent + ' 52% 100%)';
+            btn.append(sw, document.createTextNode(' ' + c.name));
+            btn.addEventListener('click', () => {
+              if (!setThemeById(c.id)) return;
+              st.textContent = '已切到「' + tmeta.name + '」（反推候选）';
+            });
+            candBox.append(btn);
+          }
+        }
         st.textContent = (v
           ? `已套用「${v.name}」主题（${Math.round(v.confidence * 100)}%）；BPM ${t.bpm != null ? t.bpm : '不可用'}`
           : '反推未给出主题（置信度过低），未套用') +

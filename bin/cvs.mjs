@@ -93,6 +93,9 @@ const commands = {
   motion:   (a) => node('scripts/motion.mjs', a),
   // R6 旗舰入口：cvs demo <style> 一键排演示片（导演演示集六件）。
   demo:    (a) => node('scripts/demo.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
+  // R11-W2：一键全身体检（doctor + 错误码注册表 + 矩阵 + golden 位级基线）
+  health: (a) => node('scripts/health.mjs', a),
+  ship:   (a) => node('scripts/ship.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
   api:      (a) => node('server/api.mjs', a),
   wizard:   (a) => surface('wizard', SURFACES.wizard, a),
   canvas:   (a) => surface('canvas', SURFACES.canvas, a),
@@ -139,6 +142,8 @@ usage: cvs <command> [args]
   frames [--video f|--plan f|--spec f|--dir d] [--port 5186]
                                          per-frame realtime preview workbench
   ui [--port 5180]                       one server for all six surfaces (start at /app/)
+  ship <spec> [--check]   package delivery bundle (spec+film+subs+manifest+README)
+  health                 full checkup: doctor + error registry + combos + golden
   test [--browser]                       run all suites
   doctor                                 environment check (renderer capability probe)
   errors [--check|--write]               error-code registry / docs/ERRORS.md

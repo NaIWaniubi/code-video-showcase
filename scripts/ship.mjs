@@ -19,12 +19,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { parseStrict, rejectUnknown } from './lib/strict-flags.mjs';
 import { writeZip } from './lib/zip.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROG = 'node scripts/ship.mjs';
-const KNOWN = new Set(['spec', 'out', 'json', 'help']);
+const KNOWN = new Set(['spec', 'out', 'json', 'check', 'force', 'help']);
 const argv = process.argv.slice(2);
 const positional = argv.filter((a) => !String(a).startsWith('--'));
 const { args, unknown } = parseStrict(argv, KNOWN);
@@ -34,6 +35,8 @@ if (args.help || positional.length < 1) {
   console.log(`Usage: node scripts/ship.mjs <spec.json> [options]
   <spec.json>         项目 spec（应先 cvs build 过，产物按 spec.render.outDir）
   --out <zip|dir>     zip 打包（默认）或解到目录 <stem>-ship/
+  --check             打包前对 master.mp4 跑双闸 QA（FAIL 时默认拒绝打包，--force 可强出）
+  --force             QA 未过也照常打包（如实标注）
   --json              one-line JSON on stdout, human text to stderr`);
   process.exit(args.help ? 0 : 2);
 }
@@ -68,6 +71,25 @@ if (missing.length) {
   console.error(`[warn] 以下产物未找到（确认已 cvs build 过）：${missing.join(', ')}`);
 }
 
+// ── R11-W1：打包前双闸 QA ──────────────────────────────────
+let qaStatus = null;
+if (args.check && files.has(`${stem}/master/master.mp4`) && !args.force) {
+  const py = process.env.PYTHON || 'python';
+  const masterAbs = path.join(deliverableDir, 'master.mp4');
+  console.error('[ship]  pre-package QA…');
+  const planArg = fs.existsSync(path.join(deliverableDir, 'plan.json'))
+    ? ['--plan', path.join(deliverableDir, 'plan.json')] : [];
+  const qr = spawnSync(process.execPath, [
+    path.join(ROOT, 'scripts/qa.mjs'), masterAbs, ...planArg,
+  ], { cwd: ROOT, stdio: 'inherit' });
+  qaStatus = qr.status ?? 1;
+  if (qr.status !== 0) {
+    console.error(`[ship]  ✗ 预检未过（exit ${qr.status}）——交付物不合规，拒绝打包。` +
+      `确认无误要强出？加 --force（清单里会标注 unvalidated）`);
+    process.exit(13);
+  }
+  console.error('[ship]  ✓ 预检通过');
+}
 // ── 自生成 README ──────────────────────────────────────────
 const title = String(raw.meta?.title || raw.meta?.name || stem);
 const brand = String(raw.meta?.brand || '');
@@ -134,7 +156,8 @@ if (mode === 'dir') {
 }
 
 const archiveName = mode === 'zip' ? `${stemFull}.zip` : null;
-const result = { ok: true, stem, entries: files.size, mode, archive: archiveName, missing };
+const result = { ok: true, stem, entries: files.size, mode, archive: archiveName,
+  missing, qaChecked: !!args.check, qaPass: args.check ? qaStatus === 0 : null };
 if (args.json) process.stdout.write(JSON.stringify(result) + '\n');
 
 // 缺成片不算失败（清单如实标注），但要留痕给自动化判断

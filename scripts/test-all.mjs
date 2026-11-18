@@ -51,6 +51,7 @@ const UNIT_SUITES = [
   'scripts/test-strict-flags.mjs',
   'scripts/test-segment-edit.mjs',
   'scripts/test-zip-lib.mjs',
+  'scripts/test-version-sync.mjs',
   'scripts/test-demo-spec.mjs',
   'scripts/test-ui.mjs',
   'ingest/test-edl.mjs',

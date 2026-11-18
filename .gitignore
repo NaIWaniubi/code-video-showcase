@@ -33,3 +33,5 @@ ai/cache/
 assets/ai/
 .theme-preview-tmp/
 *.passlog*
+# cvs ship 目录模式产物（--out dir，默认落工作区根）
+/ship-*/
