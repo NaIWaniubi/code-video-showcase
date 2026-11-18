@@ -23,7 +23,8 @@ import { inferStructure, buildReport } from './lib/ref-video-core.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PROG = 'node scripts/ref-video.mjs';
-const KNOWN = new Set(['video', 'threshold', 'sample-fps', 'out', 'apply', 'json', 'help']);
+const KNOWN = new Set(['video', 'threshold', 'sample-fps', 'out', 'apply', 'json',
+  'max-seconds', 'help']);
 const argv = process.argv.slice(2);
 const { args, unknown } = parseStrict(argv, KNOWN);
 if (unknown.length) rejectUnknown(PROG, unknown, KNOWN);
@@ -96,8 +97,17 @@ for (const m of String(sr.stderr || '').matchAll(/pts_time:(\d+(?:\.\d+)?)/g)) c
 
 // ── 3. 逐秒像素采样 ─────────────────────────────────────────────────────────
 const sampleFps = Number(args['sample-fps'] ?? 2);
+// R7-W3：--max-seconds 长片分析上限（默认 300s）——超长片逐秒解码会拖死，
+// 只取前 N 秒做视觉统计，结构仍按全长拟合（片段开头已代表整体配色）。
+const maxSeconds = Number(args['max-seconds'] ?? 300);
+if (!Number.isFinite(maxSeconds) || maxSeconds <= 0) {
+  console.error(`[error] [E_USAGE] --max-seconds must be a positive number`);
+  process.exit(2);
+}
+const effectiveDur = Math.min(probe.duration || Infinity, maxSeconds);
 const srPixels = spawnSync(FFMPEG, [
   '-hide_banner', '-nostats', '-i', path.resolve(videoArg),
+  ...(Number.isFinite(effectiveDur) && effectiveDur < probe.duration ? ['-t', String(effectiveDur)] : []),
   '-vf', `fps=${Math.max(1, sampleFps)},scale=96:96:flags=area`, '-f', 'rawvideo',
   '-pix_fmt', 'rgb24', 'pipe:1',
 ], { encoding: 'buffer', timeout: 180000, maxBuffer: 128 * 1024 * 1024 });
@@ -172,11 +182,30 @@ const structure = inferStructure({ duration: probe.duration, cuts, bpm: bpmForSt
 const report = buildReport({ source: path.basename(videoArg), probe, clusters: visual?.palette || [], structure, tempo: tempo.ok ? { method: 'energy-flux-autocorr', bpm: tempo.bpm, confidence: tempo.confidence } : { method: 'none' }, appliedTheme: visual });
 
 report.engine = 'ref-video/1';
+report.visualTruncatedTo = Number.isFinite(effectiveDur) && effectiveDur < probe.duration
+  ? `${effectiveDur}s / 全片 ${probe.duration.toFixed(1)}s` : null;
 report.notes = [...(structure.notes || []), pixelWarn].filter(Boolean);
+
 report.applied = args.apply ? applyPatch(args.apply, report.specPatch) : null;
 
 // ── 6. 输出 ────────────────────────────────────────────────────────────────
 const outDir = args.out ? path.resolve(String(args.out)) : path.resolve(process.cwd(), 'analysis', path.basename(videoArg).replace(/\.[^.]+$/, ''));
+// 证据图（contact sheet）：每秒一帧的拼版，人眼复核用（tile 8 列）。
+(report.evidence ||= []);
+{
+  const cs = spawnSync(FFMPEG, [
+    '-hide_banner', '-nostats', '-i', path.resolve(videoArg),
+    '-vf', `fps=1,scale=320:-2,tile=8x8:padding=4:margin=6`,
+    '-frames:v', '1',
+    path.join(outDir, 'contact-sheet.jpg'),
+  ], { encoding: 'utf8', timeout: 180000 });
+  if (cs.status !== 0) {
+    report.evidence.push('contact-sheet.jpg (生成失败: ' + String((cs.stderr || '').trim().slice(-100) || '').trim() + ')');
+  } else {
+    report.evidence.push('contact-sheet.jpg');
+  }
+}
+
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'ref-report.json'), JSON.stringify(report, null, 2) + '\n', 'utf8');
 

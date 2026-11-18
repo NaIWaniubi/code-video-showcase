@@ -48,6 +48,7 @@ const CLI_VERSION = (() => {
 // R2-16（N04-F8）：未知 flag 以前静默忽略——`--strik` 拼错一次，
 // 「已按交付态 strict 验收」就成了写进结论的假阳性。现在一律 exit 2 + 指名。
 const KNOWN_FLAGS = new Set(['spec', 'root', 'outdir', 'master', 'audio', 'no-audio', 'platform',
+  'segment-patch',
   'concurrency', 'no-cache', 'no-resume', 'no-qa', 'no-strict', 'deliver', 'no-deliver',
   'strict', 'burn-subtitles', 'cover', 'transition', 'transition-duration', 'dry-run', 'print',
   'json', 'help']);
@@ -187,6 +188,33 @@ try {
 } catch (e) {
   const code = e instanceof SyntaxError ? 'E_JSON_PARSE' : 'E_READ';
   fail('spec', code, `${specPath}: ${e.message}`);
+}
+
+// R7-W2：套用帧工作台导出的段表 patch（schema cvs.segment-patch/v1）。
+// 只覆盖 patch 里显式给出的段，不整表替换——原 spec 的页面/文案照旧。
+if (args['segment-patch']) {
+  const pf = path.resolve(String(args['segment-patch']));
+  let pdoc;
+  try { pdoc = JSON.parse(fs.readFileSync(pf, 'utf8')); }
+  catch (e) { fail('spec', 'E_SEGMENT_PATCH', `cannot read segment patch ${pf}: ${e.message}`); }
+  if (!Array.isArray(pdoc?.patch)) {
+    fail('spec', 'E_SEGMENT_PATCH', `${pf} is not a cvs.segment-patch/v1 document (missing patch array)`);
+  }
+  const origRounds = raw.rounds || [];
+  let applied = 0;
+  for (const rec of pdoc.patch) {
+    const idx = Number(rec.index);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= origRounds.length) {
+      fail('spec', 'E_SEGMENT_PATCH', `patch entry index ${idx} out of rounds range (0..${origRounds.length - 1})`);
+    }
+    const src = origRounds[idx];
+    // 帧工作台导出的记录带原始轮的全部字段（id/card/style/…），
+    // 以导出记录为准深合并，轮结构完整替换。
+    origRounds[idx] = { ...src, ...rec, id: rec.id || src.id };
+    applied++;
+  }
+  raw.rounds = origRounds;
+  console.error(`[patch]   segment-patch applied ${applied} round record(s) from ${pf}`);
 }
 
 // CLI 转场开关（v2.5）覆盖 spec.render，且必须在校验/建 plan 之前注入，

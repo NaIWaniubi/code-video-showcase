@@ -939,6 +939,12 @@
       "auto": true,
       "meaning": "演示片编译链失败（compile 返回非 0）",
       "action": "看下方 compile 的 [error] 明细；python/ffmpeg 缺失会先报环境码"
+    },
+    "E_SEGMENT_PATCH": {
+      "phase": "spec",
+      "exit": 10,
+      "meaning": "帧工作台导出的段表 patch 不可读、格式不对或索引越界",
+      "action": "确认 patch 是 cvs.segment-patch/v1 结构（patch 数组带合法 index），重新导出"
     }
   }
 }

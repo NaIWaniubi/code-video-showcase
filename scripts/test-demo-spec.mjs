@@ -71,3 +71,46 @@ test('e2e：demo --dry-run 链（validate+plan 不过渲染）', () => {
 });
 
 console.log(`\n${passed} checks passed`);
+
+// ── R7-W2：帧工作台段表 patch（编辑→导出→编译闭环） ──────────────
+test('segment-patch：合法 patch 套用后 rounds 变化、未知索引退 10', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cvs-segpatch-'));
+  const specPath = path.join(dir, 'spec.json');
+  const spec = composeDemoSpec('skeleton');
+  fs.writeFileSync(specPath, JSON.stringify(spec));
+  const patchPath = path.join(dir, 'patch.json');
+  // 模拟帧工作台导出：把 r01 的 style.page 换成 skeleton 页（它本来就是）
+  const edited = { ...spec.rounds[0], style: { ...spec.rounds[0].style, copy: { title: '剪辑后' } } };
+  fs.writeFileSync(patchPath, JSON.stringify({ schema: 'cvs.segment-patch/v1', patch: [{ index: 0, ...edited }] }, null, 2));
+  // patch 在 compile（cvs build）里应用，lint 不消费它
+  const r = spawnSync(process.execPath, [
+    path.join(ROOT, 'bin/cvs.mjs'), 'build', specPath,
+    '--root', ROOT, '--outdir', path.join(dir, 'o'), '--dry-run',
+    '--segment-patch', patchPath,
+  ], { cwd: ROOT, encoding: 'utf8', timeout: 60000 });
+  try {
+    assert.equal(r.status, 0, (r.stderr || '') + (r.stdout || ''));
+    assert.match((r.stderr || '') + (r.stdout || ''), /\[patch\]/, '应出现 patch 应用标记');
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+  }
+});
+
+test('segment-patch：坏 schema（缺 patch 数组）退 E_SEGMENT_PATCH exit 10', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cvs-segpatch2-'));
+  const specPath = path.join(dir, 'spec.json');
+  fs.writeFileSync(specPath, JSON.stringify(composeDemoSpec('skeleton')));
+  const bad = path.join(dir, 'bad.json');
+  fs.writeFileSync(bad, JSON.stringify({ schema: 'nope' }));
+  const r = spawnSync(process.execPath, [
+    path.join(ROOT, 'bin/cvs.mjs'), 'build', specPath,
+    '--root', ROOT, '--outdir', path.join(dir, 'o'), '--dry-run',
+    '--segment-patch', bad,
+  ], { cwd: ROOT, encoding: 'utf8', timeout: 60000 });
+  try {
+    assert.equal(r.status, 10);
+    assert.match(r.stderr || '', /E_SEGMENT_PATCH/);
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+  }
+});

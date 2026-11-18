@@ -263,7 +263,7 @@ const STYLE_DEFAULT_THEME = {
   skeleton: 'coral-noir',
   fractal: 'celadon-paper',
   firework: 'cyber-neon',
-  terrain: 'graphite-signal',
+  terrain: 'blueprint-stone',
   network: 'blueprint-stone',
 };
 

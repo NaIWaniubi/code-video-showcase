@@ -50,6 +50,7 @@ const el = {
   restrip: $('restrip'),
   btnSplit: $('btn-split'),
   btnUndo: $('btn-undo'),
+  btnExportSegs: $('btn-export-segments'),
   sourceInfo: $('sourceInfo'),
   recent: $('recent'),
 };
@@ -863,6 +864,9 @@ function attach(id, meta) {
   startStatsTimer();          // clearSource 会停表，这里重新启（R3 RT-02 F9）
   state.editStack = new EditStack();
   updateEditButtons();
+  // 编辑基准：打开时的原始段表（导出时只报差异）
+  state.meta._originalSegments = (m.segments || []).map((x) => ({ ...x }));
+  updateEditButtons();
 }
 
 let opening = false;   // R3-审计（RT-10 F7）：in-flight 闸门——连按 Enter/连点会双开，
@@ -1045,6 +1049,27 @@ el.download.addEventListener('click', downloadFrame);
 el.restrip.addEventListener('click', () => { state.stripRange = null; buildStrip(state.n); });
 el.btnSplit.addEventListener('click', () => { stopPlay(); splitAtPlayhead(); });
 el.btnUndo.addEventListener('click', undoEdit);
+/** R7：导出当前编辑后的段表为 spec patch（JSON 下载）。
+ * 只含「与原始 spec 不一致的段」——把 frames 的编辑结果变成可编译的输入。 */
+function exportSegments() {
+  const m = state.meta;
+  if (!m || !m.segments) { setStatus('没有可导出的段表', 'err'); return; }
+  const original = m._originalSegments || null;
+  const patched = m.segments.map((seg, i) => {
+    const base = original ? original[i] : null;
+    if (!base) return { index: i, ...seg };
+    // 只导出与原始不同的（新增的分割段 id 带 a/b 后缀，必不同）
+    const diff = JSON.stringify(base) !== JSON.stringify(seg);
+    return diff ? { index: i, ...seg } : null;
+  }).filter(Boolean);
+  const blob = new Blob([JSON.stringify({ schema: 'cvs.segment-patch/v1',
+    sourceFrames: m.frames, patch: patched }, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  triggerDownload(url, `spec-patch-${Date.now()}.json`);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  setStatus(`已导出 ${patched.length} 条段记录 · 用 cvs build <spec> --segment-patch <patch.json> 套用`, 'ok');
+}
+el.btnExportSegs.addEventListener('click', exportSegments);
 
 el.slider.addEventListener('pointerdown', stopPlay);
 el.slider.addEventListener('input', () => show(Number(el.slider.value)));

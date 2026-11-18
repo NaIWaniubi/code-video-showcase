@@ -93,7 +93,13 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
 - **配方页**：21 种画风中 19 种有专属页（`templates/recipe-*.html` + `cyber-pixel.html`，含 v3.1 的 generative），映射单一真值 `templates/style-pages.mjs`；**实拍素材** `cvs ingest` 出 EDL + spec 草稿（启发式，需人工审）。
 - **覆盖扩展（v2.5）**：段间转场 35 种（`--transition`，xfade 在拼接层做，默认关闭逐字节不变）、确定性效果库 26 个（`templates/effects.mjs`）、风格 20 种、领域 24 种。
 - **程序化生成画风（v3.1）**：第 21 风格 `generative`——`templates/generative.mjs` 四族纯核（流场群游/轨道环系/脉冲波/弹跳字）+ `recipe-generative.html`，关键词「生成式/程序化/procedural/粒子」即命中；向导与 combos 矩阵同步 17×21。
-- **导演演示集 + 一键出片（v3.2）**：六个颠覆性演示风格 `wireframe`(白模线框) `skeleton`(骨骼动画·走 cycle 闭式关节链) `fractal`(L-system 分形生长) `firework`(弹道粒子喷泉) `terrain`(marching squares 等高线测绘) `network`(图拓扑脉冲流量)，`cvs demo <style> [--seconds n] [--platform gif|webm|mp4]` 直接排片出成品（组合器 scripts/lib/demo-spec.mjs 生成闭合结构 → compile 全链）。
+- **导演演示集 + 一键出片（v3.2+）**：六个颠覆性演示风格 `wireframe`(白模线框)
+  `skeleton`(骨骼动画·走 cycle 闭式关节链) `fractal`(L-system 分形生长)
+  `firework`(弹道粒子喷泉) `terrain`(marching squares 等高线测绘)
+  `network`(图拓扑脉冲流量)；`cvs demo <style> [--seconds n] [--platform gif|webm|mp4]`
+  直接排片出成品，`cvs demo all` 批量出片 + manifest。
+  v3.3：frames 工作台「导出段表」→ `cvs build --segment-patch` 剪辑闭环；
+  反推 `--max-seconds` 长片上限 + contact-sheet 证据图；向导向加演示集入口。
 - **派生导出格式（v3.1）**：`--platform webm|gif|mp3` 从 master/音轨直接转码（不经 shell 的 mp4+AAC 链），交付清单按扩展名入列。覆盖矩阵单一真值 `docs/COVERAGE.md`。
 - **禁止**：让 LLM 直接生成 HTML/CSS/JS，或绕过 spec 直接改像素。模型只填枚举与文案。
 ## 0. 适用与不适用

@@ -3,6 +3,32 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v3.3.0] - 2026-11-18 — 批量出片 · 编辑闭环 · 长片反推上限 · 向导演示集入口
+
+### cvs demo all 批量出片
+- `demo.mjs` 重写为批量模式：`cvs demo all` 六个演示风格依次出片，任一失败如实记录进
+  out/demo-all/manifest.json（schema cvs.demomanifest/v1：每风格行含 exitCode/master/theme），
+  全部跑完再汇总退出码——单个失败不吞账也不中断整批。
+- dry-run 下实测 6/6 通过（terrain 默认主题曾踩 graphite-signal 的 APCA 45 门，
+  已换 blueprint-stone，nl2spec 与组合器两处同步）。
+
+### 帧工作台编辑 → spec patch → 编译闭环（R7-W2）
+- frames 新增「导出段表」：只导出与原始 spec 有差异的轮记录，下载为
+  cvs.segment-patch/v1 JSON（schema/sourceFrames/patch）。
+- compile 新增 `--segment-patch <patch.json>`：按 index 深合并覆盖 rounds，
+  坏文件/缺 patch 数组/索引越界一律 E_SEGMENT_PATCH exit 10。
+- 编辑→导出→套用的完整链路在 test-demo-spec 有两条钉子（合法套用 + 坏 schema）。
+
+### 反推引擎长片上限 + 证据图（R7-W3）
+- `--max-seconds`（默认 300）：超长片只取前 N 秒做视觉统计（切片不再整部解码），
+  报告 visualTruncatedTo 如实标注截断口径；结构仍按全长拟合。
+- contact-sheet.jpg 证据图落盘（每秒一帧 tile 8×8），人眼复核用；
+  生成失败如实进 evidence 而不是静默丢。
+
+### 向导演示集入口（R7-W4）
+- 向导向新增「导演演示集」面板：六张卡点选即套用风格+推荐主题（复用 style chip
+  同款流程，含 avoid 自愈与重新生成）。
+
 ## [v3.2.0] - 2026-11-18 — 导演演示集六件 + 一键出片（cvs demo）
 
 ### 颠覆性演示风格（六件套，全部闭式确定、逐帧可复现）

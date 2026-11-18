@@ -394,6 +394,54 @@ function buildSpec(s) {
 
 // ── 渲染：预设卡 ───────────────────────────────────────────────────────────
 
+// R7-W4：导演演示集快捷卡（六件，点选套用风格 + 推荐主题）
+const DEMO_SET = [
+  { id: 'wireframe', label: '白模线框', hint: '线框球体 · 透视公转', theme: 'cyber-neon' },
+  { id: 'skeleton', label: '骨骼动画', hint: '走 cycle 关节链', theme: 'coral-noir' },
+  { id: 'fractal', label: '分形生长', hint: 'L-system 递归树', theme: 'celadon-paper' },
+  { id: 'firework', label: '粒子喷泉', hint: '闭式弹道 + 彗尾', theme: 'cyber-neon' },
+  { id: 'terrain', label: '地形测绘', hint: '等高线扫描', theme: 'blueprint-stone' },
+  { id: 'network', label: '网络脉冲', hint: '图拓扑流量', theme: 'blueprint-stone' },
+];
+
+function renderDemoSet() {
+  const grid = document.querySelector('#demo-grid');
+  if (!grid) return;
+  grid.replaceChildren();
+  for (const d of DEMO_SET) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'preset-card';
+    btn.dataset.demo = d.id;
+    if (state.style === d.id) btn.classList.add('active');
+    const name = document.createElement('span');
+    name.className = 'preset-name';
+    name.textContent = d.label;
+    const meta = document.createElement('span');
+    meta.className = 'preset-meta';
+    const t = themeMeta(d.theme);
+    const swatchTag = document.createElement('span');
+    swatchTag.className = 'tag swatch-tag';
+    const sw = document.createElement('span');
+    sw.className = 'swatch';
+    sw.style.background = `linear-gradient(135deg, ${t.bg} 0 52%, ${t.accent} 52% 100%)`;
+    swatchTag.append(sw, document.createTextNode(t.name));
+    meta.append(swatchTag);
+    btn.append(name, meta);
+    btn.addEventListener('click', () => {
+      // 与 style chip 的 onPick 同款流程（含 avoid 自愈与重新生成）
+      state.style = d.id;
+      state.theme = d.theme;
+      setModeCustom();
+      renderCustom();
+      renderPresets();
+      renderDemoSet();
+      generateNow();
+    });
+    grid.append(btn);
+  }
+}
+
 function renderPresets() {
   const grid = $('#preset-grid');
   grid.replaceChildren();
@@ -1162,6 +1210,7 @@ async function boot() {
   ctaCustom = false;
   applyPreset(presets[0]);
   renderPresets();
+  renderDemoSet();
   renderCustom();
   generateNow();
 

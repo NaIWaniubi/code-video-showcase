@@ -17,7 +17,7 @@ const LABEL_FALLBACK = {
 /** 默认主题：按风格选暗底主视觉（与 nl2spec 的默认主题一致）。 */
 const DEFAULT_THEME = {
   wireframe: 'cyber-neon', skeleton: 'coral-noir', fractal: 'celadon-paper',
-  firework: 'cyber-neon', terrain: 'graphite-signal', network: 'blueprint-stone',
+  firework: 'cyber-neon', terrain: 'blueprint-stone', network: 'blueprint-stone',
   generative: 'cyber-neon',
 };
 
