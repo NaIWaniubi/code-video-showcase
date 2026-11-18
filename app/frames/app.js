@@ -48,6 +48,8 @@ const el = {
   strip: $('strip'),
   stride: $('stride'),
   restrip: $('restrip'),
+  btnSplit: $('btn-split'),
+  btnUndo: $('btn-undo'),
   sourceInfo: $('sourceInfo'),
   recent: $('recent'),
 };
@@ -72,11 +74,16 @@ const state = {
   poll: 0,
   stats: { delivered: [], failures: [] },
   range: { in: null, out: null, on: false },
+  // R5-W7：段级编辑历史（EditStack：分割 → 撤销）。只作用于内存中的段表；
+  // 成片不变——从工作台导出 spec 后再编译。
+  editStack: new EditStack(),
   live: { url: null, pendingUrl: null, ready: false, token: 0, ms: 0, renders: 0, active: null, segId: null, prefetchQueue: [], prefetching: false },
   raf: 0,
   playT0: 0,
   playF0: 0,
 };
+
+import { splitSegmentAt, EditStack } from '../shared/segment-edit.mjs';
 
 const CACHE_LIMIT = 260;
 const LIVE_POOL_MAX = 6;
@@ -666,6 +673,33 @@ function buildRuler() {
 
 // ── 源信息 / 最近产物 ───────────────────────────────────────────────────────
 
+function splitAtPlayhead() {
+  const m = state.meta;
+  if (!m || !m.segments) return;
+  const res = splitSegmentAt(m.segments, state.n, m.fps);
+  if (!res.ok) {
+    const why = { 'no-segments': '没有可编辑的段', 'frame-not-in-segment': '当前帧不在任何段内，无法分割',
+                 'too-close-to-edge': '靠近段边界，无法再分（需距两端各 ≥1 帧）' }[res.reason] || '无法分割';
+    setStatus(why, res.reason === 'too-close-to-edge' ? 'warn' : 'err');
+    return;
+  }
+  state.editStack.push(m.segments);
+  m.segments = res.segments;
+  buildRuler();
+  markStrip();
+  updateHud();
+  updateEditButtons();
+  setStatus(`已分割 → ${res.segments.map((x) => x.id).join(' + ')}`, 'ok');
+}
+
+/** 编辑按钮可用态：仅 live（spec/plan）源且至少一段可分时可用。 */
+function updateEditButtons() {
+  const ok = state.mode === 'live' && !!state.meta?.segments?.length &&
+             state.meta.segments.some((s) => s.endFrame - s.startFrame >= 3);
+  el.btnSplit.disabled = !ok;
+  el.btnUndo.disabled = !state.editStack.size;
+}
+
 function kvRows(rows) {
   el.sourceInfo.textContent = '';
   for (const [k, v] of rows) {
@@ -793,6 +827,7 @@ function clearSource() {
   state.live = { url: null, pendingUrl: null, ready: false, token: state.live.token + 1, ms: 0, renders: 0, active: null, segId: null, prefetchQueue: [], prefetching: false };
   // R3-审计（RT-02 F2）：A-B 循环区间以前不重置，换源后新片被锁进旧区间。
   state.range = { in: null, out: null, on: false };
+  state.editStack = new EditStack();
   el.rangebar.hidden = true;
   el.ruler.hidden = true;
   el.ruler.textContent = '';
@@ -826,6 +861,8 @@ function attach(id, meta) {
   show(0, { force: true });
   startPolling();
   startStatsTimer();          // clearSource 会停表，这里重新启（R3 RT-02 F9）
+  state.editStack = new EditStack();
+  updateEditButtons();
 }
 
 let opening = false;   // R3-审计（RT-10 F7）：in-flight 闸门——连按 Enter/连点会双开，
@@ -1006,6 +1043,8 @@ el.loop.addEventListener('change', () => { state.loop = el.loop.checked; });
 el.rate.addEventListener('change', () => { state.rate = Number(el.rate.value) || 1; });
 el.download.addEventListener('click', downloadFrame);
 el.restrip.addEventListener('click', () => { state.stripRange = null; buildStrip(state.n); });
+el.btnSplit.addEventListener('click', () => { stopPlay(); splitAtPlayhead(); });
+el.btnUndo.addEventListener('click', undoEdit);
 
 el.slider.addEventListener('pointerdown', stopPlay);
 el.slider.addEventListener('input', () => show(Number(el.slider.value)));
@@ -1026,6 +1065,11 @@ window.addEventListener('resize', fitLiveFrames);
 if (typeof ResizeObserver === 'function') new ResizeObserver(fitLiveFrames).observe(el.stageWrap);
 
 window.addEventListener('keydown', (ev) => {
+  // R5-W7：Ctrl/Cmd+Z 撤销段分割（其他组合键保持让位给浏览器）。
+  if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'z' || ev.key === 'Z')) {
+    if (state.editStack.size) { ev.preventDefault(); undoEdit(); }
+    return;
+  }
   const t = ev.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.tagName === 'BUTTON')) return;
   if (ev.metaKey || ev.ctrlKey || ev.altKey) return;

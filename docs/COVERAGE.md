@@ -78,6 +78,7 @@ mood→BPM：`electronic 120 · restrained 90 · epic 100 · upbeat 128 · guofe
 | **vaporwave** | 蒸汽波 | recipe-vaporwave.html | dynamic | 渐变天空 + 透视网格 + 扫描线落日 + 镀铬字 |
 | **blueprint** | 工程蓝图 | recipe-blueprint.html | standard | 普鲁士蓝 + 尺寸箭头 + 标题栏 + 十字线 |
 | **risograph** | 孔版印刷 | recipe-risograph.html | calm | 双专色 + 套印错位 + 颗粒平涂 + 纸纹 |
+| **generative** | 生成式画面 | recipe-generative.html | dynamic | 流场粒子群游 + 轨道环系 + 脉冲波 + 弹跳字（程序化确定生成，无扩散模型） |
 
 ---
 
@@ -147,24 +148,24 @@ black/white 检查，按需选用。
 
 默认搭配见第 1 表；下面是「也合适」的扩展建议（✓ 推荐 · ○ 可用）：
 
-| 领域 \ 风格 | swiss | editorial | brutalist | vaporwave | blueprint | risograph | kinetic | minimal | flat | ink-wash |
-|------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| tutorial | ○ | | | | ✓ | | | | ○ | |
-| changelog | ○ | | ○ | | | | ✓ | ○ | | |
-| event | | | ✓ | ○ | | ○ | ○ | | | |
-| podcast | | ✓ | | | | ○ | | ○ | | |
-| travel | | ○ | | | | ○ | | | | ✓ |
-| food | | ○ | ○ | | | ✓ | | | ✓ | |
-| fitness | | | ✓ | | | | ✓ | | | |
-| realestate | ✓ | ○ | | | ○ | | | ✓ | | |
-| fintech | ✓ | | | | ✓ | | | ○ | | |
-| healthcare | ○ | ○ | | | | ○ | | | ✓ | |
-| course | ✓ | ○ | | | ○ | | | ○ | | |
-| gaming | | | ○ | ✓ | | | ✓ | | | |
-| music | | | ○ | ✓ | | ○ | ✓ | | | |
-| nonprofit | | ✓ | | | | ○ | | ○ | | |
-| sports | | | ✓ | | | | ✓ | | | |
-| localbiz | | ○ | ○ | | | ✓ | | | ○ | |
+| 领域 \ 风格 | swiss | editorial | brutalist | vaporwave | blueprint | risograph | kinetic | minimal | flat | ink-wash | generative |
+| ------ | :--: | :--: | :--: | :--: | :--: | :--: | :--: | :--: | :--: | :--: |  |
+| tutorial | ○ |  |  |  | ✓ |  |  |  | ○ |  |  ✓ |
+| changelog | ○ |  | ○ |  |  |  | ✓ | ○ |  |  |  ✓ |
+| event |  |  | ✓ | ○ |  | ○ | ○ |  |  |  |  |
+| podcast |  | ✓ |  |  |  | ○ |  | ○ |  |  |  |
+| travel |  | ○ |  |  |  | ○ |  |  |  | ✓ |  |
+| food |  | ○ | ○ |  |  | ✓ |  |  | ✓ |  |  |
+| fitness |  |  | ✓ |  |  |  | ✓ |  |  |  |  |
+| realestate | ✓ | ○ |  |  | ○ |  |  | ✓ |  |  |  |
+| fintech | ✓ |  |  |  | ✓ |  |  | ○ |  |  |  |
+| healthcare | ○ | ○ |  |  |  | ○ |  |  | ✓ |  |  |
+| course | ✓ | ○ |  |  | ○ |  |  | ○ |  |  |  |
+| gaming |  |  | ○ | ✓ |  |  | ✓ |  |  |  |  |
+| music |  |  | ○ | ✓ |  | ○ | ✓ |  |  |  |  |
+| nonprofit |  | ✓ |  |  |  | ○ |  | ○ |  |  |  |
+| sports |  |  | ✓ |  |  |  | ✓ |  |  |  |  |
+| localbiz |  | ○ | ○ |  |  | ✓ |  |  | ○ |  |  |
 
 ---
 

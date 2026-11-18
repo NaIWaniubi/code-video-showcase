@@ -52,6 +52,10 @@ const QA_DIR = path.join(path.dirname(VIDEO), 'qa');
 const REPORT = path.resolve(String(args.json || path.join(QA_DIR, 'qa-video.json')));
 const CONTACT = path.resolve(String(args.contact || path.join(QA_DIR, 'contact.jpg')));
 const STRICT = !!args.strict;
+// W6：派生导出格式——QA 预期随之调整（webm=VP9，gif 无 pix/音频概念），
+// 不放宽「帧数/时长/内容」等核心项，只改容器级预期。
+const FORMAT = args.format ? String(args.format) : null;
+const EXPECTED_CODEC = FORMAT === 'webm' ? 'vp9' : FORMAT === 'gif' ? 'gif' : 'h264';
 
 const report = { file: VIDEO, checkedAt: new Date().toISOString(), checks: [], metrics: {} };
 const add = (name, status, detail, value) => {
@@ -76,11 +80,11 @@ let plan = null;
 if (args.plan) {
   plan = JSON.parse(fs.readFileSync(path.resolve(String(args.plan)), 'utf8'));
 }
-const fps = num('fps', plan?.meta?.fps ?? 30);
+let fps = num('fps', plan?.meta?.fps ?? 30);
 const width = num('width', plan?.meta?.width ?? 1920);
 const height = num('height', plan?.meta?.height ?? 1080);
 const duration = num('duration', plan?.stats?.duration ?? null);
-const expectedFrames = plan?.stats?.frames ?? (duration ? Math.round(duration * fps) : null);
+let expectedFrames = plan?.stats?.frames ?? (duration ? Math.round(duration * fps) : null);
 report.expect = { width, height, fps, duration, frames: expectedFrames };
 
 // ── 1a. 内容级检查（v2.3.5）────────────────────────────────────────────────
@@ -131,12 +135,27 @@ if (!v) { add('video stream', 'FAIL', 'no video stream'); }
 else {
   report.metrics.framesSource = framesSource;
   report.metrics.frames = frames;
+  // W6：派生格式按**实际流帧率**校核（gif 导出降到 15fps，plan 的 30 fps 不适用）；
+  // 时长不变，帧数期望 = 时长 × 实际帧率。
+  if (FORMAT && v) {
+    const [frA, frB] = String(v.r_frame_rate || '').split('/').map(Number);
+    const actualFps = frB ? frA / frB : NaN;
+    if (Number.isFinite(actualFps)) {
+      fps = actualFps;
+      if (duration != null) expectedFrames = Math.round(duration * actualFps);
+    }
+  }
   report.metrics.codec = v.codec_name;
   report.metrics.pix_fmt = v.pix_fmt;
   report.metrics.color = { space: v.color_space, primaries: v.color_primaries, transfer: v.color_transfer, range: v.color_range };
-  add('codec', v.codec_name === 'h264' ? 'PASS' : 'WARN', `video=${v.codec_name}${v.profile ? ` (${v.profile})` : ''}`);
-  add('pix_fmt', v.pix_fmt === 'yuv420p' ? 'PASS' : 'FAIL', `${v.pix_fmt} (need yuv420p)`);
-  add('size', Number(v.width) === width && Number(v.height) === height ? 'PASS' : 'FAIL', `${v.width}x${v.height} (need ${width}x${height})`);
+  add('codec', v.codec_name === EXPECTED_CODEC ? 'PASS' : 'WARN', `video=${v.codec_name} (need ${EXPECTED_CODEC})`);
+  add('pix_fmt', FORMAT === 'gif' ? 'ADVISORY' : (v.pix_fmt === 'yuv420p' ? 'PASS' : 'FAIL'), FORMAT === 'gif' ? 'GIF 无像素格式概念，跳过' : `${v.pix_fmt} (need yuv420p)`);
+  // W6：gif 按设计缩到 480 宽——与 plan 原生画幅不符是有意的，降为 ADVISORY 不拦交付。
+  const sizeOk = Number(v.width) === width && Number(v.height) === height;
+  add('size', FORMAT === 'gif' ? (sizeOk ? 'PASS' : 'ADVISORY') : (sizeOk ? 'PASS' : 'FAIL'),
+    FORMAT === 'gif'
+      ? `${v.width}x${v.height}（gif 导出按设计缩宽，plan 为 ${width}x${height}）`
+      : `${v.width}x${v.height} (need ${width}x${height})`);
   add('fps', v.r_frame_rate === `${fps}/1` ? 'PASS' : 'WARN', `${v.r_frame_rate} (need ${fps}/1)`);
   if (expectedFrames != null) {
     add('frames', frames === expectedFrames ? 'PASS' : 'FAIL', `${frames} (expected ${expectedFrames})`);

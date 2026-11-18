@@ -52,6 +52,7 @@ export const STYLE_IDS = [
   'vaporwave',
   'blueprint',
   'risograph',
+  'generative',
 ];
 
 /** 与 templates/themes.js 的 17 个真实 id 一致（测试会交叉校验）。 */
@@ -167,6 +168,7 @@ const STYLE_LABEL = {
   vaporwave: '蒸汽波',
   blueprint: '工程蓝图',
   risograph: '孔版印刷',
+  generative: '生成式画面',
 };
 
 const KIND_DEFAULT_STYLE = {
@@ -244,6 +246,7 @@ const STYLE_DEFAULT_THEME = {
   vaporwave: 'cyber-neon',
   blueprint: 'blueprint-stone',
   risograph: 'paper-journal',
+  generative: 'cyber-neon',
 };
 
 const KIND_DEFAULT_DURATION = {
@@ -425,6 +428,8 @@ const STYLE_RULES = [
   ['vertical', ['竖屏', '竖版', '9:16', '9：16', '抖音', '快手', '小红书', 'tiktok', 'reels', 'shorts', 'vertical']],
   ['minimal', ['极简', '简约', '大字', 'minimal', 'minimalist', 'keynote style']],
   ['flat', ['扁平', '插画', 'flat', 'illustration', '矢量', 'vector']],
+  // v3.1：程序化生成画面（R4 generative.mjs）——关键词早于 tech/data-viz 等通配族生效。
+  ['generative', ['生成式', '生成画面', '程序化', 'procedural', 'generative', '流场', '粒子', 'swarm', '轨道动画']],
 ];
 
 const THEME_RULES = [

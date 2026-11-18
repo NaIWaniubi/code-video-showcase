@@ -29,6 +29,23 @@ bash templates/concat-and-encode.sh --two-pass --bitrate 8M ...
 | `weixin` | 1080×1260 | 30 | 24 | 8M | AAC 192k | −14 | 6:7 |
 | `archive` | 1920×1080 | 30 | 18 | 24M | AAC 320k | −14 | 归档/再剪 |
 
+### 派生导出格式（v3.1 / R5-W6）
+
+不走 shell 的 mp4+AAC 链——master 与音轨就位后由 compile 直接 ffmpeg 转码，
+交付清单按扩展名入列（QA 按容器调整预期：webm=VP9、gif 缩宽低帧率且尺寸为 advisory）：
+
+| 格式 | 转码参数 | 产物 |
+|---|---|---|
+| `webm` | libvpx-vp9 1.6M / Opus 160k | `<outDir>/webm.webm` |
+| `gif` | 480 宽 · 15 fps · palettegen/paletteuse | `<outDir>/gif.gif` |
+| `mp3` | libmp3lame 192k（仅音轨） | `<outDir>/mp3.mp3` |
+
+```bash
+node bin/cvs.mjs build project.spec.json --platform gif   # 出片 + 交付清单一并列出
+```
+
+> 无音轨时 mp3 如实跳过并告警，不假装产出。
+
 > CRF 按「胶片颗粒很贵」实测调过：同一段带 grain 的 1080p30，CRF 18≈31 Mbps、20≈21 Mbps、22≈14 Mbps、24≈9 Mbps、26≈5.7 Mbps；CRF24 对 CRF12 中间片的 VMAF 仍有 96.4。`maxrate` 防止颗粒段把体积翻倍。
 
 统一输出：H.264 High、`yuv420p`、`bt709/bt709/bt709/tv`、`+faststart`、AAC 48 kHz 立体声。

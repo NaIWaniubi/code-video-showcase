@@ -1,0 +1,73 @@
+#!/usr/bin/env node
+/**
+ * test-segment-edit.mjs — 帧工作台段级编辑纯核回归（R5-W7）。
+ */
+import assert from 'node:assert/strict';
+import { pathToFileURL } from 'node:url';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(HERE, '..');
+const { splitSegmentAt, EditStack } = await import(pathToFileURL(path.join(ROOT, 'app/shared/segment-edit.mjs')).href);
+
+let passed = 0;
+function test(name, fn) {
+  try { fn(); passed++; console.log(`✓ ${name}`); }
+  catch (e) { console.error(`✗ ${name}\n  ${e.message}`); process.exitCode = 1; }
+}
+
+const segs = [
+  { id: '00-opening', startFrame: 0, endFrame: 60, frames: 60, duration: 2 },
+  { id: 'r01-style', startFrame: 60, endFrame: 300, frames: 240, duration: 8, page: 'templates/x.html' },
+];
+
+test('分割：中点切两段，帧数守恒、id 加后缀', () => {
+  const r = splitSegmentAt(segs, 180);
+  assert.equal(r.ok, true);
+  assert.equal(r.segments.length, 3);
+  assert.equal(r.segments[1].id, 'r01-stylea');
+  assert.equal(r.segments[1].endFrame, 180);
+  assert.equal(r.segments[1].frames, 120);
+  assert.equal(r.segments[2].id, 'r01-styleb');
+  assert.equal(r.segments[2].startFrame, 180);
+  assert.equal(r.segments[2].frames, 120);
+  // 原数组不被原地改（不可变契约）
+  assert.equal(segs.length, 2);
+});
+
+test('分割：贴边拒绝（距两端 <1 帧）', () => {
+  // 61 在 r01(60..300) 内距段首 1 帧：左 1 帧右 239——按契约「≥1」合法，
+  // 真正不可分的是段起点本身与只有 2 帧宽的段。
+  assert.equal(splitSegmentAt(segs, 61).ok, true, '距段首恰 1 帧可切（左 1/右 239）');
+  const badStart = splitSegmentAt(segs, 60);          // 帧 60 是 r01 起点
+  assert.equal(badStart.ok, false, '段起点不能再分');
+  const badEdge = splitSegmentAt([{ ...segs[1], endFrame: 62 }], 61);
+  assert.equal(badEdge.ok, false, '只隔 2 帧的段在中间无法各留 ≥1 帧');
+});
+
+test('分割：帧号不在任何段内 → reason 可判读', () => {
+  const r = splitSegmentAt(segs, 400);
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'frame-not-in-segment');
+  assert.deepEqual(r.segments, segs, '失败时原样返回');
+});
+
+test('duration 按 fps 折算（非硬编 30）', () => {
+  const r = splitSegmentAt([{ id: 's', startFrame: 0, endFrame: 90 }], 30, 60);
+  assert.equal(r.segments[0].duration, 0.5);      // 30/60s
+  assert.equal(r.segments[1].duration, 1);
+});
+
+test('EditStack：快照深拷贝、超限丢最旧、pop 取回', () => {
+  const st = new EditStack(2);
+  st.push(segs);                                    // 快照：原始段表的逐段拷贝
+  segs[0] = { id: 'mutated-in-place' };             // 原数组就地改
+  const back = st.pop();
+  assert.equal(back.length, 2);
+  assert.equal(back[0].id, '00-opening', '快照不受原数组后续改动影响（深拷贝契约）');
+  st.push(segs); st.push(segs); st.push(segs);
+  assert.equal(st.size, 2, '超限丢最旧');
+});
+
+console.log(`\n${passed} checks passed`);

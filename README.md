@@ -23,6 +23,8 @@ An Agent Skill for producing 30–90 s "style showcase" films: an 8 s opening, e
 - **参考片反推 `cvs ref video demo.mp4`**：拖一条成片进来 → 结构模型 + BPM 自相关 + k-means 主题匹配 → 可直接 `--apply` patch 进你的 spec。启发式结果带 confidence/残差/notes，不假装精确。
 - **旁白声道**：spec 里给文案行，编译时自动语音合成（piper 优先）+ sidechain 闪避混音 + 词级时间戳，配音不再需要外部 DAW。
 - **程序化生成画面引擎**：种子化流场群游 / 轨道环系 / 脉冲波 / 弹跳字——全部 (t, seed) 纯函数，逐帧确定性不破例。
+- **第 21 画风 `generative`**：已注册为正式配方页（recipe-generative.html），向导可选、combos 矩阵 17×21 同步。
+- **派生导出格式**：`--platform webm|gif|mp3` 直接转码入交付清单。
 
 **Changelog / 更新历史**：[CHANGELOG.md](CHANGELOG.md) · [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)
 
@@ -83,7 +85,7 @@ segment. Error codes live in `schema/errors.json` and are documented in
 
 **Motion profiles** (`templates/motion-profile.mjs`) — `look.motion` picks one of `calm` / `standard` / `dynamic` / `maximal`; omit it and the compiler derives one from *video type × art style* (cyber-pixel → `maximal`, launch/minimal/ink-wash → `calm`, knowledge → `standard`). The level travels to every page as `?mp=<level>` and scales the transition, easing, stagger, impact, shake, flash, push and the grain/scanline/paper texture layers. `standard` reproduces the pre-v2.3 output **byte for byte**, so existing projects are unchanged.
 
-**Style → page** (`templates/style-pages.mjs`) — the single source of truth for "which page renders this art style". Each of the 20 styles maps to a real page (`cyber-pixel` → `templates/cyber-pixel.html`, `guofeng` → `templates/recipe-guofeng.html`, …); `?recipe=` is now only an in-page hint, not what selects the page. Generators (`scripts/nl2spec.mjs`, `app/wizard/`) read this table, and an unknown style falls back to the generic scene page rather than the placeholder skeleton. Before v2.3.1 every style silently rendered the placeholder (audit finding F1).
+**Style → page** (`templates/style-pages.mjs`) — the single source of truth for "which page renders this art style". Each of the 21 styles maps to a real page (`cyber-pixel` → `templates/cyber-pixel.html`, `guofeng` → `templates/recipe-guofeng.html`, …); `?recipe=` is now only an in-page hint, not what selects the page. Generators (`scripts/nl2spec.mjs`, `app/wizard/`) read this table, and an unknown style falls back to the generic scene page rather than the placeholder skeleton. Before v2.3.1 every style silently rendered the placeholder (audit finding F1).
 
 **Accent override** — `look.accentOverride` (brand colour from `cvs brand apply`, or the contrast-safe colour from `content/combos.json` `_meta.accentFix`) is expanded by the plan into `?accent=/#…&accentInk=/#…&accentSoft=/#…` on **every** segment URL, and `themeFromURL()` applies it via `accentOverride()`. Without an override no parameter is added, so existing films are byte-identical. Before v2.3.1 no page ever received the override: brand colours never appeared in the video, and `accentFix` only silenced the linter (audit finding F3). It is part of `segmentHash`, so changing a brand colour always re-renders.
 
@@ -427,7 +429,7 @@ code-video-showcase/
 │  ├─ intake.md                      # pre-flight brief intake + theme lock (brief.json)
 │  ├─ original-brief.txt             # the original 61 s brief — copy and rebrand
 │  ├─ reference-film-analysis.md     # measured breakdown of the reference (cuts/frames/audio)
-│  ├─ style-recipes.md               # 20 styles: art direction + technique + sound
+│  ├─ style-recipes.md               # 21 styles: art direction + technique + sound
 │  ├─ themes.md                      # 17 themes: palettes, materials, HUD, cardColors, QA
 │  ├─ big-card-and-typography.md     # 4 card layouts, type scale, slam parameters
 │  ├─ audio-recipes.md               # 120 BPM arrangement, synthesis formulas, mix chain
@@ -476,7 +478,7 @@ code-video-showcase/
    └─ audio-analysis.json / scene-cuts.txt / colors-per-second.json
 ```
 
-## The styles (original 11 below; full 20-style catalog in `docs/COVERAGE.md`)
+## The styles (original 11 below; full 21-style catalog in `docs/COVERAGE.md`)
 
 | # | Style | Core technique | Key elements | Signature sound |
 |---|---|---|---|---|

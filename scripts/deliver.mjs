@@ -48,7 +48,10 @@ let plan = null;
 try { plan = JSON.parse(fs.readFileSync(planPath, 'utf8')); } catch { /* plan 可选 */ }
 
 // master-burned = --burn-subtitles 且没有平台版时的硬字幕母版（v2.4 / P1-08）。
-const PLATFORMS = ['master', 'master-burned', 'bilibili', 'youtube', 'douyin', 'xiaohongshu', 'weixin', 'wechat', 'square'];
+// W6：派生导出格式也进交付清单（按扩展名找产物）。
+const PLATFORM_EXT = { webm: 'webm', gif: 'gif', mp3: 'mp3' };
+const PLATFORMS = ['master', 'master-burned', 'bilibili', 'youtube', 'douyin', 'xiaohongshu', 'weixin', 'wechat', 'square',
+  'webm', 'gif', 'mp3'];
 const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const bytes = (file) => fs.statSync(file).size;
 
@@ -112,7 +115,8 @@ const burnedSet = new Set((burnedMeta.files || []).map((f) => String(f)));
 
 const rows = [];
 for (const platform of PLATFORMS) {
-  const file = path.join(outDir, `${platform}.mp4`);
+  const ext = PLATFORM_EXT[platform] || 'mp4';
+  const file = path.join(outDir, `${platform}.${ext}`);
   if (!fs.existsSync(file)) continue;
   const hasBurnedSubs = platform === 'master-burned' || burnedSet.has(path.basename(file));
   rows.push({

@@ -1,4 +1,4 @@
-# 20 种风格配方（美术 + 技术 + 音色）
+# 21 种风格配方（美术 + 技术 + 音色）
 
 > v2.5：风格扩到 20（下表 01–11 为原有详细配方；12–20 为新增/收编，见文末「v2.5 新增风格」）。
 > 领域×风格×效果×转场 的完整覆盖矩阵与动效教义见 `docs/COVERAGE.md`。
@@ -51,6 +51,7 @@
 | vaporwave | recipe-vaporwave.html | 蒸汽波 | 渐变天空、透视网格、扫描线落日、镀铬字（effects.scanlines） |
 | blueprint | recipe-blueprint.html | 工程蓝图 | 普鲁士蓝、尺寸箭头、标题栏、十字线（effects.dotGrid） |
 | risograph | recipe-risograph.html | 孔版印刷 | 双专色、套印错位、颗粒平涂、纸纹（effects.grain/halftone） |
+| generative | recipe-generative.html | 生成式画面 | 流场群游、轨道环系、脉冲波、弹跳字（generative.mjs 四族纯核，v3.1） |
 
 ---
 

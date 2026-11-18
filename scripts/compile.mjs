@@ -78,7 +78,8 @@ if (args.help || !args.spec) {
   --master <file>       default <outDir>/master.mp4
   --audio <wav>         explicit soundtrack; spec.audio is synthesized when omitted
   --no-audio            build a silent film on purpose (otherwise audio is required)
-  --platform <id>       also encode a delivery copy: bilibili|douyin|youtube|xiaohongshu|wechat|square
+  --platform <id>       delivery copy: bilibili|douyin|youtube|xiaohongshu|wechat|square
+                        | archive | webm | gif | mp3 (derived export formats)
   --concurrency <n>     render parallelism (default spec.render.concurrency)
   --no-cache            ignore the segment cache
   --no-resume           re-render even when a segment file already exists
@@ -216,6 +217,22 @@ if (errors.length) {
     issues: errors,
     raw,
   });
+}
+
+// R5（W6）：派生导出格式——不经过 concat-and-encode.sh 的 mp4+AAC 链，
+// 直接从 master/音轨 ffmpeg 转码（webm=VP9/Opus，gif=缩宽低帧率，mp3=192k）。
+const DERIVED_FORMATS = new Set(['webm', 'gif', 'mp3']);
+const PLATFORM_EXT = { webm: 'webm', gif: 'gif', mp3: 'mp3' };
+const ACCEPTED_PLATFORMS = new Set(['master', 'bilibili', 'douyin', 'youtube', 'xiaohongshu', 'wechat', 'weixin', 'square', 'archive', ...DERIVED_FORMATS]);
+
+// ── 1.5 平台/格式早退（R5-W6）：--platform 与 render.preset 在 spec 校验后、
+// plan 生成前就判死——旧版走到编码阶段才报 usage（--dry-run 完全绕开门禁，
+// unknown platform 能一路假成功到出片）。
+const earlyPlatform = args.platform
+  ? String(args.platform)
+  : (spec.render?.preset && spec.render.preset !== 'master' ? String(spec.render.preset) : null);
+if (earlyPlatform && !ACCEPTED_PLATFORMS.has(earlyPlatform)) {
+  fail('usage', 'E_PRESET', `unknown --platform "${earlyPlatform}"; accepted: ${[...ACCEPTED_PLATFORMS].join('|')}`, { raw });
 }
 
 // ── 2. plan ─────────────────────────────────────────────────────────────────
@@ -367,7 +384,7 @@ const platform = args.platform
 ctx.platform = platform;
 // 未知 --platform 不能静默回落 1920×1080（那会出一个贴错标签的交付物）。
 // 有音轨时 shell 会拒，但无音轨路径以前直接 PLATFORM_SIZE[p] || [1920,1080]。
-const ACCEPTED_PLATFORMS = new Set(['master', 'bilibili', 'douyin', 'youtube', 'xiaohongshu', 'wechat', 'weixin', 'square', 'archive']);
+// （DERIVED_FORMATS / PLATFORM_EXT / ACCEPTED_PLATFORMS 已上移到文件前段——早退校验要用。）
 if (platform && !ACCEPTED_PLATFORMS.has(platform)) {
   fail('usage', 'E_PRESET', `unknown --platform "${platform}"; accepted: ${[...ACCEPTED_PLATFORMS].join('|')}`, { raw });
 }
@@ -380,6 +397,29 @@ function scriptPlatformArgs(p) {
   if (p === 'wechat') return ['--platform', 'weixin'];
   if (p === 'square') return ['--platform', 'custom', '--width', '1080', '--height', '1080'];
   return ['--platform', p];
+}
+
+/** 派生格式编码（master 与音轨就位后转码）。返回 exit code；产物路径带扩展名。 */
+function encodeDerived(platform, masterFile, audioFile) {
+  const ffmpeg = process.env.FFMPEG || 'ffmpeg';
+  const out = path.join(path.dirname(masterFile), `${platform}.${PLATFORM_EXT[platform]}`);
+  let args;
+  if (platform === 'webm') {
+    args = ['-y', '-hide_banner', '-loglevel', 'error', '-i', masterFile,
+      '-c:v', 'libvpx-vp9', '-b:v', '1.6M', '-pix_fmt', 'yuv420p',
+      '-c:a', 'libopus', '-b:a', '160k', out];
+  } else if (platform === 'gif') {
+    // GIF 体积爆炸是常识：缩到 480 宽、15fps、两阶段调色板。
+    const w = Math.min(480, Number(spec.format?.width) || 1920);
+    args = ['-y', '-hide_banner', '-loglevel', 'error', '-i', masterFile,
+      '-vf', `fps=15,scale=${w}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse`,
+      '-an', out];
+  } else {  // mp3
+    args = ['-y', '-hide_banner', '-loglevel', 'error', '-i', audioFile,
+      '-vn', '-c:a', 'libmp3lame', '-b:a', '192k', out];
+  }
+  console.log(`[platform] ${platform} → ${out}`);
+  return spawnStatus(spawnSync(ffmpeg, args, { cwd: root, stdio: 'inherit', windowsHide: true }), 'ffmpeg');
 }
 
 // 转场参数（v2.5）：offset 直接读 plan 的段起点（transitions.mjs 单一真值）。
@@ -433,16 +473,17 @@ function encode(scripted, outFile, preset, extraArgs = []) {
   return spawnStatus(c, 'ffmpeg');
 }
 
+// W6：派生格式（webm/gif/mp3）不走 concat-and-encode.sh 的 mp4+AAC 链——
+// master 与音轨就位后直接转码；QA 与清单按扩展名处理。
+const wantDerived = platform && DERIVED_FORMATS.has(platform);
+
 if (audioPath) {
   // R2-09（N01-F2）：master = **项目原生画幅**（spec.format），不是硬编 1920×1080。
-  // 旧逻辑把竖屏项目的母版强制成横屏，QA 按 spec.format 判 size FAIL——
-  // 9:16 + --platform 的项目从第一天起就出不了绿灯。母版用原生尺寸 + master
-  // 预设的高码率；平台版才是派生尺寸。横屏项目原生=1920×1080，行为不变。
   const nativeW = Number(spec.format?.width) || 1920;
   const nativeH = Number(spec.format?.height) || 1080;
   let code = encode(true, master, 'master', ['--width', String(nativeW), '--height', String(nativeH)]);
   if (code !== 0) fail('concat', 'E_CONCAT', `master encode failed (exit ${code})`, { detailPath: concatPath, raw });
-  if (platform && platform !== 'master') {
+  if (platform && platform !== 'master' && !wantDerived) {
     const platformFile = path.join(outDir, `${platform}.mp4`);
     code = encode(true, platformFile, platform);
     if (code !== 0) fail('concat', 'E_CONCAT', `platform encode failed: ${platform} (exit ${code})`, { platform, detailPath: concatPath, raw });
@@ -451,7 +492,7 @@ if (audioPath) {
 } else {
   const code = encode(false, master);
   if (code !== 0) fail('concat', 'E_CONCAT', `video-only concat failed (exit ${code})`, { detailPath: concatPath, raw });
-  if (platform && platform !== 'master') {
+  if (platform && platform !== 'master' && !wantDerived) {
     // 无音轨时用一次显式重排编码出平台版（不静默补黑边：尺寸不匹配会在这里暴露）。
     const [w, h] = PLATFORM_SIZE[platform] || [1920, 1080];
     const platformFile = path.join(outDir, `${platform}.mp4`);
@@ -468,6 +509,16 @@ if (audioPath) {
     });
     if (c.status !== 0) fail('concat', 'E_CONCAT', `platform encode failed: ${platform} (exit ${c.status})`, { platform, raw });
     console.log(`[platform] ${platformFile}`);
+  }
+}
+
+if (wantDerived) {
+  // 无音轨且要 mp3：无源可依——如实跳过并告警，不假装产出。
+  if (!audioPath && platform === 'mp3') {
+    console.error(`[warn] mp3 需要音轨（无音频源），已跳过 ${platform} 导出`);
+  } else {
+    const dcode = encodeDerived(platform, master, audioPath);
+    if (dcode !== 0) fail('concat', 'E_CONCAT', `derived format encode failed: ${platform} (exit ${dcode})`, { platform, raw });
   }
 }
 console.log(`[master]  ${master}`);
@@ -549,17 +600,25 @@ if (!args['no-qa']) {
 
   const aliases = { wechat: 'weixin' };
   const platformSize = (p) => PLATFORM_SIZE[aliases[String(p)] || String(p)] || PLATFORM_SIZE.master;
-  const targets = [{ file: master, name: 'master', w: null, h: null }];
+  const targets = [{ file: master, name: 'master', w: null, h: null, format: null }];
   if (platform && platform !== 'master') {
-    const pf = path.join(outDir, `${platform}.mp4`);
+    // W6：派生格式按真实扩展名找产物，画幅不适用（gif 已缩宽）。
+    const ext = PLATFORM_EXT[platform] || 'mp4';
+    const pf = path.join(outDir, `${platform}.${ext}`);
     if (fs.existsSync(pf)) {
-      const [w, h] = platformSize(platform);
-      targets.push({ file: pf, name: String(platform), w, h });
+      const derived = DERIVED_FORMATS.has(platform);
+      targets.push({
+        file: pf, name: String(platform),
+        w: derived ? null : platformSize(platform)[0],
+        h: derived ? null : platformSize(platform)[1],
+        format: derived ? platform : null,
+      });
     }
   }
 
   for (const t of targets) {
     const qaArgs = [qa, t.file, '--plan', planPath,
+      ...(t.format ? ['--format', t.format] : []),
       '--json', path.join(outDir, 'qa', t.name === 'master' ? 'qa-video.json' : `qa-video-${t.name}.json`)];
     if (t.w) qaArgs.push('--width', String(t.w), '--height', String(t.h), '--no-contact');
     // R2-09 配套：平台件画幅与原生不同 → letterbox/pillarbox 黑边是有意 padding，
@@ -577,6 +636,9 @@ if (!args['no-qa']) {
     }
 
     if (audioPath) {
+      // W6：gif 等无音轨派生格式——抽音轨必失败，如实跳过而不是让 QA 崩栈。
+      if (t.format === 'gif') { console.error(`[warn] qa-audio skipped for ${t.name}（无音轨）`); }
+      else {
       // 质检量的是**成片里的音轨**（过完 loudnorm 的交付流），不是未归一的合成 wav；
       // qa-audio.py 自身能吃 mp4（内部 ffmpeg 抽流），不再手写抽取命令。
       const report = path.join(outDir, 'qa', t.name === 'master' ? 'qa-audio.json' : `qa-audio-${t.name}.json`);
@@ -587,6 +649,7 @@ if (!args['no-qa']) {
       if (qa2.status !== 0) {
         qaPass = false;
         fail('qa', 'E_QA_AUDIO', `qa-audio failed for ${path.basename(t.file)} (exit ${qa2.status}); see ${report}`, { raw });
+      }
       }
     }
   }

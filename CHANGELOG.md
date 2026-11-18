@@ -3,6 +3,34 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v3.1.0] - 2026-11-18 — 第 21 画风 generative · 派生导出格式 webm/gif/mp3 · 帧工作台段级剪辑
+
+在 v3.0.0 三件套之上继续补齐「完整产品面」：画风词表、平台交付与工作台交互。
+
+### W5 · generative 成为第 21 个正式画风
+- `scripts/nl2spec.mjs` 四表（STYLE_IDS/LABEL/DEFAULT_THEME/RULES 关键词）注册 `generative`；
+- `scripts/build-combos.mjs` 补族归属（tech：暗底 recommended / 亮底 ok）+ 中文标签「生成式画面」；
+- combos 矩阵重生成 **17×21=357**（幂等，preset 全 recommended）；
+- 新配方页 `templates/recipe-generative.html`：swarm 氛围层 + 轨道环系主视觉锚点 + 脉冲波传播 + 弹跳字标题（BPM 落拍反弹）+ 标准 HUD；冒烟渲染 30 帧 raw 通过；
+- `style-pages.mjs` STYLE_PAGES/RECIPE_IDS 同步（测试交叉校验键集合一致）；
+- COVERAGE 矩阵补行与列（tutorial/changelog 推荐 generative）。
+
+### W6 · 派生导出格式（--platform webm / gif / mp3）
+- compile：`DERIVED_FORMATS`/`PLATFORM_EXT`——master 与音轨就位后直接 ffmpeg 转码（webm=VP9 1.6M/Opus、gif=480 宽 15fps 两阶段调色板、mp3=192k），不经 shell 的 mp4+AAC 链；无音轨的 mp3 如实跳过并告警。
+- deliver：PLATFORMS 按扩展名入列（webm/gif/mp3）。
+- qa-video：`--format` 感知——webm 预期 VP9、gif 无 pix_fmt 概念（advisory）、按**实际流帧率**重算帧数期望、gif 缩宽尺寸降为 advisory；无音轨的 gif 跳过音频 QA（如实 warn 而非崩栈）。
+- **平台校验提前到 spec 之后、plan 之前**：未知 `--platform` 不再走到编码阶段才报（旧版 `--dry-run` 完全绕开门禁一路假成功）；常量随之上移解决 TDZ。
+- platform-presets 文档补 archive 与派生格式两节。
+
+### W7 · 帧工作台段级剪辑（分割/撤销）
+- 新纯核 `app/shared/segment-edit.mjs`：`splitSegmentAt(segments, n, fps)`——中点切分、帧数守恒断言、贴边拒绝（段起点/两端各 <1 帧）、reason 可判读；`EditStack` 撤销栈（深拷贝快照、超限丢最旧）。
+- frames UI：live 源专属「分割段」「撤销」按钮 + Ctrl/Cmd+Z；编辑后重建 ruler/strip/HUD，按钮可用态随模式与栈长度联动；attach/clearSource 重置栈。
+- 单测 5 项（含帧数守恒、深拷贝契约、超限语义）。
+
+### 工程面
+- test-all UNIT +1（test-segment-edit）；SKILL/README/COVERAGE/style-recipes 口径同步 21 画风。
+- gif 全链 e2e 实测：出片 → 转码 → 视频 QA 按容器预期全绿（无音轨音频 QA 如实跳过）。
+
 ## [v3.0.0] - 2026-11-18 — 断层领先三件套：参考片反推 / 旁白声道 / 程序化生成画面
 
 在 v2.9.0（十视角审计收口）之上，一次性交付三个竞品没有的能力。

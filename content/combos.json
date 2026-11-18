@@ -1,7 +1,7 @@
 {
   "_meta": {
     "schemaVersion": 1,
-    "description": "17 themes × 20 styles 兼容矩阵。recommended/ok/avoid 三档；preset 组合必须 recommended。",
+    "description": "17 themes × 21 styles 兼容矩阵。recommended/ok/avoid 三档；preset 组合必须 recommended。",
     "generatedBy": "C1 rules (deterministic, no network)",
     "sourceOfTruth": "themes ids + mode + names come from templates/themes.js; style ids are the 20 style vocabulary (v2.5).",
     "rules": [
@@ -52,7 +52,8 @@
         "brutalist": "neutral",
         "vaporwave": "neon",
         "blueprint": "tech",
-        "risograph": "paper"
+        "risograph": "paper",
+        "generative": "tech"
       }
     },
     "themeNames": {
@@ -94,14 +95,15 @@
       "brutalist": "新粗野主义",
       "vaporwave": "蒸汽波",
       "blueprint": "工程蓝图",
-      "risograph": "孔版印刷"
+      "risograph": "孔版印刷",
+      "generative": "生成式画面"
     },
     "counts": {
-      "recommended": 159,
-      "ok": 144,
+      "recommended": 168,
+      "ok": 152,
       "avoid": 37
     },
-    "coverage": "17×20=340",
+    "coverage": "17×21=357",
     "accentFix": {
       "aqua-morandi": {
         "accent": "#6e9fae",
@@ -146,7 +148,8 @@
       "brutalist": "ok",
       "vaporwave": "recommended",
       "blueprint": "recommended",
-      "risograph": "ok"
+      "risograph": "ok",
+      "generative": "recommended"
     },
     "claude-light": {
       "cyber-pixel": "avoid",
@@ -168,7 +171,8 @@
       "brutalist": "ok",
       "vaporwave": "avoid",
       "blueprint": "ok",
-      "risograph": "recommended"
+      "risograph": "recommended",
+      "generative": "ok"
     },
     "aqua-morandi": {
       "cyber-pixel": "avoid",
@@ -190,7 +194,8 @@
       "brutalist": "ok",
       "vaporwave": "avoid",
       "blueprint": "ok",
-      "risograph": "recommended"
+      "risograph": "recommended",
+      "generative": "ok"
     },
     "amber-noir": {
       "cyber-pixel": "recommended",
@@ -212,7 +217,8 @@
       "brutalist": "ok",
       "vaporwave": "recommended",
       "blueprint": "recommended",
-      "risograph": "ok"
+      "risograph": "ok",
+      "generative": "recommended"
     },
     "blueprint-stone": {
       "cyber-pixel": "avoid",
@@ -234,7 +240,8 @@
       "brutalist": "ok",
       "vaporwave": "avoid",
       "blueprint": "ok",
-      "risograph": "recommended"
+      "risograph": "recommended",
+      "generative": "ok"
     },
     "graphite-signal": {
       "cyber-pixel": "recommended",
@@ -256,7 +263,8 @@
       "brutalist": "ok",
       "vaporwave": "recommended",
       "blueprint": "recommended",
-      "risograph": "ok"
+      "risograph": "ok",
+      "generative": "recommended"
     },
     "celadon-paper": {
       "cyber-pixel": "avoid",
@@ -278,7 +286,8 @@
       "brutalist": "ok",
       "vaporwave": "avoid",
       "blueprint": "ok",
-      "risograph": "recommended"
+      "risograph": "recommended",
+      "generative": "ok"
     },
     "crimson-theater": {
       "cyber-pixel": "recommended",
@@ -300,7 +309,8 @@
       "brutalist": "ok",
       "vaporwave": "recommended",
       "blueprint": "recommended",
-      "risograph": "ok"
+      "risograph": "ok",
+      "generative": "recommended"
     },
     "cyber-neon": {
       "cyber-pixel": "recommended",
@@ -322,7 +332,8 @@
       "brutalist": "ok",
       "vaporwave": "recommended",
       "blueprint": "recommended",
-      "risograph": "ok"
+      "risograph": "ok",
+      "generative": "recommended"
     },
     "paper-journal": {
       "cyber-pixel": "avoid",
@@ -344,7 +355,8 @@
       "brutalist": "ok",
       "vaporwave": "avoid",
       "blueprint": "ok",
-      "risograph": "recommended"
+      "risograph": "recommended",
+      "generative": "ok"
     },
     "dark-gold-cinema": {
       "cyber-pixel": "recommended",
@@ -366,7 +378,8 @@
       "brutalist": "ok",
       "vaporwave": "recommended",
       "blueprint": "recommended",
-      "risograph": "ok"
+      "risograph": "ok",
+      "generative": "recommended"
     },
     "ice-minimal": {
       "cyber-pixel": "avoid",
@@ -388,7 +401,8 @@
       "brutalist": "ok",
       "vaporwave": "avoid",
       "blueprint": "ok",
-      "risograph": "recommended"
+      "risograph": "recommended",
+      "generative": "ok"
     },
     "pop-acid": {
       "cyber-pixel": "recommended",
@@ -410,7 +424,8 @@
       "brutalist": "recommended",
       "vaporwave": "recommended",
       "blueprint": "recommended",
-      "risograph": "ok"
+      "risograph": "ok",
+      "generative": "recommended"
     },
     "terminal-phosphor": {
       "cyber-pixel": "recommended",
@@ -432,7 +447,8 @@
       "brutalist": "ok",
       "vaporwave": "recommended",
       "blueprint": "recommended",
-      "risograph": "ok"
+      "risograph": "ok",
+      "generative": "recommended"
     },
     "solar-dusk": {
       "cyber-pixel": "avoid",
@@ -454,7 +470,8 @@
       "brutalist": "ok",
       "vaporwave": "avoid",
       "blueprint": "ok",
-      "risograph": "recommended"
+      "risograph": "recommended",
+      "generative": "ok"
     },
     "abyss-teal": {
       "cyber-pixel": "recommended",
@@ -476,7 +493,8 @@
       "brutalist": "ok",
       "vaporwave": "recommended",
       "blueprint": "recommended",
-      "risograph": "ok"
+      "risograph": "ok",
+      "generative": "recommended"
     },
     "sand-linen": {
       "cyber-pixel": "avoid",
@@ -498,7 +516,8 @@
       "brutalist": "ok",
       "vaporwave": "avoid",
       "blueprint": "ok",
-      "risograph": "recommended"
+      "risograph": "recommended",
+      "generative": "ok"
     }
   }
 }

@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/shared/fonts.css">
+<title>recipe · generative</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #0e0e0d; }
+  #c { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<script type="module">
+// recipe-generative.html — 风格段「生成式画面」（v3.1 / R4）。
+//
+// 引擎：templates/generative.mjs——流场群游（swarm）/ 轨道环系（orbits）/
+// 脉冲波（pulse rings）/ 弹跳字（bounceChars）。全部是 (t, seed) 的确定性纯函数：
+// 同一 t 必出同一像素，逐帧渲染可复现，不破「No generative models」铁律。
+//
+// 视觉编排：
+//   1. 全屏 swarm 粒子层（主题强调色，低透明，作氛围底）；
+//   2. 左/上区放「轨道环系」作为主视觉锚点 + 从锚心向外传播的脉冲波；
+//   3. 标题逐字弹跳入场（按 BPM 落拍反弹），副标随后淡入；
+//   4. HUD 胶囊与顶栏沿用标准件（drawHud/drawTopMeta）。
+//
+// 渲染契约（与其他配方页一致）：
+//   window.DURATION / window.renderFrame(t)（纯函数）/ window.__ready / window.__bootError
+import { createSegment, applyImpact2D, drawFlash, loadFonts, vars, TAU, clamp, smoothstep } from './common.js';
+import {
+  themeFromURL, getTheme, loadFontsFor, hexToRgba, mix, relativeLuminance,
+} from './themes.js';
+import {
+  setupStage, safePad, fitTextSize, drawTracked, drawHud, drawTopMeta,
+} from './recipes/util.js';
+import { typeSize, safe, probe } from './tokens.mjs';
+import { swarmField, orbitSystem, pulseRings, bounceChars } from './generative.mjs';
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { alpha: false });
+const { W, H, portrait } = setupStage(canvas);
+const pad = safePad(W, H);
+
+const params = new URLSearchParams(location.search);
+const seg = createSegment({ duration: 3.0 });
+window.DURATION = seg.duration;
+
+const THEME = getTheme(themeFromURL(location.search));
+const TC = THEME.colors;
+const V = vars();
+
+const TITLE = String(params.get('title') || V.title || '生成式画面').slice(0, 14);
+const SUB = String(V.subtitle || '种子驱动的程序化视觉 · 每一帧都可复现').slice(0, 40);
+const BRAND = String(V.brand || 'CVS').slice(0, 24);
+
+const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;
+const INK = isLight ? TC.ink : TC.paper;
+const MUTED = hexToRgba(INK, 0.55);
+const ACCENT = TC.accent;
+const SOFT = TC.accentSoft || mix(ACCENT, TC.bg, 0.55);
+
+const SANS = '"Noto Sans SC", "PingFang SC", sans-serif';
+const MONO = '"JetBrains Mono", ui-monospace, monospace';
+const FAMILIES = Array.from(new Set([
+  ...(loadFontsFor(THEME) || []),
+  'Noto Sans SC', 'JetBrains Mono', 'Inter',
+]));
+
+// BPM：URL/vars 显式给则尊重，否则默认 120（spec 下发 ?bpm= 时生效）。
+const BPM = Math.max(40, Math.min(200, Number(params.get('bpm')) || Number(V.bpm) || 120));
+// 种子：品牌名哈希位 → 同片同画面；换 brand 即换一套生成轨迹（但仍是确定的）。
+let SEED_HASH = 2166136261;
+for (let i = 0; i < BRAND.length; i++) SEED_HASH = Math.imul(SEED_HASH ^ BRAND.charCodeAt(i), 16777619);
+const SEED = Math.abs(SEED_HASH | 0) % 100000 + 1;
+
+/* ───────────────────────────── 布局 ───────────────────────────── */
+
+let L = null;
+
+function buildLayout() {
+  // 主视觉锚点：横屏在左侧偏中，竖屏在上部。
+  const ax = portrait ? Math.round(W * 0.5) : Math.round(W * 0.28);
+  const ay = portrait ? Math.round(H * 0.34) : Math.round(H * 0.5);
+  const artR = Math.round(Math.min(W, H) * (portrait ? 0.16 : 0.21));
+  const titleMaxW = portrait ? W - pad * 2 : W - Math.round(W * 0.50) - pad;
+  const titleSize = fitTextSize(ctx, TITLE, {
+    maxWidth: titleMaxW, family: SANS, weight: 800,
+    maxSize: typeSize('title', W, H), minSize: 40, spacing: 0.02,
+  });
+  probe('title', titleSize, safe(W, H));
+  return {
+    ax, ay, artR, titleSize, titleMaxW,
+    titleX: portrait ? Math.round(W / 2) : Math.round(W * 0.50),
+    titleY: portrait ? Math.round(H * 0.66) : Math.round(H * 0.50),
+    subSize: Math.max(13, Math.round(titleSize * 0.26)),
+    subX: portrait ? Math.round(W / 2) : Math.round(W * 0.50),
+    subY: 0,                       // drawScene 内按标题实际高动态落位
+  };
+}
+
+/* ───────────────────────────── 场景 ───────────────────────────── */
+
+function drawScene(u, t) {
+  ctx.fillStyle = TC.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // 1) 流场群游（全屏氛围层）
+  ctx.save();
+  ctx.globalAlpha = 0.32;
+  for (const p of swarmField({ count: portrait ? 90 : 130, t, seed: SEED, W, H,
+                               steps: 8, size: portrait ? 4.2 : 6.4 })) {
+    ctx.fillStyle = p.hue > 0.7 ? SOFT : ACCENT;
+    ctx.globalAlpha = 0.30 * p.alpha;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, TAU);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // 2) 轨道环系 + 脉冲波（主视觉锚点）
+  ctx.save();
+  for (const ring of orbitSystem({
+    t, seed: SEED + 17, rings: 5,
+    cx: L.ax / W, cy: L.ay / H, radiusJitter: 0.24,
+  })) {
+    ctx.strokeStyle = hexToRgba(INK, 0.30);   // MUTED 本身已是 rgba，不能再包一层
+    ctx.lineWidth = 1.4;
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    ctx.ellipse(L.ax, L.ay, ring.radius * L.artR * 3.4, ring.radius * L.artR * 3.4 * 0.42,
+                ring.phase * 0.35, 0, TAU);
+    ctx.stroke();
+    ctx.fillStyle = ACCENT;
+    ctx.globalAlpha = 0.95;
+    for (const d of ring.dots) {
+      const a = d.phi + ring.phase + t * ring.omega;
+      const ex = L.ax + Math.cos(a) * ring.radius * L.artR * 3.4;
+      const ey = L.ay + Math.sin(a) * ring.radius * L.artR * 3.4 * 0.42;
+      ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(TAU * (t * 0.6 + d.blink)));
+      ctx.beginPath();
+      ctx.arc(ex, ey, Math.max(2.2, 5.2 * d.size), 0, TAU);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  // 3) 脉冲波（从锚心向外传播，环随生命衰减）
+  ctx.save();
+  for (const r of pulseRings({ t, speed: 340, rings: 7, width: 300 })) {
+    const rad = r.radius * 0.001 * Math.min(W, H);
+    if (rad <= 2 || rad > L.artR * 5) continue;
+    ctx.strokeStyle = ACCENT;
+    ctx.globalAlpha = r.alpha * 0.5;
+    ctx.lineWidth = 3 * (1 - r.life * 0.6);
+    ctx.beginPath();
+    ctx.arc(L.ax, L.ay, rad, 0, TAU);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 4) 锚心点（收束焦点）
+  ctx.save();
+  ctx.fillStyle = INK;
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath();
+  ctx.arc(L.ax, L.ay, Math.max(3, L.titleSize * 0.045), 0, TAU);
+  ctx.fill();
+  ctx.restore();
+
+  // 5) 标题：弹跳字入场（落拍反弹）+ 淡入
+  const intro = clamp(t / 0.5);
+  const fade = smoothstep(0.12, 0.55, intro);
+  if (fade > 0.001) {
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.font = `800 ${L.titleSize}px ${SANS}`;
+    ctx.textAlign = portrait ? 'center' : 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = INK;
+    let xCursor = portrait ? L.titleX : L.titleX;
+    for (const c of bounceChars({ text: TITLE, t, bpm: BPM, fontSize: L.titleSize, W })) {
+      const dx = portrait ? 0 : ((c.x * W) - L.titleX);   // 横屏按弹跳布局的起点
+      void dx;
+      const cx = portrait ? L.titleX + (c.x - 0.5) * L.titleMaxW * 0.86 : c.x * W;
+      const cy = L.titleY - c.dy * L.titleSize * 0.85;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(c.rot);
+      ctx.fillText(c.ch, 0, 0);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // 6) 副标（标题后淡入）
+  const subY = portrait ? L.titleY + L.titleSize * 0.62 : L.titleY + L.titleSize * 0.68;
+  const subFade = smoothstep(0.45, 0.9, intro);
+  if (subFade > 0.001 && SUB) {
+    ctx.save();
+    ctx.globalAlpha = subFade * 0.9;
+    ctx.font = `${Math.max(13, L.titleSize * 0.26)}px ${SANS}`;
+    ctx.fillStyle = MUTED;
+    ctx.textAlign = portrait ? 'center' : 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(SUB, L.subX, subY);
+    ctx.restore();
+  }
+
+  // 7) 标准件：HUD 胶囊 + 顶栏 meta
+  try {
+    drawHud(ctx, {
+      W, H, u, duration: seg.duration,
+      theme: THEME, label: 'STYLE 21 / 21', name: 'GENERATIVE', brand: BRAND, pad,
+    });
+  } catch { /* HUD 不参与核心画面，失败不置 bootError */ }
+}
+
+window.renderFrame = (u) => {
+  const { t, fx } = seg.sample(u);
+  ctx.save();
+  ctx.scale(1 + (fx.scale - 1), 1 + (fx.scale - 1));
+  drawScene(u, t);
+  ctx.restore();
+  applyImpact2D(ctx, fx, W, H);
+  drawFlash(ctx, fx.flash, W, H, TC.paper);
+};
+
+window.__ready = false;
+window.__bootError = null;
+(async () => {
+  try {
+    await loadFonts(FAMILIES);
+    L = buildLayout();
+    window.renderFrame(0);
+    window.__ready = true;
+  } catch (e) {
+    window.__bootError = String((e && e.stack) || e);
+  }
+})();
+</script>
+</body>
+</html>

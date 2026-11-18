@@ -53,6 +53,8 @@ const STYLE_OPTIONS = [
   { id: 'data-viz', label: '数据可视化', hint: '条形 · 竞速' },
   { id: 'screencast', label: '录屏', hint: '代码 · 逐字' },
   { id: 'flat', label: '扁平插画', hint: '矢量 · 色块' },
+  // v3.1：generative（位置按字典序，测试对表 STYLE_IDS）
+  { id: 'generative', label: '生成式画面', hint: '粒子 · 轨道' },
   { id: 'minimal', label: '极简大字', hint: '发布会 · 克制' },
   { id: 'vertical', label: '竖屏卡片', hint: '手机 · 弹卡' },
   // v2.5：收编 kinetic + 6 个新风格（与 templates/style-pages.mjs 对齐）

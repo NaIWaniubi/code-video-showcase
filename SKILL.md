@@ -90,8 +90,10 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
 - **界面**：`cvs ui`(5180) 一个端口挂齐六个界面（`app/index.html` 是首页）；也可单独 `app/wizard/`(5181)、`app/canvas/`(5182)、`app/script/`(5183)、`app/versions/`(5184)、`app/review/`(5185)、`app/frames/`(5186)、`server/api.mjs`(5190)。
 - **旧项目**：timeline v1 仍完全可用，`spec.mjs` 自动迁移；`render-farm` 默认 batch 模式（一个 worker 一个浏览器跑一个 shard），`--legacy` 回退逐段进程。页面按视口自适应（横/竖/方真重排），16:9 输出位级不变。
 - **质量闸门**：`npm run test:all`（纯 Node）、`npm run test:browser`、`npm run golden`（静帧位级回归）、`npm run brand -- check …`。
-- **配方页**：20 种画风中 18 种有专属页（`templates/recipe-*.html` + `cyber-pixel.html`），映射单一真值 `templates/style-pages.mjs`；**实拍素材** `cvs ingest` 出 EDL + spec 草稿（启发式，需人工审）。
-- **覆盖扩展（v2.5）**：段间转场 35 种（`--transition`，xfade 在拼接层做，默认关闭逐字节不变）、确定性效果库 26 个（`templates/effects.mjs`）、风格 20 种、领域 24 种。覆盖矩阵单一真值 `docs/COVERAGE.md`。
+- **配方页**：21 种画风中 19 种有专属页（`templates/recipe-*.html` + `cyber-pixel.html`，含 v3.1 的 generative），映射单一真值 `templates/style-pages.mjs`；**实拍素材** `cvs ingest` 出 EDL + spec 草稿（启发式，需人工审）。
+- **覆盖扩展（v2.5）**：段间转场 35 种（`--transition`，xfade 在拼接层做，默认关闭逐字节不变）、确定性效果库 26 个（`templates/effects.mjs`）、风格 20 种、领域 24 种。
+- **程序化生成画风（v3.1）**：第 21 风格 `generative`——`templates/generative.mjs` 四族纯核（流场群游/轨道环系/脉冲波/弹跳字）+ `recipe-generative.html`，关键词「生成式/程序化/procedural/粒子」即命中；向导与 combos 矩阵同步 17×21。
+- **派生导出格式（v3.1）**：`--platform webm|gif|mp3` 从 master/音轨直接转码（不经 shell 的 mp4+AAC 链），交付清单按扩展名入列。覆盖矩阵单一真值 `docs/COVERAGE.md`。
 - **禁止**：让 LLM 直接生成 HTML/CSS/JS，或绕过 spec 直接改像素。模型只填枚举与文案。
 ## 0. 适用与不适用
 
@@ -222,7 +224,7 @@ Three.js 片段：`renderer` 必须 `{ preserveDrawingBuffer: true }`；启动�
 
 ## 7. 风格展示配方（每段 3 s / 6 拍）
 
-20 种风格是「视觉美术 + 技术实现 + 音色」三件套；逐页参数见 `references/style-recipes.md`，配方页映射见 §0.5，完整覆盖矩阵见 `docs/COVERAGE.md`。v2.5 新增 6 风格 + 收编 kinetic，音色按领域 mood 合成。
+21 种风格是「视觉美术 + 技术实现 + 音色」三件套；逐页参数见 `references/style-recipes.md`，配方页映射见 §0.5，完整覆盖矩阵见 `docs/COVERAGE.md`。v2.5 新增 6 风格 + 收编 kinetic，音色按领域 mood 合成。
 
 | 风格 | 一句话 | 音色 |
 |---|---|---|

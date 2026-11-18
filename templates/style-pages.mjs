@@ -57,6 +57,8 @@ export const STYLE_PAGES = {
   vaporwave: 'templates/recipe-vaporwave.html',
   blueprint: 'templates/recipe-blueprint.html',
   risograph: 'templates/recipe-risograph.html',
+  // v3.1（R4）：程序化生成画面（generative.mjs 的四族确定性纯核）。
+  generative: 'templates/recipe-generative.html',
 };
 
 /**
@@ -85,6 +87,7 @@ export const STYLE_RECIPE_IDS = {
   vaporwave: 'vaporwave',
   blueprint: 'blueprint',
   risograph: 'risograph',
+  generative: 'generative',
 };
 
 /**

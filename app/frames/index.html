@@ -70,7 +70,14 @@
         <span class="mono">t = <b id="time">0.000</b>s</span>
         <span class="mono muted perf" id="perf">实测 — fps · 延迟 — ms</span>
       </div>
-      <div class="row usage">← / → 逐帧 · Shift+←/→ 10 帧 · 空格播放 · I / O 循环入出点 · D 下载本帧</div>
+      <div class="row usage">
+        <span>← / → 逐帧 · Shift+←/→ 10 帧 · 空格播放 · I / O 循环入出点 · D 下载本帧</span>
+        <span class="grow"></span>
+        <!-- R5-W7：live 源的段级编辑——在播放头把所在段一分为二（Ctrl+Z 撤销）。
+             只改内存中的段表；成片不变，需要时从工作台导出 spec 再编译。 -->
+        <button id="btn-split" class="ghost tiny" disabled title="在当前帧把所在段一分为二（仅 spec/plan 现场渲染源）">分割段</button>
+        <button id="btn-undo" class="ghost tiny" disabled title="撤销上一次分割（Ctrl+Z）">撤销</button>
+      </div>
     </div>
 
     <div class="filmstrip card">

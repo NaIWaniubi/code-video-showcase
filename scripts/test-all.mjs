@@ -49,6 +49,7 @@ const UNIT_SUITES = [
   'scripts/test-domains.mjs',
   'scripts/test-hardening.mjs',
   'scripts/test-strict-flags.mjs',
+  'scripts/test-segment-edit.mjs',
   'scripts/test-ui.mjs',
   'ingest/test-edl.mjs',
 ];
