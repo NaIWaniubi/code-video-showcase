@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/shared/fonts.css">
+<title>recipe · skeleton</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #0e0e0d; }
+  #c { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<script type="module">
+// recipe-skeleton.html — 「骨骼演示」：把动画的骨架直接摆出来——
+// 关节链闭式走 cycle（骨盆起伏 / 髋摆 / 膝屈 / 对侧手臂摆动），不逐帧积分，
+// 每一帧的关节角都是 t 的显式函数，确定性可复现。侧视 + 步幅轨迹弧 +
+// 中点测量刻度（制图标注感）。
+import { createSegment, applyImpact2D, drawFlash, loadFonts, vars, TAU, clamp } from './common.js';
+import {
+  themeFromURL, getTheme, loadFontsFor, hexToRgba, mix, relativeLuminance,
+} from './themes.js';
+import { setupStage, safePad, fitTextSize, drawHud } from './recipes/util.js';
+import { typeSize, safe, probe } from './tokens.mjs';
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { alpha: false });
+const { W, H, portrait } = setupStage(canvas);
+const pad = safePad(W, H);
+
+const params = new URLSearchParams(location.search);
+const seg = createSegment({ duration: 3.0 });
+window.DURATION = seg.duration;
+
+const THEME = getTheme(themeFromURL(location.search));
+const TC = THEME.colors;
+const V = vars();
+
+const TITLE = String(params.get('title') || V.title || '骨骼演示').slice(0, 14);
+const SUB = String(V.subtitle || '关节链 · 步幅轨迹 · 闭式走 cycle').slice(0, 40);
+const BRAND = String(V.brand || 'CVS').slice(0, 24);
+
+const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;
+const INK = isLight ? TC.ink : TC.paper;
+const MUTED = hexToRgba(INK, 0.45);
+const ACCENT = TC.accent;
+const BONE = hexToRgba(INK, 0.88);
+const FORE_BONE = hexToRgba(INK, 0.80);   // 小骨（细段）
+
+const SANS = '"Noto Sans SC", "PingFang SC", sans-serif';
+const MONO = '"JetBrains Mono", ui-monospace, monospace';
+const FAMILIES = Array.from(new Set([...(loadFontsFor(THEME) || []), 'Noto Sans SC', 'JetBrains Mono', 'Inter']));
+
+/* ───────────────────────────── 布局 ───────────────────────────── */
+
+let L = null;
+function buildLayout() {
+  const cx = portrait ? Math.round(W / 2) : Math.round(W * 0.34);
+  const cy = Math.round(H * 0.44);
+  const s = Math.min(W, H) * (portrait ? 0.115 : 0.15);   // 比例尺（身高基准）
+  const titleMaxW = portrait ? W - pad * 2 : W - Math.round(W * 0.60) - pad;
+  const titleSize = fitTextSize(ctx, TITLE, {
+    maxWidth: titleMaxW, family: SANS, weight: 800,
+    maxSize: typeSize('title', W, H), minSize: 40, spacing: 0.02,
+  });
+  probe('title', titleSize, safe(W, H));
+  return { cx, cy, s, titleSize, titleX: portrait ? Math.round(W / 2) : Math.round(W * 0.60),
+    titleY: Math.round(H * 0.66),
+    subX: portrait ? Math.round(W / 2) : Math.round(W * 0.60), subY: 0 };
+}
+
+/* ────────────────────── 骨骼动力学 ────────────────────────────── */
+
+const WALK_T = 1.15;                                   // 一个完整步幅周期（秒）
+const w = (t) => ((t % WALK_T) / WALK_T) * TAU;
+
+// 角度从「竖直向下」计，x=sin、y=cos（画布 y 向下正）。
+const dir = (a) => [Math.sin(a), Math.cos(a)];
+
+/** 两段肢体根（相对像素）：返回 [肘点, 末点]。t 显式传入（纯函数，无全局态）。 */
+function limb(rx, ry, len1, len2, t, phase, swing, bendFn) {
+  const ph = ((t % WALK_T) / WALK_T) * TAU;
+  const ang1 = swing * Math.sin(ph + phase);
+  const [dx1, dy1] = dir(ang1);
+  const kx = rx + dx1 * len1, ky = ry + dy1 * len1;
+  const bend = bendFn();
+  const [dx2, dy2] = dir(ang1 - bend);
+  return [{ x: kx, y: ky }, { x: kx + dx2 * len2, y: ky + dy2 * len2 }];
+}
+
+/** 整副骨架在 t 时刻的绝对关节表（纯函数）。 */
+function pose(t, cx, cy, s) {
+  const ph = w(t);
+  const bob = Math.abs(Math.sin(ph)) * 0.05 * s;        // 骨盆起伏
+  const pelvis = { x: cx, y: cy - bob };
+  const lean = 0.08 * Math.sin(ph);                      // 躯干微前倾后仰
+  const spineTop = { x: pelvis.x + lean * s * 0.5, y: pelvis.y - 0.30 * s };
+  const headR = 0.075 * s;
+  const head = { x: spineTop.x + lean * s * 0.18, y: spineTop.y - headR - 0.05 * s };
+
+  // 手臂：对侧摆动（与腿反相）
+  const shL = limb(spineTop.x, spineTop.y, 0.26 * s, 0.24 * s, t, Math.PI, 0.55,
+    () => Math.max(0, 0.75 * Math.sin(ph)));
+  const shR = limb(spineTop.x, spineTop.y, 0.26 * s, 0.24 * s, t, 0, 0.55,
+    () => Math.max(0, 0.75 * Math.sin(ph + Math.PI)));
+
+  // 腿：髋摆 + 膝屈（足在后蹬地时屈膝抬起）
+  const kneeBend = (off) => Math.max(0, 0.9 * (1 - Math.cos(ph + off)));
+  const legL = limb(pelvis.x, pelvis.y, 0.32 * s, 0.31 * s, t, Math.PI, 0.5,
+    () => kneeBend(Math.PI));
+  const legR = limb(pelvis.x, pelvis.y, 0.32 * s, 0.31 * s, t, 0, 0.5,
+    () => kneeBend(0));
+
+  return {
+    pelvis, spineTop, head, headR, shL, shR, legL, legR,
+    ground: pelvis.y + 0.63 * s,
+  };
+}
+
+/* ────────────────────────── 场景 ────────────────────────────── */
+
+function drawBone(a, b, width, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+}
+
+function drawJoint(p, r, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r, 0, TAU);
+  ctx.fill();
+}
+
+function drawScene(u, t) {
+  ctx.fillStyle = TC.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  const P = pose(t, L.cx, L.cy, L.s);
+
+  // 地面 + 步幅刻度
+  ctx.save();
+  ctx.strokeStyle = MUTED;
+  ctx.globalAlpha = 0.6;
+  ctx.setLineDash([6, 10]);
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(L.cx - L.s * 0.9, P.ground);
+  ctx.lineTo(L.cx + L.s * 0.9, P.ground);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // 步幅标尺 tick（半步距离，周期性的小刻度）
+  for (let i = -3; i <= 3; i++) {
+    const x = L.cx + (i / 3) * L.s * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(x, P.ground);
+    ctx.lineTo(x, P.ground + 7);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 步幅轨迹弧（脚的运动轨迹椭圆，淡淡的参考环）
+  ctx.save();
+  ctx.globalAlpha = 0.16;
+  ctx.strokeStyle = ACCENT;
+  ctx.lineWidth = 1.4;
+  for (const off of [0, Math.PI]) {
+    ctx.beginPath();
+    ctx.ellipse(L.cx + Math.sin(off + Math.PI) * L.s * 0.12, P.ground - L.s * 0.09,
+      L.s * 0.22, L.s * 0.07, 0, 0, TAU);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 躯干（三段脊柱 + 头骨圆）
+  drawBone(P.pelvis, P.spineTop, 6, BONE);
+  drawJoint(P.pelvis, 6.5, ACCENT);
+  drawJoint(P.spineTop, 5.5, hexToRgba(ACCENT, 0.7));
+  ctx.strokeStyle = BONE;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(P.head.x, P.head.y, P.headR, 0, TAU);
+  ctx.stroke();
+  // 颅顶十字标（白盒检具感）
+  ctx.save();
+  ctx.strokeStyle = hexToRgba(INK, 0.55);
+  ctx.lineWidth = 1.4;
+  const hx = P.head.x, hy = P.head.y;
+  ctx.beginPath(); ctx.moveTo(hx - P.headR * 0.7, hy); ctx.lineTo(hx + P.headR * 0.7, hy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(hx, hy - P.headR * 0.7); ctx.lineTo(hx, hy + P.headR * 0.7); ctx.stroke();
+  ctx.restore();
+
+  // 四肢（骨骼带中点测量刻度）
+  const limbs = [
+    ['肩→肘→腕（左臂）', [P.shL[0], P.shL[1]]],
+    ['肩→肘→腕（右臂）', [P.shR[0], P.shR[1]]],
+    ['髋→膝→踝（左腿）', [P.legL[0], P.legL[1]]],
+    ['髋→膝→踝（右腿）', [P.legR[0], P.legR[1]]],
+  ];
+  const roots = [
+    [P.spineTop, P.shL[0]], [P.spineTop, P.shR[0]],
+    [P.pelvis, P.legL[0]], [P.pelvis, P.legR[0]],
+  ];
+  for (let i = 0; i < limbs.length; i++) {
+    const [root, mid, end] = [roots[i][0], limbs[i][1][0], limbs[i][1][1]];
+    drawBone(root, mid, 4.4, BONE);
+    drawBone(mid, end, 3.2, FORE_BONE);
+    drawJoint(mid, 4.6, hexToRgba(ACCENT, 0.8));
+    drawJoint(end, 4.0, hexToRgba(ACCENT, 0.45));
+    // 中点测量 tick（垂直于骨段）
+    const mx = (root.x + end.x) / 2, my = (root.y + end.y) / 2;
+    const vx = end.x - root.x, vy = end.y - root.y;
+    const ln = Math.hypot(vx, vy) || 1;
+    const nx = -vy / ln, ny = vx / ln;
+    ctx.save();
+    ctx.strokeStyle = hexToRgba(INK, 0.26);
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(mx - nx * 8, my - ny * 8); ctx.lineTo(mx + nx * 8, my + ny * 8); ctx.stroke();
+    ctx.restore();
+  }
+
+  // 标题色带
+  const intro = clamp(t / 0.55);
+  const fade = smoothstepX(intro);
+  if (fade > 0.001) {
+    ctx.save();
+    ctx.globalAlpha = fade;
+    const bandH = Math.round(L.titleSize * 1.7);
+    const bandW = Math.min(portrait ? W - pad * 2 : W * 0.36, L.titleSize * 9);
+    const bandX = portrait ? Math.round((W - bandW) / 2) : Math.round(W * 0.60 - bandW / 2);
+    ctx.fillStyle = ACCENT;
+    ctx.fillRect(bandX, L.titleY - bandH / 2, bandW, bandH);
+    ctx.fillStyle = isLight ? TC.paper : TC.bg;
+    ctx.font = `800 ${L.titleSize}px ${SANS}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(TITLE, bandX + bandW / 2, L.titleY + 1);
+    ctx.restore();
+  }
+  const subFade = smoothstepX(clamp((t - 0.4) / 0.5));
+  if (subFade > 0.001 && SUB) {
+    ctx.save();
+    ctx.globalAlpha = subFade * 0.9;
+    ctx.font = `${Math.max(13, L.titleSize * 0.26)}px ${SANS}`;
+    ctx.fillStyle = MUTED;
+    ctx.textAlign = portrait ? 'center' : 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(SUB, L.subX, L.titleY + Math.round(L.titleSize * 1.7));
+    ctx.restore();
+  }
+
+  try {
+    drawHud(ctx, { W, H, u, duration: seg.duration, theme: THEME,
+      label: 'DEMO SKELETON', name: 'BONE RIG', brand: BRAND, pad });
+  } catch { /* HUD 不参与核心画面 */ }
+}
+
+function smoothstepX(a) { const x = Math.min(1, Math.max(0, a)); return x * x * (3 - 2 * x); }
+
+window.renderFrame = (u) => {
+  const { t, fx } = seg.sample(u);
+  ctx.save();
+  ctx.scale(1 + (fx.scale - 1), 1 + (fx.scale - 1));
+  drawScene(u, t);
+  ctx.restore();
+  applyImpact2D(ctx, fx, W, H);
+  drawFlash(ctx, fx.flash, W, H, TC.paper);
+};
+
+window.__ready = false;
+window.__bootError = null;
+(async () => {
+  try {
+    await loadFonts(FAMILIES);
+    L = buildLayout();
+    window.renderFrame(0);
+    window.__ready = true;
+  } catch (e) {
+    window.__bootError = String((e && e.stack) || e);
+  }
+})();
+</script>
+</body>
+</html>

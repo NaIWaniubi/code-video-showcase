@@ -3,6 +3,26 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v3.2.0] - 2026-11-18 — 导演演示集六件 + 一键出片（cvs demo）
+
+### 颠覆性演示风格（六件套，全部闭式确定、逐帧可复现）
+- `wireframe` 白模线框：线框球体经纬 + 双螺旋圆环结，闭式旋转矩阵透视公转，白盒检具感。
+- `skeleton` 骨骼动画：骨盆起伏/髋摆/膝屈/对侧臂摆的走 cycle 关节链，步幅轨迹弧 + 中点测量刻度。
+- `fractal` 分形生长：L-system 递归分叉，品牌哈希种子（换 brand 换树但每帧确定），前沿层按生长进度截短。
+- `firework` 粒子喷泉：150 粒闭式弹道喷泉 φ=(t−t_launch) mod (飞行+暂停)，彗尾按 φ−δ 闭式求值，过顶一次性爆环。
+- `terrain` 地形测绘：解析高度场 + marching squares 等高线（启动时一次生成），扫描平面逐圈增亮 + 测绘角标。
+- `network` 网络脉冲：枢纽+双环图拓扑，包脉冲沿链路以 frac(ωt+φ) 行进，三段尾迹 + 节点呼吸。
+
+### cvs demo 一键出片
+- 新 `scripts/demo.mjs` + 纯核 `scripts/lib/demo-spec.mjs`：`cvs demo skeleton` / `--seconds` / `--theme` / `--platform gif|webm|mp3|…` / `--dry-run`。
+- 组合器生成闭合结构 spec（D 公式与 format.duration 严格一致，不硬凑；card<round 闸保留；时长 4–30s，短片单轮长片双轮）→ compile 同款全链（validate→plan→render→QA）。
+- 错误码：E_UNKNOWN_STYLE（usage/2）、E_DEMO_FAILED（env/14）。
+
+### 工程面
+- 注册链全通：style-pages / nl2spec 四表（含关键词规则）/ build-combos（combos 重生成 **17×27=459**）/ 向导选项 / domains+style-pages 交叉测试全绿。
+- 六页冒烟渲染实测通过（修复过程中自查出并堵掉 6 处「rgba 再包一层 rgba」的色值双重包装坑）。
+- test-demo-spec 5 项（闭合公式/结构闸/页映射/未知码/dry-run e2e）；错误码 143→145 覆盖 100%；npm script `demo`。
+
 ## [v3.1.0] - 2026-11-18 — 第 21 画风 generative · 派生导出格式 webm/gif/mp3 · 帧工作台段级剪辑
 
 在 v3.0.0 三件套之上继续补齐「完整产品面」：画风词表、平台交付与工作台交互。

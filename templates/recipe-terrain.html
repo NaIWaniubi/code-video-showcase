@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/shared/fonts.css">
+<title>recipe · terrain</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #0e0e0d; }
+  #c { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<script type="module">
+// recipe-terrain.html — 「地形测绘」：解析高度场 + marching squares 等高线。
+// 高度场是 3 组正弦的和（闭式），轮廓在启动时一次性生成（无逐帧重算）；
+// 每帧只做「绘图层」：随 t 循环扫亮的等高线（测绘扫描）+ 移动扫描平面，
+// 全部是 t 的纯函数，确定性逐帧可复现。
+import { createSegment, applyImpact2D, drawFlash, loadFonts, vars, TAU, clamp, hash01 } from './common.js';
+import {
+  themeFromURL, getTheme, loadFontsFor, hexToRgba, mix, relativeLuminance,
+} from './themes.js';
+import { setupStage, safePad, fitTextSize, drawHud } from './recipes/util.js';
+import { typeSize, safe, probe } from './tokens.mjs';
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { alpha: false });
+const { W, H, portrait } = setupStage(canvas);
+const pad = safePad(W, H);
+
+const params = new URLSearchParams(location.search);
+const seg = createSegment({ duration: 3.0 });
+window.DURATION = seg.duration;
+
+const THEME = getTheme(themeFromURL(location.search));
+const TC = THEME.colors;
+const V = vars();
+
+const TITLE = String(params.get('title') || V.title || '地形测绘').slice(0, 14);
+const SUB = String(V.subtitle || '等高线 · 高度场 · 扫描测绘').slice(0, 40);
+const BRAND = String(V.brand || 'CVS').slice(0, 24);
+
+const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;
+const INK = isLight ? TC.ink : TC.paper;
+const MUTED = hexToRgba(INK, 0.45);
+const ACCENT = TC.accent;
+
+const SANS = '"Noto Sans SC", "PingFang SC", sans-serif';
+const FAMILIES = Array.from(new Set([...(loadFontsFor(THEME) || []), 'Noto Sans SC', 'Inter']));
+
+/* ───────────────────────────── 布局 ───────────────────────────── */
+
+let L = null;
+function buildLayout() {
+  const size = Math.min(W * (portrait ? 0.62 : 0.44), H * 0.62);
+  const rx = portrait ? Math.round((W - size) / 2) : Math.round(W * 0.28 - size / 2);
+  const ry = Math.round((H - size) / 2 - H * 0.02);
+  const titleMaxW = portrait ? W - pad * 2 : W - Math.round(W * 0.66) - pad;
+  const titleSize = fitTextSize(ctx, TITLE, {
+    maxWidth: titleMaxW, family: SANS, weight: 800,
+    maxSize: typeSize('title', W, H), minSize: 40, spacing: 0.02,
+  });
+  probe('title', titleSize, safe(W, H));
+  return { rx, ry, size, N: 56, titleSize,
+    titleX: portrait ? Math.round(W / 2) : Math.round(W * 0.66),
+    titleY: portrait ? Math.round(H * 0.80) : Math.round(H * 0.62),
+    subX: portrait ? Math.round(W / 2) : Math.round(W * 0.66), subY: 0 };
+}
+
+/* ──────────────── 高度场 + marching squares ─────────────────── */
+
+let SEED_H = 12345;
+let HEIGHTS = null;
+let CONTOURS = [];
+
+/** 解析高度场（闭式，种子偏移相位）。 */
+function heightAt(x, y) {
+  const s = SEED_H / 7919;
+  return 1
+    + 0.55 * Math.sin(x * 2.1 + s + y * 1.3 * 0.9)
+    + 0.35 * Math.sin(y * 2.7 - s * 1.7 + x * 0.8)
+    + 0.22 * Math.sin((x + y) * 3.1 + s * 2.3);
+}
+
+/** 启动时一次性生成等高线段表（marching squares）。 */
+function buildContours() {
+  const { rx, ry, size, N } = L;
+  const cell = size / (N - 1);
+  const grid = Array.from({ length: N }, () => Array(N).fill(0));
+  let lo = Infinity, hi = -Infinity;
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const v = heightAt(i / (N - 1), j / (N - 1));
+      grid[j][i] = v;
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+  }
+  const NL = 7;
+  const levels = [];
+  for (let k = 0; k < NL; k++) levels.push(lo + (hi - lo) * ((k + 0.5) / NL));
+  // marching squares 16 情形表（边编号：上0 右1 下2 左3）
+  const CASE = [
+    [], [[3, 0]], [[0, 1]], [[3, 1]], [[1, 2]], [[3, 0], [1, 2]], [[0, 2]], [[2, 3]],
+    [[2, 3]], [[0, 2]], [[0, 1], [2, 3]], [[1, 2]], [[1, 3]], [[0, 1]], [[0, 3]], [],
+  ];
+  CONTOURS = levels.map((lv) => {
+    const segs = [];
+    for (let j = 0; j < N - 1; j++) {
+      for (let i = 0; i < N - 1; i++) {
+        const v00 = grid[j][i], v10 = grid[j][i + 1], v11 = grid[j + 1][i + 1], v01 = grid[j + 1][i];
+        let code = 0;
+        if (v00 > lv) code |= 8;
+        if (v10 > lv) code |= 4;
+        if (v11 > lv) code |= 2;
+        if (v01 > lv) code |= 1;
+        const pairs = CASE[code];
+        if (!pairs.length) continue;
+        const ptOf = (edge) => {
+          // 线性插值求边上的等高线交点
+          switch (edge) {
+            case 0: { const t = (lv - v00) / (v10 - v00 || 1e-9); return [rx + cell * (i + t), ry + cell * j]; }
+            case 1: { const t = (lv - v10) / (v11 - v10 || 1e-9); return [rx + cell * (i + 1), ry + cell * (j + t)]; }
+            case 2: { const t = (lv - v11) / (v01 - v11 || 1e-9); return [rx + cell * (i + 1 - t), ry + cell * (j + 1)]; }
+            default: { const t = (lv - v01) / (v00 - v01 || 1e-9); return [rx + cell * i, ry + cell * (j + 1 - t)]; }
+          }
+        };
+        for (const pr of pairs) {
+          const [a, b] = ptOf(pr[0]);
+          const [c, d] = ptOf(pr[1]);
+          segs.push([a, b, c, d]);
+        }
+      }
+    }
+    return { level: lv, segs };
+  });
+}
+
+/* ────────────────────────── 场景 ────────────────────────────── */
+
+function drawScene(u, t) {
+  ctx.fillStyle = TC.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  const { rx, ry, size } = L;
+  const NL = CONTOURS.length;
+
+  // 测绘扫描平面：横移的亮带，逐圈扫过整图（如实循环）
+  const sweepPhase = (t * 0.22) % 1;
+  const sweepX = rx + size * sweepPhase;
+  const bandHalf = size * 0.045;
+
+  for (let li = 0; li < NL; li++) {
+    const cont = CONTOURS[li];
+    const frac = (li + 0.5) / NL;
+    // 扫描平面附近增亮（距离决定亮度，纯 t 函数）
+    const lx0 = rx + size * frac;
+    const distToScan = Math.abs(lx0 - sweepX);
+    const boost = 0.18 + 0.82 * clamp(1 - distToScan / bandHalf);
+    // 双色切换（不把已带透明度的字符串喂进混合器）
+    ctx.strokeStyle = boost > 0.75 ? hexToRgba(ACCENT, 0.95)
+      : hexToRgba(INK, 0.38 + 0.42 * boost);
+    ctx.lineWidth = boost > 0.75 ? 1.7 : 1.1;
+    const segs = cont.segs;
+    ctx.beginPath();
+    for (let si = 0; si < segs.length; si++) {
+      const [a, b, c, d] = segs[si];
+      ctx.moveTo(a, b);
+      ctx.lineTo(c, d);
+    }
+    ctx.stroke();
+  }
+
+  // 边框 + 四角测绘角标
+  ctx.save();
+  ctx.strokeStyle = hexToRgba(INK, 0.38);
+  ctx.lineWidth = 1.4;
+  ctx.strokeRect(rx, ry, size, size);
+  ctx.strokeStyle = hexToRgba(ACCENT, 0.85);
+  ctx.lineWidth = 2;
+  const m = 12;
+  for (const [cx, cy, dx, dy] of [[rx, ry, 1, 1], [rx + size, ry, -1, 1],
+                                   [rx, ry + size, 1, -1], [rx + size, ry + size, -1, -1]]) {
+    ctx.beginPath(); ctx.moveTo(cx + dx * m, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + dy * m); ctx.stroke();
+  }
+  ctx.restore();
+
+  // 比例尺标注（右下角小刻度尺）
+  ctx.save();
+  ctx.globalAlpha = 0.75;
+  ctx.strokeStyle = MUTED;
+  ctx.lineWidth = 1.2;
+  const sx0 = rx + size - size * 0.18, sy0 = ry + size + 16;
+  ctx.beginPath(); ctx.moveTo(sx0, sy0); ctx.lineTo(sx0 + size * 0.18, sy0); ctx.stroke();
+  for (let k = 0; k <= 3; k++) {
+    ctx.beginPath();
+    ctx.moveTo(sx0 + (size * 0.18 * k) / 3, sy0);
+    ctx.lineTo(sx0 + (size * 0.18 * k) / 3, sy0 + 5);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 标题色带
+  const fade = smoothstepX(clamp(t / 0.55));
+  if (fade > 0.001) {
+    ctx.save();
+    ctx.globalAlpha = fade;
+    const bandH = Math.round(L.titleSize * 1.7);
+    const bandW = Math.min(portrait ? W - pad * 2 : W * 0.32, L.titleSize * 9);
+    const bandX = portrait ? Math.round((W - bandW) / 2) : Math.round(W * 0.66 - bandW / 2);
+    ctx.fillStyle = ACCENT;
+    ctx.fillRect(bandX, L.titleY - bandH / 2, bandW, bandH);
+    ctx.fillStyle = isLight ? TC.paper : TC.bg;
+    ctx.font = `800 ${L.titleSize}px ${SANS}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(TITLE, bandX + bandW / 2, L.titleY + 1);
+    ctx.restore();
+  }
+  const subFade = smoothstepX(clamp((t - 0.4) / 0.5));
+  if (subFade > 0.001 && SUB) {
+    ctx.save();
+    ctx.globalAlpha = subFade * 0.9;
+    ctx.font = `${Math.max(13, L.titleSize * 0.26)}px ${SANS}`;
+    ctx.fillStyle = MUTED;
+    ctx.textAlign = portrait ? 'center' : 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(SUB, L.subX, L.titleY + Math.round(L.titleSize * 1.7));
+    ctx.restore();
+  }
+
+  try {
+    drawHud(ctx, { W, H, u, duration: seg.duration, theme: THEME,
+      label: 'DEMO TOPO', name: 'CONTOUR', brand: BRAND, pad });
+  } catch { /* HUD 不参与核心画面 */ }
+}
+
+function smoothstepX(a) { const x = Math.min(1, Math.max(0, a)); return x * x * (3 - 2 * x); }
+
+window.renderFrame = (u) => {
+  const { t, fx } = seg.sample(u);
+  ctx.save();
+  ctx.scale(1 + (fx.scale - 1), 1 + (fx.scale - 1));
+  drawScene(u, t);
+  ctx.restore();
+  applyImpact2D(ctx, fx, W, H);
+  drawFlash(ctx, fx.flash, W, H, TC.paper);
+};
+
+window.__ready = false;
+window.__bootError = null;
+(async () => {
+  try {
+    await loadFonts(FAMILIES);
+    L = buildLayout();
+    let h = 2166136261;
+    for (let i = 0; i < BRAND.length; i++) h = Math.imul(h ^ BRAND.charCodeAt(i), 16777619);
+    SEED_H = (h >>> 0) % 100000;
+    buildContours();
+    window.renderFrame(0);
+    window.__ready = true;
+  } catch (e) {
+    window.__bootError = String((e && e.stack) || e);
+  }
+})();
+</script>
+</body>
+</html>

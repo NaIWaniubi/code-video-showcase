@@ -55,6 +55,13 @@ const STYLE_OPTIONS = [
   { id: 'flat', label: '扁平插画', hint: '矢量 · 色块' },
   // v3.1：generative（位置按字典序，测试对表 STYLE_IDS）
   { id: 'generative', label: '生成式画面', hint: '粒子 · 轨道' },
+  // R6：导演演示集六件（白模/骨骼/分形/喷泉/地形/网络）
+  { id: 'wireframe', label: '白模线框', hint: '线框 · 透视' },
+  { id: 'skeleton', label: '骨骼动画', hint: '关节 · 步幅' },
+  { id: 'fractal', label: '分形生长', hint: '递归 · L-system' },
+  { id: 'firework', label: '粒子喷泉', hint: '弹道 · 尾迹' },
+  { id: 'terrain', label: '地形测绘', hint: '等高线 · 扫描' },
+  { id: 'network', label: '网络脉冲', hint: '拓扑 · 流量' },
   { id: 'minimal', label: '极简大字', hint: '发布会 · 克制' },
   { id: 'vertical', label: '竖屏卡片', hint: '手机 · 弹卡' },
   // v2.5：收编 kinetic + 6 个新风格（与 templates/style-pages.mjs 对齐）

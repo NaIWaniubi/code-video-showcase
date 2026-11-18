@@ -53,6 +53,12 @@ export const STYLE_IDS = [
   'blueprint',
   'risograph',
   'generative',
+  'wireframe',
+  'skeleton',
+  'fractal',
+  'firework',
+  'terrain',
+  'network',
 ];
 
 /** 与 templates/themes.js 的 17 个真实 id 一致（测试会交叉校验）。 */
@@ -169,6 +175,12 @@ const STYLE_LABEL = {
   blueprint: '工程蓝图',
   risograph: '孔版印刷',
   generative: '生成式画面',
+  wireframe: '白模线框',
+  skeleton: '骨骼动画',
+  fractal: '分形生长',
+  firework: '粒子喷泉',
+  terrain: '地形测绘',
+  network: '网络脉冲',
 };
 
 const KIND_DEFAULT_STYLE = {
@@ -247,6 +259,12 @@ const STYLE_DEFAULT_THEME = {
   blueprint: 'blueprint-stone',
   risograph: 'paper-journal',
   generative: 'cyber-neon',
+  wireframe: 'cyber-neon',
+  skeleton: 'coral-noir',
+  fractal: 'celadon-paper',
+  firework: 'cyber-neon',
+  terrain: 'graphite-signal',
+  network: 'blueprint-stone',
 };
 
 const KIND_DEFAULT_DURATION = {
@@ -430,6 +448,12 @@ const STYLE_RULES = [
   ['flat', ['扁平', '插画', 'flat', 'illustration', '矢量', 'vector']],
   // v3.1：程序化生成画面（R4 generative.mjs）——关键词早于 tech/data-viz 等通配族生效。
   ['generative', ['生成式', '生成画面', '程序化', 'procedural', 'generative', '流场', '粒子', 'swarm', '轨道动画']],
+  ['wireframe', ['白模', '线框', 'wireframe', '白盒', '网格模型']],
+  ['skeleton', ['骨骼', '骨架', 'skeleton', 'rig', '关节', '走路', '人物动画']],
+  ['fractal', ['分形', '递归生长', 'lsystem', 'l-system', '树生长', 'mandelbrot']],
+  ['firework', ['烟花', '喷泉', '弹道', 'firework', '烟火', '粒子喷泉']],
+  ['terrain', ['地形', '等高线', '测绘', 'topo', 'terrain', '高程']],
+  ['network', ['网络', '拓扑', '节点', '流量', 'netflow', '图']],
 ];
 
 const THEME_RULES = [

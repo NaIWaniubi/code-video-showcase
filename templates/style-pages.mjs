@@ -59,6 +59,12 @@ export const STYLE_PAGES = {
   risograph: 'templates/recipe-risograph.html',
   // v3.1（R4）：程序化生成画面（generative.mjs 的四族确定性纯核）。
   generative: 'templates/recipe-generative.html',
+  wireframe: 'templates/recipe-wireframe.html',
+  skeleton: 'templates/recipe-skeleton.html',
+  fractal: 'templates/recipe-fractal.html',
+  firework: 'templates/recipe-firework.html',
+  terrain: 'templates/recipe-terrain.html',
+  network: 'templates/recipe-network.html',
 };
 
 /**
@@ -88,6 +94,12 @@ export const STYLE_RECIPE_IDS = {
   blueprint: 'blueprint',
   risograph: 'risograph',
   generative: 'generative',
+  wireframe: 'wireframe',
+  skeleton: 'skeleton',
+  fractal: 'fractal',
+  firework: 'firework',
+  terrain: 'terrain',
+  network: 'network',
 };
 
 /**

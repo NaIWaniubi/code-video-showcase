@@ -1,6 +1,6 @@
 {
   "name": "code-video-showcase",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Pure-code, beat-synced showcase video skill: deterministic HTML/Canvas frames, synthesized score, FFmpeg assembly.",
   "type": "module",
   "license": "MIT",
@@ -84,7 +84,8 @@
     "combos": "node scripts/build-combos.mjs",
     "combos:check": "node scripts/build-combos.mjs --check",
     "scaffold": "node scripts/new-project.mjs",
-    "plan:legacy": "node templates/timeline.mjs --spec templates/timeline.example.json --out out/plan.json --concat out/segments.txt --print"
+    "plan:legacy": "node templates/timeline.mjs --spec templates/timeline.example.json --out out/plan.json --concat out/segments.txt --print",
+    "demo": "node scripts/demo.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

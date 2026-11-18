@@ -48,12 +48,24 @@ const NEW_STYLE_FAMILY = {
   risograph: 'paper',
   // v3.1：程序化生成画面——暗底强（粒子/流场在深背景上最出彩），亮底可用。
   generative: 'tech',
+  wireframe: 'tech',
+  skeleton: 'tech',
+  fractal: 'paper',
+  firework: 'neon',
+  terrain: 'neutral',
+  network: 'tech',
 };
 
 const STYLE_LABEL = {
   'great-wall': '长城', kinetic: '动态字体', swiss: '瑞士网格', editorial: '报纸编辑',
   brutalist: '新粗野主义', vaporwave: '蒸汽波', blueprint: '工程蓝图', risograph: '孔版印刷',
   generative: '生成式画面',
+  wireframe: '白模线框',
+  skeleton: '骨骼动画',
+  fractal: '分形生长',
+  firework: '粒子喷泉',
+  terrain: '地形测绘',
+  network: '网络脉冲',
 };
 
 function baseVerdict(family, mode) {

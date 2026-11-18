@@ -90,6 +90,8 @@ const commands = {
   golden:   (a) => node('scripts/golden.mjs', a),
   image:    (a) => node('scripts/image.mjs', a),
   motion:   (a) => node('scripts/motion.mjs', a),
+  // R6 旗舰入口：cvs demo <style> 一键排演示片（导演演示集六件）。
+  demo:    (a) => node('scripts/demo.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
   api:      (a) => node('server/api.mjs', a),
   wizard:   (a) => surface('wizard', SURFACES.wizard, a),
   canvas:   (a) => surface('canvas', SURFACES.canvas, a),
@@ -131,6 +133,7 @@ usage: cvs <command> [args]
   golden [--update|--selfcheck]          byte-exact still regression
   image [--spec f] [--set a,b] [--at t]  spec -> image set (cover/card/poster/story/...); --list shows presets
   api [--port 5190] [--host h] [--token t]  job-queue HTTP service (origin-checked)
+  demo <style-id> [--seconds n] [--platform gif|webm|mp4]  one-shot demo film (directors' demo set)
   wizard | canvas | script | versions | review    start a dev surface (5181-5185)
   frames [--video f|--plan f|--spec f|--dir d] [--port 5186]
                                          per-frame realtime preview workbench

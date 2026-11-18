@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/shared/fonts.css">
+<title>recipe · wireframe</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #0e0e0d; }
+  #c { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<script type="module">
+// recipe-wireframe.html — 「白模演示」：白模 = 白盒/线框——把模型的骨架几何
+// 直接摆出来看拓扑。3D 线框球体 + 圆环结，随时间绕 Y 轴匀速公转（确定性的
+// 旋转矩阵），透视投影，参考机械制图的正交感。
+//
+// 确定性：所有顶点位置是 (theta, phi, t) 的闭式函数；同一 t 必出同一像素。
+import { createSegment, applyImpact2D, drawFlash, loadFonts, vars, TAU, clamp } from './common.js';
+import {
+  themeFromURL, getTheme, loadFontsFor, hexToRgba, mix, relativeLuminance,
+} from './themes.js';
+import { setupStage, safePad, fitTextSize, drawHud } from './recipes/util.js';
+import { typeSize, safe, probe } from './tokens.mjs';
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { alpha: false });
+const { W, H, portrait } = setupStage(canvas);
+const pad = safePad(W, H);
+
+const params = new URLSearchParams(location.search);
+const seg = createSegment({ duration: 3.0 });
+window.DURATION = seg.duration;
+
+const THEME = getTheme(themeFromURL(location.search));
+const TC = THEME.colors;
+const V = vars();
+
+const TITLE = String(params.get('title') || V.title || '白模演示').slice(0, 14);
+const SUB = String(V.subtitle || '线框几何 · 透视公转 · 白盒可视化').slice(0, 40);
+const BRAND = String(V.brand || 'CVS').slice(0, 24);
+
+const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;
+const INK = isLight ? TC.ink : TC.paper;
+const MUTED = hexToRgba(INK, 0.45);
+const ACCENT = TC.accent;
+
+const SANS = '"Noto Sans SC", "PingFang SC", sans-serif';
+const FAMILIES = Array.from(new Set([...(loadFontsFor(THEME) || []), 'Noto Sans SC', 'Inter']));
+
+/* ───────────────────────────── 布局 ───────────────────────────── */
+
+let L = null;
+function buildLayout() {
+  const r = Math.min(W, H) * (portrait ? 0.20 : 0.28);
+  const artX = portrait ? W / 2 : Math.round(W * 0.30);
+  const artY = Math.round(H * 0.46);
+  const titleMaxW = portrait ? W - pad * 2 : W - Math.round(W * 0.58) - pad;
+  const titleSize = fitTextSize(ctx, TITLE, {
+    maxWidth: titleMaxW, family: SANS, weight: 800,
+    maxSize: typeSize('title', W, H), minSize: 40, spacing: 0.02,
+  });
+  probe('title', titleSize, safe(W, H));
+  return { artX, artY, R: r, titleSize, titleX: portrait ? Math.round(W / 2) : Math.round(W * 0.58),
+    titleY: portrait ? Math.round(H * 0.68) : Math.round(H * 0.56),
+    subX: portrait ? Math.round(W / 2) : Math.round(W * 0.58),
+    subY: 0 };
+}
+
+/* ────────────────────────── 3D 原语 ────────────────────────── */
+
+const FOV = 1100;
+function project(p, cx, cy, dist) {
+  const s = FOV / (p.z + dist);
+  return [cx + p.x * s, cy - p.y * s];
+}
+
+/** 旋转（yaw/pitch 闭式，不积分）。 */
+function rot(p, yaw, pitch) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const x = p.x * cy - p.z * sy;
+  const z = p.x * sy + p.z * cy;
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  return { x, y: p.y * cp - z * sp, z: p.y * sp + z * cp };
+}
+
+/* ────────────────────────── 白模场景 ────────────────────────── */
+
+function drawWireSphere(cx, cy, R, t, dist) {
+  const LAT = 9, LON = 14;
+  const yaw = t * 0.42, pitch = 0.32;
+  // 预生成单位球顶点一次（固定数量，确定性）
+  for (let li = 0; li < LAT; li++) {
+    const phi1 = (li / LAT) * Math.PI;
+    const phi2 = ((li + 1) / LAT) * Math.PI;
+    ctx.beginPath();
+    for (let j = 0; j <= LON; j++) {
+      const th = (j / LON) * TAU;
+      const p = rot({ x: Math.sin(phi1) * Math.cos(th), y: Math.cos(phi1), z: Math.sin(phi1) * Math.sin(th) }, yaw, pitch);
+      const [x, y] = project({ x: p.x * R, y: p.y * R, z: p.z * R }, cx, cy, dist);
+      if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = hexToRgba(INK, 0.30);
+    ctx.lineWidth = 1.1;
+    ctx.stroke();
+  }
+  for (let li = 0; li <= LAT; li += 2) {
+    const phi = (li / LAT) * Math.PI;
+    ctx.beginPath();
+    for (let j = 0; j <= LON; j++) {
+      const th = (j / LON) * TAU;
+      const p = rot({ x: Math.sin(phi) * Math.cos(th), y: Math.cos(phi), z: Math.sin(phi) * Math.sin(th) }, yaw, pitch);
+      const [x, y] = project({ x: p.x * R, y: p.y * R, z: p.z * R }, cx, cy, dist);
+      if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = hexToRgba(ACCENT, li % 2 ? 0.6 : 0.28);
+    ctx.lineWidth = li === 0 || li === LAT ? 1.6 : 1.1;
+    ctx.stroke();
+  }
+}
+
+/** 圆环结：两条相位交错的曲线 = 双螺旋白模。 */
+function drawKnot(cx, cy, R, t, dist) {
+  const N = 96;
+  const omg = 0.55;
+  for (let phase = 0; phase < 2; phase++) {
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const th = (i / N) * TAU + t * omg + phase * Math.PI;
+      const p = rot({
+        x: (2.2 + Math.cos(3 * th)) * Math.cos(th),
+        y: Math.sin(3 * th + phase * 1.7),
+        z: (2.2 + Math.cos(3 * th)) * Math.sin(th),
+      }, -t * 0.3, 0.15);
+      const sc = R * 0.33;
+      const [x, y] = project({ x: p.x * sc, y: p.y * sc, z: p.z * sc }, cx, cy, dist);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = hexToRgba(ACCENT, phase ? 0.85 : 0.35);
+    ctx.lineWidth = phase ? 2.2 : 1.2;
+    ctx.stroke();
+  }
+}
+
+function drawScene(u, t) {
+  ctx.fillStyle = TC.bg;
+  ctx.fillRect(0, 0, W, H);
+  const { artX, artY, R } = L;
+  const dist = R * 3.2;
+
+  // 轨道细环（跟着公转的参考圆）
+  ctx.save();
+  ctx.globalAlpha = 0.3;
+  ctx.strokeStyle = MUTED;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 7]);
+  ctx.beginPath();
+  ctx.ellipse(artX, artY, R * 1.35, R * 0.46, 0.22 + Math.sin(t * 0.25) * 0.06, 0, TAU);
+  ctx.stroke();
+  ctx.restore();
+
+  drawWireSphere(artX, artY, R, t, dist);
+  drawKnot(artX, artY, R, t, dist);
+
+  // 主焦点：白模轴心十字标
+  ctx.save();
+  ctx.strokeStyle = INK;
+  ctx.globalAlpha = 0.9;
+  ctx.lineWidth = 1.6;
+  const cx0 = artX, cy0 = artY;
+  ctx.beginPath(); ctx.moveTo(cx0 - 10, cy0); ctx.lineTo(cx0 + 10, cy0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx0, cy0 - 10); ctx.lineTo(cx0, cy0 + 10); ctx.stroke();
+  ctx.restore();
+
+  // 标题（色带，白盒标注条）
+  const intro = clamp(t / 0.55);
+  const fade = smoothstepX(intro);
+  if (fade > 0.001) {
+    ctx.save();
+    ctx.globalAlpha = fade;
+    const bandH = Math.round(L.titleSize * 1.7);
+    const bandX = portrait ? Math.round((W - Math.min(W - pad * 2, L.titleSize * 9)) / 2) : Math.round(W * 0.58 - L.titleSize * 4.6);
+    const bandW = Math.min(portrait ? W - pad * 2 : W * 0.34, L.titleSize * 9);
+    ctx.fillStyle = ACCENT;
+    ctx.fillRect(bandX, L.titleY - bandH / 2, bandW, bandH);
+    ctx.fillStyle = isLight ? TC.paper : TC.bg;
+    ctx.font = `800 ${L.titleSize}px ${SANS}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(TITLE, bandX + bandW / 2, L.titleY + 1);
+    ctx.restore();
+  }
+  const subFade = smoothstepX(clamp((t - 0.4) / 0.5));
+  if (subFade > 0.001 && SUB) {
+    ctx.save();
+    ctx.globalAlpha = subFade * 0.9;
+    ctx.font = `${Math.max(13, L.titleSize * 0.26)}px ${SANS}`;
+    ctx.fillStyle = MUTED;
+    ctx.textAlign = portrait ? 'center' : 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(SUB, L.subX, L.titleY + bandHOf() );
+    ctx.restore();
+  }
+
+  try {
+    drawHud(ctx, { W, H, u, duration: seg.duration, theme: THEME,
+      label: 'DEMO WIREFRAME', name: 'WHITE MODEL', brand: BRAND, pad });
+  } catch { /* HUD 不参与核心画面 */ }
+}
+
+function smoothstepX(a) { const x = Math.min(1, Math.max(0, a)); return x * x * (3 - 2 * x); }
+function bandHOf() { return Math.round(L.titleSize * 1.7); }
+
+window.renderFrame = (u) => {
+  const { t, fx } = seg.sample(u);
+  ctx.save();
+  ctx.scale(1 + (fx.scale - 1), 1 + (fx.scale - 1));
+  drawScene(u, t);
+  ctx.restore();
+  applyImpact2D(ctx, fx, W, H);
+  drawFlash(ctx, fx.flash, W, H, TC.paper);
+};
+
+window.__ready = false;
+window.__bootError = null;
+(async () => {
+  try {
+    await loadFonts(FAMILIES);
+    L = buildLayout();
+    window.renderFrame(0);
+    window.__ready = true;
+  } catch (e) {
+    window.__bootError = String((e && e.stack) || e);
+  }
+})();
+</script>
+</body>
+</html>

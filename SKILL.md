@@ -76,7 +76,7 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
 - **渲染器恢复**：`--timeout`(120s) 与 `--launch-timeout`(30s) 独立；页面抛错杀 ffmpeg + 浏览器进程树，重启换全新 profile——失败不挂住、不留孤儿。
 - **失败对象**：`logPath` 恒指构建日志；`detailPath` 是阶段诊断产物（render/concat/deliver 各自的清单或日志）。
 - **确定性检测**：`golden` manifest 记 Chrome/Node/字体指纹；环境不一致跳过哈希比对并告警（`--strict-env` 改失败）。跨机可比前提 = 同一镜像 + 同一字体锁。
-- **统一入口**：`node bin/cvs.mjs`（33 个子命令，`cvs --help` 全列）。`cvs ui` 一个端口起齐六个界面（5180，`/app/` 是首页）。
+- **统一入口**：`node bin/cvs.mjs`（34 个子命令，`cvs --help` 全列）。`cvs ui` 一个端口起齐六个界面（5180，`/app/` 是首页）。
 - **参考图/参考片**：`cvs ref poster.jpg`（图：色板/强调色/密度与 top-3 主题候选，不复制像素）；
   **`cvs ref video demo.mp4`（片，旗舰反推）**：ffprobe+切点+逐秒采样+k-means 主题匹配+BPM 自相关
   → 结构模型（opening/rounds/card/flash…）+ spec patch，`--apply` 直接并入既有 spec（不毁用户内容）。
@@ -93,6 +93,7 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
 - **配方页**：21 种画风中 19 种有专属页（`templates/recipe-*.html` + `cyber-pixel.html`，含 v3.1 的 generative），映射单一真值 `templates/style-pages.mjs`；**实拍素材** `cvs ingest` 出 EDL + spec 草稿（启发式，需人工审）。
 - **覆盖扩展（v2.5）**：段间转场 35 种（`--transition`，xfade 在拼接层做，默认关闭逐字节不变）、确定性效果库 26 个（`templates/effects.mjs`）、风格 20 种、领域 24 种。
 - **程序化生成画风（v3.1）**：第 21 风格 `generative`——`templates/generative.mjs` 四族纯核（流场群游/轨道环系/脉冲波/弹跳字）+ `recipe-generative.html`，关键词「生成式/程序化/procedural/粒子」即命中；向导与 combos 矩阵同步 17×21。
+- **导演演示集 + 一键出片（v3.2）**：六个颠覆性演示风格 `wireframe`(白模线框) `skeleton`(骨骼动画·走 cycle 闭式关节链) `fractal`(L-system 分形生长) `firework`(弹道粒子喷泉) `terrain`(marching squares 等高线测绘) `network`(图拓扑脉冲流量)，`cvs demo <style> [--seconds n] [--platform gif|webm|mp4]` 直接排片出成品（组合器 scripts/lib/demo-spec.mjs 生成闭合结构 → compile 全链）。
 - **派生导出格式（v3.1）**：`--platform webm|gif|mp3` 从 master/音轨直接转码（不经 shell 的 mp4+AAC 链），交付清单按扩展名入列。覆盖矩阵单一真值 `docs/COVERAGE.md`。
 - **禁止**：让 LLM 直接生成 HTML/CSS/JS，或绕过 spec 直接改像素。模型只填枚举与文案。
 ## 0. 适用与不适用

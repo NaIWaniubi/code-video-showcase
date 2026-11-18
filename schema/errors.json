@@ -926,6 +926,19 @@
       "auto": true,
       "meaning": "旁白合成失败（synth_voice 退出非 0 或产物缺失）",
       "action": "检查 spec.audio.vo 文案与行 JSON；或删除该字段退回纯音乐"
+    },
+    "E_UNKNOWN_STYLE": {
+      "phase": "usage",
+      "exit": 2,
+      "meaning": "demo 命令的风格 id 不在 STYLE_IDS 词表内",
+      "action": "用 cvs --help 列出的风格 id，或 cvs motion list 看目录"
+    },
+    "E_DEMO_FAILED": {
+      "phase": "env",
+      "exit": 14,
+      "auto": true,
+      "meaning": "演示片编译链失败（compile 返回非 0）",
+      "action": "看下方 compile 的 [error] 明细；python/ffmpeg 缺失会先报环境码"
     }
   }
 }

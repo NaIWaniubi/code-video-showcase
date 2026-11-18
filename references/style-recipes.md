@@ -1,4 +1,4 @@
-# 21 种风格配方（美术 + 技术 + 音色）
+# 27 种风格配方（美术 + 技术 + 音色）
 
 > v2.5：风格扩到 20（下表 01–11 为原有详细配方；12–20 为新增/收编，见文末「v2.5 新增风格」）。
 > 领域×风格×效果×转场 的完整覆盖矩阵与动效教义见 `docs/COVERAGE.md`。
@@ -52,6 +52,12 @@
 | blueprint | recipe-blueprint.html | 工程蓝图 | 普鲁士蓝、尺寸箭头、标题栏、十字线（effects.dotGrid） |
 | risograph | recipe-risograph.html | 孔版印刷 | 双专色、套印错位、颗粒平涂、纸纹（effects.grain/halftone） |
 | generative | recipe-generative.html | 生成式画面 | 流场群游、轨道环系、脉冲波、弹跳字（generative.mjs 四族纯核，v3.1） |
+| wireframe | recipe-wireframe.html | 白模线框 | 线框球体、双螺旋环结、透视公转（闭式旋转矩阵） |
+| skeleton | recipe-skeleton.html | 骨骼动画 | 关节链走 cycle、步幅弧、中点测量刻度 |
+| fractal | recipe-fractal.html | 分形生长 | L-system 递归、品牌哈希种子、前沿层生长进度 |
+| firework | recipe-firework.html | 粒子喷泉 | 150 粒弹道喷泉、循环发射、彗尾与过顶爆环 |
+| terrain | recipe-terrain.html | 地形测绘 | 解析高度场、marching squares 等高线、扫描增亮 |
+| network | recipe-network.html | 网络脉冲 | 图拓扑、包脉冲闭式行进、呼吸节点 |
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "schemaVersion": 1,
-    "description": "17 themes × 21 styles 兼容矩阵。recommended/ok/avoid 三档；preset 组合必须 recommended。",
+    "description": "17 themes × 27 styles 兼容矩阵。recommended/ok/avoid 三档；preset 组合必须 recommended。",
     "generatedBy": "C1 rules (deterministic, no network)",
     "sourceOfTruth": "themes ids + mode + names come from templates/themes.js; style ids are the 20 style vocabulary (v2.5).",
     "rules": [
@@ -53,7 +53,13 @@
         "vaporwave": "neon",
         "blueprint": "tech",
         "risograph": "paper",
-        "generative": "tech"
+        "generative": "tech",
+        "wireframe": "tech",
+        "skeleton": "tech",
+        "fractal": "paper",
+        "firework": "neon",
+        "terrain": "neutral",
+        "network": "tech"
       }
     },
     "themeNames": {
@@ -96,14 +102,20 @@
       "vaporwave": "蒸汽波",
       "blueprint": "工程蓝图",
       "risograph": "孔版印刷",
-      "generative": "生成式画面"
+      "generative": "生成式画面",
+      "wireframe": "白模线框",
+      "skeleton": "骨骼动画",
+      "fractal": "分形生长",
+      "firework": "粒子喷泉",
+      "terrain": "地形测绘",
+      "network": "网络脉冲"
     },
     "counts": {
-      "recommended": 168,
-      "ok": 152,
-      "avoid": 37
+      "recommended": 212,
+      "ok": 202,
+      "avoid": 45
     },
-    "coverage": "17×21=357",
+    "coverage": "17×27=459",
     "accentFix": {
       "aqua-morandi": {
         "accent": "#6e9fae",
@@ -149,7 +161,13 @@
       "vaporwave": "recommended",
       "blueprint": "recommended",
       "risograph": "ok",
-      "generative": "recommended"
+      "generative": "recommended",
+      "wireframe": "recommended",
+      "skeleton": "recommended",
+      "fractal": "ok",
+      "firework": "recommended",
+      "terrain": "ok",
+      "network": "recommended"
     },
     "claude-light": {
       "cyber-pixel": "avoid",
@@ -172,7 +190,13 @@
       "vaporwave": "avoid",
       "blueprint": "ok",
       "risograph": "recommended",
-      "generative": "ok"
+      "generative": "ok",
+      "wireframe": "ok",
+      "skeleton": "ok",
+      "fractal": "recommended",
+      "firework": "avoid",
+      "terrain": "ok",
+      "network": "ok"
     },
     "aqua-morandi": {
       "cyber-pixel": "avoid",
@@ -195,7 +219,13 @@
       "vaporwave": "avoid",
       "blueprint": "ok",
       "risograph": "recommended",
-      "generative": "ok"
+      "generative": "ok",
+      "wireframe": "ok",
+      "skeleton": "ok",
+      "fractal": "recommended",
+      "firework": "avoid",
+      "terrain": "ok",
+      "network": "ok"
     },
     "amber-noir": {
       "cyber-pixel": "recommended",
@@ -218,7 +248,13 @@
       "vaporwave": "recommended",
       "blueprint": "recommended",
       "risograph": "ok",
-      "generative": "recommended"
+      "generative": "recommended",
+      "wireframe": "recommended",
+      "skeleton": "recommended",
+      "fractal": "ok",
+      "firework": "recommended",
+      "terrain": "ok",
+      "network": "recommended"
     },
     "blueprint-stone": {
       "cyber-pixel": "avoid",
@@ -241,7 +277,13 @@
       "vaporwave": "avoid",
       "blueprint": "ok",
       "risograph": "recommended",
-      "generative": "ok"
+      "generative": "ok",
+      "wireframe": "ok",
+      "skeleton": "ok",
+      "fractal": "recommended",
+      "firework": "avoid",
+      "terrain": "ok",
+      "network": "ok"
     },
     "graphite-signal": {
       "cyber-pixel": "recommended",
@@ -264,7 +306,13 @@
       "vaporwave": "recommended",
       "blueprint": "recommended",
       "risograph": "ok",
-      "generative": "recommended"
+      "generative": "recommended",
+      "wireframe": "recommended",
+      "skeleton": "recommended",
+      "fractal": "ok",
+      "firework": "recommended",
+      "terrain": "ok",
+      "network": "recommended"
     },
     "celadon-paper": {
       "cyber-pixel": "avoid",
@@ -287,7 +335,13 @@
       "vaporwave": "avoid",
       "blueprint": "ok",
       "risograph": "recommended",
-      "generative": "ok"
+      "generative": "ok",
+      "wireframe": "ok",
+      "skeleton": "ok",
+      "fractal": "recommended",
+      "firework": "avoid",
+      "terrain": "ok",
+      "network": "ok"
     },
     "crimson-theater": {
       "cyber-pixel": "recommended",
@@ -310,7 +364,13 @@
       "vaporwave": "recommended",
       "blueprint": "recommended",
       "risograph": "ok",
-      "generative": "recommended"
+      "generative": "recommended",
+      "wireframe": "recommended",
+      "skeleton": "recommended",
+      "fractal": "ok",
+      "firework": "recommended",
+      "terrain": "ok",
+      "network": "recommended"
     },
     "cyber-neon": {
       "cyber-pixel": "recommended",
@@ -333,7 +393,13 @@
       "vaporwave": "recommended",
       "blueprint": "recommended",
       "risograph": "ok",
-      "generative": "recommended"
+      "generative": "recommended",
+      "wireframe": "recommended",
+      "skeleton": "recommended",
+      "fractal": "ok",
+      "firework": "recommended",
+      "terrain": "ok",
+      "network": "recommended"
     },
     "paper-journal": {
       "cyber-pixel": "avoid",
@@ -356,7 +422,13 @@
       "vaporwave": "avoid",
       "blueprint": "ok",
       "risograph": "recommended",
-      "generative": "ok"
+      "generative": "ok",
+      "wireframe": "ok",
+      "skeleton": "ok",
+      "fractal": "recommended",
+      "firework": "avoid",
+      "terrain": "ok",
+      "network": "ok"
     },
     "dark-gold-cinema": {
       "cyber-pixel": "recommended",
@@ -379,7 +451,13 @@
       "vaporwave": "recommended",
       "blueprint": "recommended",
       "risograph": "ok",
-      "generative": "recommended"
+      "generative": "recommended",
+      "wireframe": "recommended",
+      "skeleton": "recommended",
+      "fractal": "ok",
+      "firework": "recommended",
+      "terrain": "ok",
+      "network": "recommended"
     },
     "ice-minimal": {
       "cyber-pixel": "avoid",
@@ -402,7 +480,13 @@
       "vaporwave": "avoid",
       "blueprint": "ok",
       "risograph": "recommended",
-      "generative": "ok"
+      "generative": "ok",
+      "wireframe": "ok",
+      "skeleton": "ok",
+      "fractal": "recommended",
+      "firework": "avoid",
+      "terrain": "ok",
+      "network": "ok"
     },
     "pop-acid": {
       "cyber-pixel": "recommended",
@@ -425,7 +509,13 @@
       "vaporwave": "recommended",
       "blueprint": "recommended",
       "risograph": "ok",
-      "generative": "recommended"
+      "generative": "recommended",
+      "wireframe": "recommended",
+      "skeleton": "recommended",
+      "fractal": "ok",
+      "firework": "recommended",
+      "terrain": "ok",
+      "network": "recommended"
     },
     "terminal-phosphor": {
       "cyber-pixel": "recommended",
@@ -448,7 +538,13 @@
       "vaporwave": "recommended",
       "blueprint": "recommended",
       "risograph": "ok",
-      "generative": "recommended"
+      "generative": "recommended",
+      "wireframe": "recommended",
+      "skeleton": "recommended",
+      "fractal": "ok",
+      "firework": "recommended",
+      "terrain": "ok",
+      "network": "recommended"
     },
     "solar-dusk": {
       "cyber-pixel": "avoid",
@@ -471,7 +567,13 @@
       "vaporwave": "avoid",
       "blueprint": "ok",
       "risograph": "recommended",
-      "generative": "ok"
+      "generative": "ok",
+      "wireframe": "ok",
+      "skeleton": "ok",
+      "fractal": "recommended",
+      "firework": "avoid",
+      "terrain": "ok",
+      "network": "ok"
     },
     "abyss-teal": {
       "cyber-pixel": "recommended",
@@ -494,7 +596,13 @@
       "vaporwave": "recommended",
       "blueprint": "recommended",
       "risograph": "ok",
-      "generative": "recommended"
+      "generative": "recommended",
+      "wireframe": "recommended",
+      "skeleton": "recommended",
+      "fractal": "ok",
+      "firework": "recommended",
+      "terrain": "ok",
+      "network": "recommended"
     },
     "sand-linen": {
       "cyber-pixel": "avoid",
@@ -517,7 +625,13 @@
       "vaporwave": "avoid",
       "blueprint": "ok",
       "risograph": "recommended",
-      "generative": "ok"
+      "generative": "ok",
+      "wireframe": "ok",
+      "skeleton": "ok",
+      "fractal": "recommended",
+      "firework": "avoid",
+      "terrain": "ok",
+      "network": "ok"
     }
   }
 }

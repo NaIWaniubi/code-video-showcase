@@ -79,6 +79,12 @@ mood→BPM：`electronic 120 · restrained 90 · epic 100 · upbeat 128 · guofe
 | **blueprint** | 工程蓝图 | recipe-blueprint.html | standard | 普鲁士蓝 + 尺寸箭头 + 标题栏 + 十字线 |
 | **risograph** | 孔版印刷 | recipe-risograph.html | calm | 双专色 + 套印错位 + 颗粒平涂 + 纸纹 |
 | **generative** | 生成式画面 | recipe-generative.html | dynamic | 流场粒子群游 + 轨道环系 + 脉冲波 + 弹跳字（程序化确定生成，无扩散模型） |
+| **wireframe** | 白模线框 | recipe-wireframe.html | dynamic | 线框球体 + 双螺旋圆环结 + 透视公转 |
+| **skeleton** | 骨骼动画 | recipe-skeleton.html | dynamic | 闭式走 cycle 关节链 + 步幅弧 + 测量刻度 |
+| **fractal** | 分形生长 | recipe-fractal.html | calm | L-system 递归分叉，品牌哈希种子，生长即时间 |
+| **firework** | 粒子喷泉 | recipe-firework.html | dynamic | 150 粒闭式弹道喷泉 + 彗尾 + 过顶爆发环 |
+| **terrain** | 地形测绘 | recipe-terrain.html | standard | 解析高度场 marching squares 等高线 + 扫描测绘 |
+| **network** | 网络脉冲 | recipe-network.html | dynamic | 星环混合图拓扑，包脉冲沿链路闭式行进带尾迹 |
 
 ---
 
