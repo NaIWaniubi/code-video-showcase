@@ -1000,6 +1000,12 @@
       "exit": 10,
       "meaning": "参考片反推 patch 不可读、缺 specPatch 或结构冲突",
       "action": "用 `cvs ref video <片> --apply <spec>` 生成合规补丁；结构不一致会被 E_DURATION 如实拦下"
+    },
+    "E_EMIT_SPEC": {
+      "phase": "spec",
+      "exit": 13,
+      "meaning": "参考片结构拟合失败，无法 --emit-spec 展开成可编译新片",
+      "action": "换一个更长的参考片（≥6s）或人工校 structure 后重试"
     }
   }
 }

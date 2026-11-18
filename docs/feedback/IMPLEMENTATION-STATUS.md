@@ -1,6 +1,33 @@
 # 优化方案落地状态（v1.0 → v2.5.2）
 
-> **快照注记**（v2.9.0 更新）：本文写于 v2.5.2 时点；此后三轮审计（R2/R3）的修复清单以 CHANGELOG 与 [../audit2/FINDINGS-ROUND2.md](../audit2/FINDINGS-ROUND2.md) 为准。原第 8 条「未 commit」已过时——本仓改动均已按版本提交。
+> ## v3.x 时代能力清单（v3.9.0，2026-11-18 · v2.8.1 → v3.9.0 共 11 个大版本）
+>
+> 本节为 v3.x 全波次（第三轮十视角审计 + 断层领先三件套 + 产品面补齐）的落地总账。
+> 逐版明细以 CHANGELOG 为准；以下为能力级索引：
+>
+> - **第三轮审计收口（v2.9.0）**：内容寻址缓存闭合（url()/asset 字节重算/工具链指纹）·
+>   用户链路断点清零（cvs qa 复活/install 字体/剧本防覆盖）· serve 层收敛（Range206/
+>   fonts.css 缓存/jobs 反代加固/根路径跳转）· frames 修复（manifest 穿越/释放源/range 泄漏等）
+>   · 安全闸门（versions outDir/legacy timeline/assets 三查/私网硬拦）· 质检强化（检查齐全性/
+>   GOP 检查/E_PLAN_INCOMPLETE/EXTENSIBLE 位深/theme 上屏矩阵）· 渲染确定性（dom-overlay
+>   兜底/指数退避/xfade bitexact/timescale）· 测试体系（nightly browser CI/bash -n 门禁/
+>   golden envCompare/launchRetry/deliver BOM 钉/clampConcurrency）。
+> - **断层领先三件套（v3.0.0）**：参考片反推引擎（结构+BPM+主题+证据图+--apply）·
+>   旁白声道（四声调轮廓合成/piper 可选/sidechain 闪避混音/词级时间戳）·
+>   程序化生成画面引擎 generative.mjs（流场群游/轨道环系/脉冲波/弹跳字，闭式确定）。
+> - **第 21 画风 generative 注册（v3.1.0）**：配方页注册链全通（nl2spec/combos 17×21/
+>   向导/style-pages），组合器 `demo-spec.mjs` 一键出片；帧工作台段级剪辑纯核 segment-edit。
+> - **产品面补齐（v3.2/v3.3）**：导演演示集六件（白模/骨骼/L-system/喷泉/地形/网络）·
+>   批量+并行+重试与 manifest 凭据 · frames→spec patch 剪辑闭环 · 反推长片上限+contact-sheet ·
+>   向导向演示集面板 · copyPatch 文案回填 · golden demo-skeleton 位级基线。
+> - **体验与闭环深化（v3.4–v3.8）**：上传进度+取消 · --only 子集 · 双通道合并面板 ·
+>   段表可视化 · cvs ship 自研 ZIP 交付打包（--check 预检+报告入库）· cvs qa 双闸聚合 ·
+>   doctor 编码器探测 · npm run gate 发布门禁 · cvs health 五项全身体检。
+> - **终极闭环（v3.9.0）**：`cvs ref video --emit-spec` 把参考片一步展开成可编译新片 spec。
+>
+> **当前门禁口径（v3.9.0 实测）**：test:all 29 套件 486 通过 · health 5/5 ·
+> golden 4 specs/12 stills 相符 · errors 155 码覆盖 100% · version-sync 四方一致 ·
+> npm run gate 全绿。原第 8 条「未 commit」早已过时——所有改动按版本提交。
 >
 对照 [BACKLOG.json](BACKLOG.json) 的 26 项，逐项说明落地情况。
 > 判定口径：**已落地** = 代码 + 回归测试 + 文档齐；**部分** = 主路径可用但仍有明确缺口；**未做** = 未开始。

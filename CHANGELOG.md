@@ -17,6 +17,10 @@
 - ref-video usage 补 --emit-spec 行；test-ref-video 加端到端钉子（含无 ffmpeg 时如实 skip）；
 - 四方版本号同步 3.9.0。
 
+### 台账收口
+- docs/feedback/IMPLEMENTATION-STATUS.md 顶部新增 v3.x 能力清单（11 个大版本次间索引 +
+  当前门禁口径）；README Quick start 补导演演示集 / 参考片反推 / ship 三段进阶示例。
+
 ## [v3.8.0] - 2026-11-18 — QA 报告入包 · --ref-patch · health 五项
 
 ### R12-W1 ship --check 的 QA 报告入库

@@ -619,6 +619,16 @@ node bin/cvs.mjs build project.spec.json --platform douyin --strict --burn-subti
 #    out/images/cover/cover.png     card 版式封面
 #    out/delivery.json · master.srt/.vtt · qa/qa-video.json · qa/qa-audio.json
 
+# 3) 导演演示集——六个闭式确定引擎一键出片（白模/骨骼/分形/喷泉/地形/网络）
+node bin/cvs.mjs demo skeleton                  # 出 out/demo-skeleton/master.mp4
+node bin/cvs.mjs demo all --only fractal,terrain --seconds 8
+
+# 4) 有参考片？反推它，再交付打包
+node bin/cvs.mjs ref video my-demo.mp4 --emit-spec inspired.spec.json   # 结构+BPM+主题 → 可编译新 spec
+node bin/cvs.mjs build inspired.spec.json
+node bin/cvs.mjs ship inspired.spec.json --check   # QA 预检 + 自研 ZIP 交付包（spec+成片+字幕+清单+README+QA 报告）
+
+
 # 3) 版本快照 → 审片 → 校验后回滚
 node bin/cvs.mjs snapshot --spec project.spec.json --label 首版
 node bin/cvs.mjs history --spec project.spec.json

@@ -17,7 +17,7 @@
 
 脚本可以用退出码做粗分流，用 `--json` / `error.json` 的 `code` 做精确重试。
 
-## 已注册错误码（154）
+## 已注册错误码（156）
 
 | 错误码 | 阶段 | 退出码 | 含义 | 唯一动作 |
 |---|---|---|---|---|
@@ -42,6 +42,7 @@
 | `E_DESCRIPTION` | spec | 10 | description 不是字符串 | 改成字符串 |
 | `E_DURATION` | spec | 10 | format.duration 与结构公式不一致 | 删掉 duration 让工具算，或改 structure |
 | `E_DURATION_MAX` | spec | 10 | 总帧数超过 18000 | 缩短时长或降低 fps |
+| `E_EMIT_SPEC` | spec | 13 | 参考片结构拟合失败，无法 --emit-spec 展开成可编译新片 | 换一个更长的参考片（≥6s）或人工校 structure 后重试 |
 | `E_EXCEPTION` | spec | 10 | E_EXCEPTION：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_FLASH` | spec | 10 | flash 参数非法 | count ≥ 0 且 each > 0 |
 | `E_FLASH_MAX` | spec | 10 | flash.count 超过 256 | 减少闪帧 |
@@ -74,6 +75,7 @@
 | `E_PAGE_TRAVERSAL` | spec | 10 | 页面路径含 .. 段，越出项目根（文件存在性 oracle / 越界读） | 改成不含 .. 的项目根内相对路径 |
 | `E_PRESET` | spec | 10 | render.preset 非法 | bilibili|douyin|youtube|wechat|weixin|xiaohongshu|master|square |
 | `E_READ` | spec | 10 | spec 文件读不到 | 检查 --spec 路径 |
+| `E_REF_PATCH` | spec | 10 | 参考片反推 patch 不可读、缺 specPatch 或结构冲突 | 用 `cvs ref video <片> --apply <spec>` 生成合规补丁；结构不一致会被 E_DURATION 如实拦下 |
 | `E_RENDERER` | spec | 10 | E_RENDERER：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_ROUND_COUNT` | spec | 10 | E_ROUND_COUNT：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_ROUND_ID` | spec | 10 | round.id 非法/重复 | 只用字母数字-_，≤64 字符 |
@@ -178,8 +180,8 @@
 
 ## 覆盖情况
 
-- 代码中出现的 `E_*`：154
-- 已注册且被使用：154
+- 代码中出现的 `E_*`：156
+- 已注册且被使用：156
 - 未注册：0
 
 - 已注册但当前未使用：0
