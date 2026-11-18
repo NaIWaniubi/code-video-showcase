@@ -76,7 +76,8 @@ const commands = {
   compile:  (a) => node('scripts/compile.mjs', specArgs(a)),
   again:    (a) => node('scripts/again.mjs', a),
   deliver:  (a) => node('scripts/deliver.mjs', specArgs(a)),
-  qa:      (a) => node('scripts/qa-video.mjs', qaArgs(a)),
+  // R10-W3：cvs qa 双闸——视频+音频一次跑完（旧版只跑视频闸）。
+  qa:      (a) => node('scripts/qa.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
   snapshot: (a) => node('scripts/versions.mjs', ['snapshot', ...specArgs(a)]),
   rollback: (a) => node('scripts/versions.mjs', ['rollback', ...a]),
   history:  (a) => node('scripts/versions.mjs', ['list', ...a]),
@@ -117,7 +118,7 @@ usage: cvs <command> [args]
                [--transition fade|wipeleft|circleopen|...] [--transition-duration 0.4]
                [--concurrency n] [--resume] [--no-qa] [--json] [--dry-run]
                                         validate -> plan -> incremental render -> concat(xfade) -> qa
-  qa [video] [--plan f]                quality gates on master / platform cuts
+  qa [video] [--plan f]                quality gates (video + audio both, strict WARN fails)
                                         (default video out/master.mp4, plan out/plan.json)
   again [--set k=v] [--no-build]         edit last spec + rebuild only dirty segments
   deliver [--spec f] [--json] [--cover img]  delivery.json + master.srt/.vtt + cover

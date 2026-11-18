@@ -60,6 +60,17 @@ if (ff.ok) {
   });
   const filt = run(FFMPEG, ['-hide_banner', '-filters']);
   add('ffmpeg', 'loudnorm', /loudnorm/.test(filt.out), 'EBU R128 filter', true, { code: 'E_NO_LOUDNORM', fix: 'use a full ffmpeg build' });
+  // R10-W2：派生导出与烧字幕的编码器能力——缺哪个说哪个（--platform webm/gif/mp3、
+  // --burn-subtitles 之前先让 doctor 告诉用户环境差什么）。
+  add('ffmpeg', 'libvpx-vp9', /libvpx-vp9/.test(enc.out), 'VP9 encoder（--platform webm）', false,
+    { code: 'W_NO_VP9', fix: 'webm 导出需要；full build 自带' });
+  add('ffmpeg', 'libmp3lame', /libmp3lame/.test(enc.out), 'MP3 encoder（--platform mp3）', false,
+    { code: 'W_NO_MP3LAME', fix: '--platform mp3 需要' });
+  add('ffmpeg', 'libopus', /libopus/.test(enc.out), 'Opus encoder（--platform webm 音频）', false,
+    { code: 'W_NO_OPUS', fix: '--platform webm 需要' });
+  const subOk = /subtitles/.test(filt.out);
+  add('ffmpeg', 'subtitles filter', subOk, '字幕烧录（--burn-subtitles）', false,
+    { code: 'W_NO_SUBTITLES', fix: '需要 libass；compile 会以 exit 13 如实拒绝而不是静默跳过' });
   add('ffmpeg', 'blackdetect/freezedetect', /blackdetect/.test(filt.out) && /freezedetect/.test(filt.out), 'QA filters', true, {
     code: 'E_NO_QA_FILTERS', fix: 'use a full ffmpeg build',
   });

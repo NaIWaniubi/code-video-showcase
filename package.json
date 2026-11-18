@@ -1,6 +1,6 @@
 {
   "name": "code-video-showcase",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "description": "Pure-code, beat-synced showcase video skill: deterministic HTML/Canvas frames, synthesized score, FFmpeg assembly.",
   "type": "module",
   "license": "MIT",
@@ -61,7 +61,7 @@
     "variant": "node scripts/variants.mjs",
     "ingest": "node ingest/cli.mjs",
     "render": "node templates/render-farm.mjs --plan out/plan.json --resume",
-    "qa": "node scripts/qa-video.mjs out/master.mp4 --plan out/plan.json",
+    "qa": "node scripts/qa.mjs",
     "qa:audio": "python scripts/qa-audio.py out/audio/mix.wav --plan out/plan.json",
     "theme:audit": "node scripts/theme-audit.mjs --strict",
     "theme:preview": "node scripts/theme-preview.mjs",
@@ -85,7 +85,9 @@
     "combos:check": "node scripts/build-combos.mjs --check",
     "scaffold": "node scripts/new-project.mjs",
     "plan:legacy": "node templates/timeline.mjs --spec templates/timeline.example.json --out out/plan.json --concat out/segments.txt --print",
-    "demo": "node scripts/demo.mjs"
+    "demo": "node scripts/demo.mjs",
+    "gate": "node scripts/errors.mjs --check && node scripts/build-combos.mjs --check && node bin/cvs.mjs lint fixtures/mini-41s/spec.json --root . && node templates/plan.mjs --spec fixtures/mini-41s/spec.json --root . --check",
+    "ship": "node scripts/ship.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

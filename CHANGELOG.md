@@ -3,6 +3,29 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v3.6.0] - 2026-11-18 — cvs ship 交付打包 · cvs qa 双闸聚合 · doctor 编码器探测 · npm run gate
+
+### R10-W1 cvs ship：开箱即用的交付包
+- 新 scripts/ship.mjs + 自研 ZIP 写入器 scripts/lib/zip.mjs（CRC32 标准向量实现、
+  STORE/DEFLATE 双档、小文件不压、路径注入拒绝——零新依赖，不给纯代码工具引 npm zip 包）。
+- cvs ship project.spec.json → <stem>-<日期>.zip（或 --out dir 目录模式），包内：
+  spec / master.mp4 / 字幕 / plan.json / delivery.json / 自生成 README（环境要求 + 三步复现）；
+- 前置缺失如实报：没 build 过会点名缺件并退 13，不静默出空壳。
+- 实测：zip 经 Python zipfile 校验完整性 OK、7 件结构正确；dir 模式落盘验证过。
+
+### R10-W2 doctor 编码器能力探测
+- libvpx-vp9（--platform webm）/ libmp3lame（--platform mp3）/ libopus / subtitles filter
+  （--burn-subtitles）四项 optional 检查——导出平台前先让 doctor 告诉用户环境差什么。
+
+### R10-W3 cvs qa 双闸聚合
+- cvs qa <video> 一次跑视频闸 + 音频闸，任一 FAIL 即整体退出 13 并给汇总行；
+  音频源缺省取视频本身（量交付流而非合成 wav）；--json 出汇总。
+- 实测：对旧竖屏母版正确判 video=FAIL · audio=PASS，行为与文档一致。
+
+### R10-W4 npm run gate 发布门禁
+- gate script：errors --check（覆盖率）+ combos --check（矩阵）+ fixture lint + plan --check，
+  发布前四项一键全查（本机实测通过）。
+
 ## [v3.5.0] - 2026-11-18 — 上传进度取消 · --only 子集 · 段表可视化 · 双通道合并 · 骨架降耗
 
 ### R9-W1 `cvs demo --only a,b,c` 子集批量

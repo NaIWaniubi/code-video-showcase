@@ -106,6 +106,10 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
   v3.5：上传带字节级进度与取消；参考素材入口合并（图/片按类型自动分流）；
   `demo --only a,b,c` 子集批量（任何批量都留 manifest 凭据）；
   frames「段表」——时间→标题可视化内联编辑，直接进导出。
+  v3.6：`cvs ship <spec>` 交付物打包（自研 ZIP，spec+成片+字幕+清单+自动 README，
+  竞赛四件套同形；缺成片如实退 13）；`cvs qa` 双闸聚合（视频+音频一次跑，任一 FAIL 即整体 FAIL）；
+  doctor 加编码器能力探测（VP9/MP3lame/Opus/subtitles）；npm run gate 发布门禁。
+  
 - **派生导出格式（v3.1）**：`--platform webm|gif|mp3` 从 master/音轨直接转码（不经 shell 的 mp4+AAC 链），交付清单按扩展名入列。覆盖矩阵单一真值 `docs/COVERAGE.md`。
 - **禁止**：让 LLM 直接生成 HTML/CSS/JS，或绕过 spec 直接改像素。模型只填枚举与文案。
 ## 0. 适用与不适用

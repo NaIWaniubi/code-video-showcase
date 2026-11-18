@@ -21,7 +21,8 @@ An Agent Skill for producing 30–90 s "style showcase" films: an 8 s opening, e
 **v3.0 flagship（断层领先三件套）**
 
 - **参考片反推 `cvs ref video demo.mp4`**：拖一条成片进来 → 结构模型 + BPM 自相关 + k-means 主题匹配 → 可直接 `--apply` patch 进你的 spec。启发式结果带 confidence/残差/notes，不假装精确。
-- **导演演示集 + 一键出片（v3.2–v3.5）**：白模线框 / 骨骼动画 / L-system 分形 / 弹道喷泉 / 等高线测绘 / 网络脉冲六个闭式确定引擎；`cvs demo <style>` 出单片、`cvs demo all --only a,b --concurrency/--retries` 批量（manifest 如实报账、上传带进度+取消）；向导向可拖入参考片一键套用主题/BPM/时长；golden 位级基线含 demo-skeleton。
+- **导演演示集 + 一键出片（v3.2–v3.5）**：白模线框 / 骨骼动画 / L-system 分形 / 弹道喷泉 / 等高线测绘 / 网络脉冲六个闭式确定引擎；`cvs demo <style>` 出单片、`cvs demo all --only a,b --concurrency/--retries` 批量（manifest 如实报账、上传带进度+取消）。
+- **交付打包与发布门禁**：`cvs ship <spec>` 把 spec+成片+字幕+清单+自生成 README 打成开箱即用 zip（竞赛「作品四件套」同形，缺成片如实退 13）；`cvs qa` 视频+音频双闸一次跑完；doctor 告知 VP9/MP3lame/Opus/subtitles 编码器是否就位；`npm run gate` 发布前四项一键全查。；向导向可拖入参考片一键套用主题/BPM/时长；golden 位级基线含 demo-skeleton。
 - **旁白声道**：spec 里给文案行，编译时自动语音合成（piper 优先）+ sidechain 闪避混音 + 词级时间戳，配音不再需要外部 DAW。
 - **程序化生成画面引擎**：种子化流场群游 / 轨道环系 / 脉冲波 / 弹跳字——全部 (t, seed) 纯函数，逐帧确定性不破例。
 - **第 21 画风 `generative`**：已注册为正式配方页（recipe-generative.html），向导可选、combos 矩阵 17×21 同步。
