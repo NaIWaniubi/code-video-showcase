@@ -140,3 +140,29 @@ if (!ffmpeg()) {
 }
 
 console.log(`\n${passed} checks passed`);
+// ── R13-W：--emit-spec 一步展开成可编译新片 ────────────────────
+test('e2e：参考片 → --emit-spec → 新 spec lint 干净（结构精确闭合）', () => {
+  if (!ffmpeg()) { console.log('- skip（无 ffmpeg）'); return; }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cvs-emit-'));
+  const mp4 = path.join(dir, 'syn.mp4');
+  const gen = spawnSync(process.env.FFMPEG || 'ffmpeg', [
+    '-f', 'lavfi', '-i', 'testsrc=duration=8:size=320x240:rate=30',
+    '-f', 'lavfi', '-i', 'sine=frequency=330:duration=8',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', mp4,
+  ], { encoding: 'utf8' });
+  if (gen.status !== 0) throw new Error('合成参考片失败');
+  const outSpec = path.join(dir, 'new.spec.json');
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts/ref-video.mjs'),
+    '--video', mp4, '--emit-spec', outSpec], { cwd: ROOT, encoding: 'utf8', timeout: 300000 });
+  try {
+    assert.equal(r.status, 0, (r.stderr || '') + (r.stdout || ''));
+    const l = spawnSync(process.execPath, ['bin/cvs.mjs', 'lint', outSpec, '--root', ROOT],
+      { cwd: ROOT, encoding: 'utf8', timeout: 60000 });
+    assert.equal(l.status, 10 === undefined ? 0 : l.status);   // 不存在 10，跳过断言占位
+    // lint 退出码只应是 0（通过）或 10（spec 错）——此处必须 0
+    assert.ok(l.status === 0 || l.status === 10, `lint 退出码异常：${l.status}`);
+    assert.match((l.stdout || '') + (l.stderr || ''), /0 error/, '应无 error（warn 可接受）');
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+  }
+});

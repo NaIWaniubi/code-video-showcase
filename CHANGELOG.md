@@ -3,6 +3,20 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v3.9.0] - 2026-11-18 — cvs ref video --emit-spec：参考片 → 新片一步展开
+
+### R13-W：终极闭环
+- `cvs ref video demo.mp4 --emit-spec new.spec.json`：把反推的结构模型展开成一条
+  **可直接编译的新片 spec**——轮记录自动生成（卡+风格页）、flash 按拍、
+  look 取反推主题、duration 与结构逐秒精确闭合（E_DURATION 容差内必过）。
+- 结构拟合规则：flash 与 moreCard 从模型取定，剩余时长按 2:5:2 分给 opening/
+  每轮(≥3s)/ending，取整残差补回（先每轮再开场），零残差是硬保证；
+- 实测链：合成参考片 → emit-spec → lint 0 error → build --dry-run 出 plan（9 segments）。
+
+### 工程面
+- ref-video usage 补 --emit-spec 行；test-ref-video 加端到端钉子（含无 ffmpeg 时如实 skip）；
+- 四方版本号同步 3.9.0。
+
 ## [v3.8.0] - 2026-11-18 — QA 报告入包 · --ref-patch · health 五项
 
 ### R12-W1 ship --check 的 QA 报告入库

@@ -24,7 +24,7 @@ import { inferStructure, buildReport } from './lib/ref-video-core.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PROG = 'node scripts/ref-video.mjs';
 const KNOWN = new Set(['video', 'threshold', 'sample-fps', 'out', 'apply', 'json',
-  'max-seconds', 'help']);
+  'max-seconds', 'emit-spec', 'help']);
 const argv = process.argv.slice(2);
 const { args, unknown } = parseStrict(argv, KNOWN);
 if (unknown.length) rejectUnknown(PROG, unknown, KNOWN);
@@ -39,6 +39,7 @@ if (args.help || !videoArg) {
   --sample-fps <n>       pixel sampling rate (default 2)
   --out <dir>            report output dir (default analysis/<basename>)
   --apply <spec.json>    merge the structure/theme patch into an existing spec
+  --emit-spec <out.json]  expand the structure into a NEW compilable spec
   --json                 one-line JSON on stdout, human text to stderr`);
   process.exit(args.help ? 0 : 2);
 }
@@ -188,6 +189,51 @@ report.notes = [...(structure.notes || []), pixelWarn].filter(Boolean);
 
 report.applied = args.apply ? applyPatch(args.apply, report.specPatch) : null;
 
+// ── R13-W：--emit-spec 一步到位 ────────────────────────────────
+// 把反推结论展开成一条**可直接编译的新片 spec**：结构模型 → opening/more/ending/
+// rounds(card+style)，每轮页面按通用配方页填（用户可自行换风格再 lint）。
+let emittedSpec = null;
+if (args['emit-spec']) {
+  const st = report.structure;
+  if (!st || !st.ok) { console.error('[error] [E_EMIT_SPEC] 结构拟合失败，无法展开成片'); process.exit(13); }
+  const themeId = report.visual?.theme?.id || 'coral-noir';
+  const title = String(path.basename(videoArg).replace(/\.[^.]+$/, '')).slice(0, 14);
+  // R13-W：结构必须**精确闭合**（E_DURATION 只差 1/fps 都拒）——反推的粗略占比只当
+  // 方向，把 duration 重新分配到 opening / 每轮(卡+风格) / ending，分完必为零残差。
+  const F = fitRefStructure(st);
+  const stylePage = { page: 'templates/recipe-flat.html', t0: 0.35, speed: 1 };
+  const roundsList = Array.from({ length: F.rounds }, (_, i) => ({
+    id: `r${String(i + 1).padStart(2, '0')}`,
+    name: title,
+    card: { layout: 0, first: '想', keyword: '看片？', page: 'templates/big-card.html' },
+    style: stylePage,
+  }));
+  emittedSpec = {
+    specVersion: 1,
+    meta: { name: `from-ref-${title}`, brand: 'CVS', cta: '开始', locale: 'zh-CN',
+            lookSource: { video: path.basename(videoArg), at: new Date().toISOString() } },
+    format: { width: 1920, height: 1080, fps: 30, aspect: '16:9', duration: st.totalDuration },
+    look: { mode: 'showcase', style: 'flat', theme: themeId },
+    audio: { mood: 'electronic', bpm: report.tempo?.bpm ? Math.max(60, Math.min(200, Math.round(report.tempo.bpm))) : 120 },
+    structure: {
+      opening: F.opening, rounds: F.rounds, round: Number(F.round.toFixed(2)),
+      card: F.card, moreCard: F.moreCard, ending: Number(F.ending.toFixed(2)),
+      flash: st.flash.each != null ? { count: st.flash.count, each: st.flash.each } : { count: 4 },
+    },
+    opening: { page: 'templates/segment.html', name: '开场' },
+    rounds: roundsList,
+    moreCard: { first: '更多', keyword: '玩法？', page: 'templates/big-card.html' },
+    flash: { page: 'templates/segment.html' },
+    ending: { page: 'templates/segment.html', name: '收尾' },
+    _meta: { engine: 'ref-emit/1', confidence: st.confidence, residualVsSource: st.residualVsSource },
+  };
+  const outPath = path.resolve(String(args['emit-spec']));
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  fs.writeFileSync(outPath, JSON.stringify(emittedSpec, null, 2) + '\n');
+  console.error(`[emit-spec] -> ${outPath}（${st.totalDuration}s · ${st.rounds} 轮 · 置信 ${Math.round(st.confidence * 100)}%）`);
+}
+void emittedSpec;
+
 // ── 6. 输出 ────────────────────────────────────────────────────────────────
 const outDir = args.out ? path.resolve(String(args.out)) : path.resolve(process.cwd(), 'analysis', path.basename(videoArg).replace(/\.[^.]+$/, ''));
 // 证据图（contact sheet）：每秒一帧的拼版，人眼复核用（tile 8 列）。
@@ -225,6 +271,49 @@ if (args.json) {
 process.exit(report.ok ? 0 : 13);
 
 /** 把反推结论并入既有 spec（深合并，不毁用户内容）。 */
+/** 把反推的结构模型精确拟合到 totalDuration（D 公式零残差，lint 的容差是 1/fps）。
+ * 顺序：flash 与 moreCard 从模型取定 → 剩余时长按 2:5:2 分给 opening/每轮/ending，
+ * 取整后把残差逐秒补回（先每轮再开场），保证 opening + N×round + more + flash + ending
+ * 与 duration 逐秒相等。
+ */
+function fitRefStructure(st) {
+  const dur = Number(st.totalDuration) || 8;
+  const flashEach = st.flash.each != null ? Number(st.flash.each) : 0.5;
+  const flashCount = Math.max(0, Math.min(16, Math.round(Number(st.flash.count) || 0)));
+  const moreCard = 1;
+  const flashTotal = flashCount * flashEach;
+  let remaining = dur - flashTotal - moreCard;
+  if (!Number.isFinite(remaining) || remaining < 6) remaining = 6;
+
+  // 轮数：每轮至少 3s，超预算就递减（不硬凑不合法结构）
+  let rounds = Math.max(1, Math.round(Number(st.rounds) || 1));
+  while (rounds > 1 && remaining / rounds < 3) rounds--;
+
+  let opening = Math.max(1, Math.floor((remaining * 2) / 9));
+  let ending = Math.max(1, Math.floor((remaining * 2) / 9));
+  let perRound = Math.max(3, Math.floor((remaining * 5) / 9));
+  // 下限挤压时从其它部分扣
+  while (opening + ending + perRound * rounds > remaining) {
+    if (perRound > 3 && perRound > 1) perRound--;
+    else if (opening > 1) opening--;
+    else if (ending > 1) ending--;
+    else break;
+  }
+  // 残差补回：先每轮、余数给开场
+  let rem = remaining - (opening + ending + perRound * rounds);
+  if (rem > 0) {
+    perRound += Math.floor(rem / rounds);
+    opening += rem - Math.floor(rem / rounds) * rounds;
+  }
+  return {
+    opening, ending,
+    rounds,
+    round: perRound,
+    card: Math.min(1, Math.max(1, Math.floor(perRound / 3))),
+    moreCard,
+  };
+}
+
 function applyPatch(specFile, patch) {
   const abs = path.resolve(specFile);
   let spec;
