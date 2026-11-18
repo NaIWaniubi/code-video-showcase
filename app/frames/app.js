@@ -51,6 +51,7 @@ const el = {
   btnSplit: $('btn-split'),
   btnUndo: $('btn-undo'),
   btnExportSegs: $('btn-export-segments'),
+  segList: $('segList'),
   sourceInfo: $('sourceInfo'),
   recent: $('recent'),
 };
@@ -867,6 +868,7 @@ function attach(id, meta) {
   // 编辑基准：打开时的原始段表（导出时只报差异）
   state.meta._originalSegments = (m.segments || []).map((x) => ({ ...x }));
   updateEditButtons();
+  renderSegList();
 }
 
 let opening = false;   // R3-审计（RT-10 F7）：in-flight 闸门——连按 Enter/连点会双开，
@@ -1049,6 +1051,50 @@ el.download.addEventListener('click', downloadFrame);
 el.restrip.addEventListener('click', () => { state.stripRange = null; buildStrip(state.n); });
 el.btnSplit.addEventListener('click', () => { stopPlay(); splitAtPlayhead(); });
 el.btnUndo.addEventListener('click', undoEdit);
+/** R9-W4：段表渲染——时间 → 标题。input 直接绑 state.meta.segments，
+ * 导出时由 exportSegments 把差异记进 copyPatch（所见即所得）。 */
+function renderSegList() {
+  const m = state.meta;
+  const box = el.segList;
+  if (!box) return;
+  if (!m || !m.segments || !m.segments.length) {
+    box.textContent = '';
+    box.innerHTML = '<p class="muted small">打开 live 源后列出每段的时间区间与标题。</p>';
+    return;
+  }
+  box.replaceChildren();
+  for (const seg of m.segments) {
+    const row = document.createElement('div');
+    row.className = 'segrow';
+    row.setAttribute('role', 'listitem');
+
+    const t0 = (seg.startFrame / m.fps).toFixed(2);
+    const t1 = ((seg.endFrame - 1) / m.fps).toFixed(2);
+    const time = document.createElement('span');
+    time.className = 'seg-time mono';
+    time.textContent = `${t0}–${t1}s`;
+    time.title = `第 ${seg.startFrame}–${seg.endFrame - 1} 帧`;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = String((seg.copy && seg.copy.title) || seg.name || seg.id || '');
+    input.placeholder = '标题（回车或失焦保存）';
+    input.size = Math.max(10, Math.min(30, String(input.value).length + 2));
+    input.addEventListener('change', () => {
+      // 直接绑定轮记录（style.copy 为真值通道，title 在 copy 里）
+      seg.copy = { ...(seg.copy || {}), title: input.value };
+      setStatus(`${seg.id} 标题已更新`, 'ok');
+    });
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') input.blur();
+      if (ev.key === 'Escape') { input.value = (seg.copy && seg.copy.title) || ''; input.blur(); }
+    });
+
+    row.append(time, input);
+    box.append(row);
+  }
+}
+
 /** R7：导出当前编辑后的段表为 spec patch（JSON 下载）。
  * 只含「与原始 spec 不一致的段」——把 frames 的编辑结果变成可编译的输入。 */
 function exportSegments() {

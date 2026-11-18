@@ -440,3 +440,9 @@ button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+/* R9-W4：段表可视化编辑——时间列固定窄宽，标题列自适应。 */
+.seglist { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+.segrow { display: grid; grid-template-columns: 92px 1fr; gap: 8px; align-items: center; font-size: 12px; }
+.seg-time { color: var(--muted); white-space: nowrap; }
+.segrow input { font-size: 12px; padding: 3px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,.18); background: transparent; color: inherit; }

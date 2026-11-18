@@ -22,7 +22,7 @@ import { composeDemoSpec } from './lib/demo-spec.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROG = 'node scripts/demo.mjs';
 const KNOWN = new Set(['style', 'seconds', 'theme', 'outdir', 'platform', 'dry-run',
-  'json', 'concurrency', 'retries', 'help']);
+  'json', 'concurrency', 'retries', 'only', 'help']);
 const argv = process.argv.slice(2);
 const positional = argv.filter((a) => !String(a).startsWith('--'));
 const { args, unknown } = parseStrict(argv, KNOWN);
@@ -30,6 +30,19 @@ if (unknown.length) rejectUnknown(PROG, unknown, KNOWN);
 
 // `all`：导演演示集六件（不带常规风格——那是 combos 矩阵的事，演示集才有现场感）。
 const DEMO_SET = ['wireframe', 'skeleton', 'fractal', 'firework', 'terrain', 'network'];
+
+/** R9-W1：`--only` 在批量模式下选子集（组合校验失败即 exit 2，不静默吞）。 */
+function onlyList() {
+  if (!args.only) return null;
+  const ids = String(args.only).split(',').map((x) => x.trim()).filter(Boolean);
+  const bad = ids.filter((id) => !DEMO_SET.includes(id));
+  if (bad.length) {
+    console.error(`[error] [E_DEMO_ONLY] --only 里的未知演示风格：${bad.join(', ')}；可选：${DEMO_SET.join('|')}`);
+    process.exit(2);
+  }
+  return ids.length ? ids : null;
+}
+
 /** 对单个风格跑一遍「组合→写 spec→compile」，可重试，返回结果行。 */
 async function runOne(styleId, { retryCount = 0 } = {}) {
   const seconds = Number(args.seconds || 6);
@@ -44,7 +57,8 @@ async function runOne(styleId, { retryCount = 0 } = {}) {
   const specPath = path.join(outDir, 'project.spec.json');
   fs.writeFileSync(specPath, JSON.stringify(spec, null, 2) + "\n");
   const extra = [];
-  if (args.platform && styles.length === 1 && String(positional[0]) === styleId) {
+  // 只跑一路时 --platform 才有意义（无论这个风格来自 positional[0] 还是 --only）。
+  if (args.platform && styles.length === 1) {
     extra.push('--platform', String(args.platform));
   }
   if (args['dry-run']) extra.push('--dry-run');
@@ -84,6 +98,7 @@ if (args.help || !positional.length) {
   <style-id>            wireframe | skeleton | fractal | firework | terrain | network |
                        generative + 全部常规风格（cvs --help 列 STYLE vocab）
                        all = 六个演示风格依次出片（单个 --outdir 忽略）
+  --only a,b,c          (批量) 只出这些演示风格；非法名 exit 2
   --seconds <n>         film length (default 6)
   --theme <id>          theme override (default per style)
   --outdir <dir>        output dir (default out/demo-<style>)
@@ -99,7 +114,13 @@ if (args.help || !positional.length) {
 }
 
 const requested = String(positional[0]);
-const styles = requested === 'all' ? DEMO_SET : [requested];
+let styles;
+if (requested === 'all') {
+  // 混合用法：`demo all --only skeleton,fractal` 只出两个。
+  styles = onlyList() || DEMO_SET;
+} else {
+  styles = [requested];
+}
 
 console.error(`[demo]    ${styles.length === 1 ? `style=${styles[0]}` : `batch=${styles.length} styles (${styles.join(', ')})`}`);
 
@@ -130,7 +151,9 @@ if (styles.length === 1 || conc <= 1) {
 }
 
 // all 模式：manifest.json 汇总每个风格的成败
-if (styles.length > 1) {
+// R9-W1：任何批量（含 --only 出的单个子集）都留 manifest——
+// 少了它「跑了什么、成败如何」就没有落盘凭据。
+if (true) {
   const manifestDir = path.resolve(process.cwd(), args.outdir ? String(args.outdir) : path.join('out', 'demo-all'));
   fs.mkdirSync(manifestDir, { recursive: true });
   const manifest = {

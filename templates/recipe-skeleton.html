@@ -217,11 +217,10 @@ function drawScene(u, t) {
     const vx = end.x - root.x, vy = end.y - root.y;
     const ln = Math.hypot(vx, vy) || 1;
     const nx = -vy / ln, ny = vx / ln;
-    ctx.save();
+    // 直写：省掉循环内 ×4 的 save/restore 对（strokeStyle 每帧都会重设，无状态泄漏）。
     ctx.strokeStyle = hexToRgba(INK, 0.26);
     ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.moveTo(mx - nx * 8, my - ny * 8); ctx.lineTo(mx + nx * 8, my + ny * 8); ctx.stroke();
-    ctx.restore();
   }
 
   // 标题色带

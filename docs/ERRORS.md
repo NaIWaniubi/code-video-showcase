@@ -17,11 +17,12 @@
 
 脚本可以用退出码做粗分流，用 `--json` / `error.json` 的 `code` 做精确重试。
 
-## 已注册错误码（153）
+## 已注册错误码（154）
 
 | 错误码 | 阶段 | 退出码 | 含义 | 唯一动作 |
 |---|---|---|---|---|
 | `E_COMMAND` | usage | 2 | 未知子命令 | cvs --help |
+| `E_DEMO_ONLY` | usage | 2 | --only 里的演示风格名不在导演演示集六件内 | 用 wireframe|skeleton|fractal|firework|terrain|network 之一 |
 | `E_PLAN_INCOMPLETE` | usage | 2 | qa-audio 的 --plan 是合法 JSON 但缺 audio.bpm/cues（旧行为直接 KeyError 崩溃，脚本无法路由） | 重新跑 `cvs plan` 生成完整 plan；残缺 plan 下 cue/tempo/HF 门禁无法执行 |
 | `E_PLAN_MISSING` | usage | 2 | qa-audio 的 --plan 指向不存在的文件（旧行为静默丢掉 cue/HF 门禁假绿） | 先跑 `cvs plan` 生成 plan.json，或修正 --plan 路径 |
 | `E_UNKNOWN_COMMAND` | usage | 2 | 未知子命令 | 运行 `cvs --help` |
@@ -177,8 +178,8 @@
 
 ## 覆盖情况
 
-- 代码中出现的 `E_*`：153
-- 已注册且被使用：153
+- 代码中出现的 `E_*`：154
+- 已注册且被使用：154
 - 未注册：0
 
 - 已注册但当前未使用：0

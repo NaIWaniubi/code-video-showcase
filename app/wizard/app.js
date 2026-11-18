@@ -877,7 +877,7 @@ function applyPreset(p) {
   lastRef = null;
   const cand = $('#ref-candidates');
   if (cand) cand.replaceChildren();
-  setRefStatus('拖入或点击选择一张参考图（JPG/PNG）。识别后可一键套用主题与主色。');
+  setRefStatus('拖入一张参考图（JPG/PNG）或一支参考片（MP4/WebM…）。图提取配色气质，片反推主题/BPM/结构，一键套用。');
   if (!ctaCustom) state.cta = KIND_CTA[p.kind] || state.cta;
 }
 
@@ -1163,51 +1163,118 @@ function bindEvents() {
     });
     
   // R8-W2：参考片反推入口——POST 到本机向导服务端 /api/analyze-ref（CLI 全链）。
-  const refvDrop = $('#refv-drop');
-  const refvInput = $('#refv-input');
-  if (refvDrop && refvInput) {
-    const stat = () => $('#refv-status');
-    const submit = async (f) => {
-      if (!f) return;
+  const refAllDrop = $('#ref-all-drop');
+  const refAllInput = $('#ref-all-input');
+  if (refAllDrop && refAllInput) {
+    // R9-W3：双通道共用一条状态行——图走 applyReferenceFile（自带 DOM 展示），
+    // 片的结果直接写 #ref-status（该元素在合并面板里）。
+    const stat = () => $('#ref-status');
+    // R9-W2：XHR 上传——拿到字节级进度；AbortController 提供取消。
+    let refvAbort = null;
+    let refvTimer = null;
+    const clearRefvBusy = () => {
+      if (refvTimer) { clearTimeout(refvTimer); refvTimer = null; }
+      const btn = $('#refv-cancel');
+      if (btn) { btn.hidden = true; btn.disabled = true; }
+      refAllDrop.style.pointerEvents = '';
+      refAllDrop.style.opacity = '';
+    };
+    const submit = (f) => new Promise((resolve) => {
+      if (!f) { resolve(); return; }
       const st = stat();
-      if (!st) return;
-      st.textContent = '分析中（长片会更久）…';
+      if (!st) { resolve(); return; }
+      const size = f.size || 0;
+      st.textContent = '上传中…';
+      // 取消按钮随分析出现（长片的等待期里给用户一条退路）。
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.id = 'refv-cancel';
+      cancelBtn.textContent = '取消';
+      cancelBtn.className = 'ghost tiny';
+      cancelBtn.addEventListener('click', () => {
+        if (refvAbort) refvAbort.abort();
+      });
+      st.replaceChildren(cancelBtn, document.createTextNode(
+        size ? `上传中 0%（${(size / 1048576).toFixed(1)} MB）` : '上传中…'));
+      const xhr = new XMLHttpRequest();
+      refvAbort = xhr;
+      xhr.open('POST', '/api/analyze-ref');
+      xhr.upload.onprogress = (ev) => {
+        if (ev.lengthComputable && size > 0) {
+          const pct = Math.min(100, Math.round((ev.loaded / ev.total) * 100));
+          st.replaceChildren(cancelBtn, document.createTextNode(
+            `上传中 ${pct}%（${((ev.loaded / 1048576).toFixed(1))} MB）`));
+        }
+      };
+      xhr.onload = () => {
+        clearRefvBusy();
+        let j = null;
+        try { j = JSON.parse(xhr.responseText); } catch { /* 非 JSON */ }
+        if (xhr.status < 200 || xhr.status >= 300 || !j || !j.ok) {
+          st.textContent = '分析失败：' + ((j && (j.message || j.error)) || ('HTTP ' + xhr.status));
+          resolve();
+          return;
+        }
+        applyReferenceVideo(j);
+        const v = j.visual && j.visual.theme;
+        const t = j.tempo || {};
+        st.textContent = (v
+          ? `已套用「${v.name}」主题（${Math.round(v.confidence * 100)}%）；BPM ${t.bpm != null ? t.bpm : '不可用'}`
+          : '反推未给出主题（置信度过低），未套用') +
+          (j.structure && j.structure.totalDuration
+            ? `；结构拟合 ${j.structure.totalDuration}s（残差 ${j.structure.residualVsSource}s）` : '');
+        if (j.notes && j.notes.length) st.textContent += ' · ' + j.notes[0];
+        resolve();
+      };
+      xhr.onerror = () => { clearRefvBusy(); st.textContent = '上传失败：网络错误（可取消后重试）'; resolve(); };
+      xhr.ontimeout = () => { clearRefvBusy(); st.textContent = '上传失败：超时'; resolve(); };
+      xhr.onabort = () => { clearRefvBusy(); st.textContent = '已取消'; resolve(); };
+      xhr.timeout = 15 * 60 * 1000;      // 长片分析给足预算（服务端上限 600s）
       const fd = new FormData();
       fd.append('file', f, f.name || 'reference.mp4');
-      let res, j = null;
-      try { res = await fetch('/api/analyze-ref', { method: 'POST', body: fd }); }
-      catch (e) { st.textContent = '上传失败：' + e.message; return; }
-      try { j = await res.json(); } catch { /* 非 JSON */ }
-      if (!res.ok || !j || !j.ok) {
-        st.textContent = '分析失败：' + ((j && (j.message || j.error)) || ('HTTP ' + res.status));
-        return;
-      }
-      applyReferenceVideo(j);
-      const v = j.visual && j.visual.theme;
-      const t = j.tempo || {};
-      st.textContent = (v
-        ? `已套用「${v.name}」主题（${Math.round(v.confidence * 100)}%）；BPM ${t.bpm != null ? t.bpm : '不可用'}`
-        : '反推未给出主题（置信度过低），未套用') +
-        (j.structure && j.structure.totalDuration
-          ? `；结构拟合 ${j.structure.totalDuration}s（残差 ${j.structure.residualVsSource}s）` : '');
-      if (j.notes && j.notes.length) st.textContent += ' · ' + j.notes[0];
+      xhr.send(fd);
+      void clearRefvBusy;
+      void refvTimer;
+    });
+    refAllDrop.addEventListener('click', () => { refAllInput.click(); });
+    refAllDrop.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); refAllInput.click(); }
+    });
+    refAllDrop.addEventListener('dragover', (e) => { e.preventDefault(); refAllDrop.style.borderColor = '#d97757'; });
+    refAllDrop.addEventListener('dragleave', () => { refAllDrop.style.borderColor = 'rgba(255,255,255,.22)'; });
+    // 双通道分流：image/* → 图通道（配色提取）；其余按视频扩展名 → 片通道（反推）。
+    const routeByType = (f) => {
+      const type = String(f.type || '');
+      const name = String(f.name || '').toLowerCase();
+      const isImg = type.startsWith('image/');
+      const isVid = type.startsWith('video/') ||
+        ['.mp4', '.webm', '.mov', '.mkv'].some((x) => name.endsWith(x));
+      if (isImg && !isVid) return 'image';
+      if (isVid && !isImg) return 'video';
+      return null;
     };
-    refvDrop.addEventListener('click', () => { refvInput.click(); });
-    refvDrop.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); refvInput.click(); }
-    });
-    refvDrop.addEventListener('dragover', (e) => { e.preventDefault(); refvDrop.style.borderColor = '#d97757'; });
-    refvDrop.addEventListener('dragleave', () => { refvDrop.style.borderColor = 'rgba(255,255,255,.22)'; });
-    refvDrop.addEventListener('drop', async (e) => {
+    refAllDrop.addEventListener('drop', (e) => {
       e.preventDefault();
-      refvDrop.style.borderColor = 'rgba(255,255,255,.22)';
+      refAllDrop.style.borderColor = 'rgba(255,255,255,.22)';
       const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f) await submit(f);
+      if (!f) return;
+      const kind = routeByType(f);
+      if (kind === 'image') { applyReferenceFile(f); return; }
+      if (kind === 'video') { submit(f); return; }
+      const st = $('#ref-status');
+      if (st) st.textContent = '无法识别的文件类型：请给图片（JPG/PNG）或视频（MP4/WebM 等）';
     });
-    refvInput.addEventListener('change', async () => {
+    refAllInput.addEventListener('change', () => {
       const f = refvInput.files && refvInput.files[0];
-      if (f) await submit(f);
-      refvInput.value = '';
+      if (!f) return;
+      const kind = routeByType(f);
+      if (kind === 'image') { applyReferenceFile(f); }
+      else if (kind === 'video') { submit(f); }
+      else {
+        const st = $('#ref-status');
+        if (st) st.textContent = '无法识别的文件类型：请给图片或视频';
+      }
+      refAllInput.value = '';
     });
   }
 

@@ -99,10 +99,13 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
   `network`(图拓扑脉冲流量)；`cvs demo <style> [--seconds n] [--platform gif|webm|mp4]`
   直接排片出成品，`cvs demo all` 批量出片 + manifest。
   v3.3：frames 工作台「导出段表」→ `cvs build --segment-patch` 剪辑闭环；
-  反推 `--max-seconds` 长片上限 + contact-sheet 证据图；向导向加演示集入口；向导向加演示集入口。
+  反推 `--max-seconds` 长片上限 + contact-sheet 证据图；向导向加演示集入口。
   v3.4：`demo all --concurrency`（钳 ≤2）/`--retries` 重试；向导新增参考片上传
   （拖一条成片 → 服务端反推 → 一键套用主题/BPM/时长）；帧工作台导出加 copyPatch
   文案回填（split 后各片段各自成卡）；golden 位级基线新增 demo-skeleton。
+  v3.5：上传带字节级进度与取消；参考素材入口合并（图/片按类型自动分流）；
+  `demo --only a,b,c` 子集批量（任何批量都留 manifest 凭据）；
+  frames「段表」——时间→标题可视化内联编辑，直接进导出。
 - **派生导出格式（v3.1）**：`--platform webm|gif|mp3` 从 master/音轨直接转码（不经 shell 的 mp4+AAC 链），交付清单按扩展名入列。覆盖矩阵单一真值 `docs/COVERAGE.md`。
 - **禁止**：让 LLM 直接生成 HTML/CSS/JS，或绕过 spec 直接改像素。模型只填枚举与文案。
 ## 0. 适用与不适用

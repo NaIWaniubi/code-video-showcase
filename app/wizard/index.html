@@ -46,33 +46,23 @@
           </p>
         </div>
 
-        <section class="panel" aria-labelledby="ref-title">
+        <!-- R9-W3：参考素材一体化入口——按文件类型自动分流（图 → 配色；片 → 结构/BPM/主题反推） -->
+        <section class="panel" aria-labelledby="ref-all-title">
           <div class="panel-head">
-            <h2 id="ref-title">有参考图？</h2>
-            <span class="hint">提取配色与气质 · 浏览器内完成 · 不复制像素</span>
+            <h2 id="ref-all-title">有参考素材？</h2>
+            <span class="hint">图：配色与气质（浏览器内）· 片：结构 / BPM / 主题（服务端分析）</span>
           </div>
-          <div id="ref-drop" role="button" tabindex="0" aria-label="选择参考图（JPG/PNG），识别后套用主题与主色" style="display:flex;gap:14px;align-items:center;padding:14px;border:1px dashed rgba(255,255,255,.22);border-radius:12px;cursor:pointer">
+          <div id="ref-all-drop" role="button" tabindex="0"
+               aria-label="拖入或点击选择一张图或一支片（图提取配色，片反推结构与主题）"
+               style="display:flex;gap:14px;align-items:center;padding:14px;border:1px dashed rgba(255,255,255,.22);border-radius:12px;cursor:pointer">
             <canvas id="ref-thumb" width="96" height="96" style="width:96px;height:96px;border-radius:8px;background:#111;image-rendering:pixelated;flex:none"></canvas>
             <div style="flex:1;min-width:0">
-              <p id="ref-status" style="margin:0 0 8px">拖入或点击选择一张参考图（JPG/PNG）。识别后可一键套用主题与主色。</p>
+              <p id="ref-status" style="margin:0 0 8px">拖入一张参考图（JPG/PNG）或一支参考片（MP4/WebM…）。图直接提取配色气质；片反推主题、BPM 与结构草案，一键套用。</p>
               <div id="ref-candidates" style="display:flex;gap:8px;flex-wrap:wrap"></div>
             </div>
             <input id="ref-input" type="file" accept="image/*" hidden />
-          </div>
-        </section>
-
-        <!-- R8-W2：参考片反推入口（服务端分析，回填主题/BPM/时长） -->
-        <section class="panel" aria-labelledby="refv-title">
-          <div class="panel-head">
-            <h2 id="refv-title">有参考片？</h2>
-            <span class="hint">结构 / BPM / 主题反推 · 服务端分析 · 启发式结论带置信度</span>
-          </div>
-          <div id="refv-drop" role="button" tabindex="0" aria-label="拖入或选择一支参考片（mp4/webm/mov/mkv），反推后套用"
-               style="display:flex;gap:14px;align-items:center;padding:14px;border:1px dashed rgba(255,255,255,.22);border-radius:12px;cursor:pointer">
-            <div style="flex:1;min-width:0">
-              <p id="refv-status" style="margin:0">拖入或点击选择一支参考片（MP4/WebM 等）。反推给出主题、BPM 与结构草案，可一键套用到右侧 spec。</p>
-            </div>
-            <input id="refv-input" type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.mp4,.webm,.mov,.mkv" hidden />
+            <!-- R9-W3：双通道分流专用选择器（图 → 配色；片 → 反推） -->
+            <input id="ref-all-input" type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.mp4,.webm,.mov,.mkv" hidden />
           </div>
         </section>
 

@@ -3,6 +3,31 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v3.5.0] - 2026-11-18 — 上传进度取消 · --only 子集 · 段表可视化 · 双通道合并 · 骨架降耗
+
+### R9-W1 `cvs demo --only a,b,c` 子集批量
+- 批量子集选择：`demo all --only skeleton,fractal` 只出这两个；非法风格名
+  E_DEMO_ONLY exit 2（不静默吞，也不把错名当风格跑）。
+- 单路子集同样生效 `--platform`（判定改为 styles.length===1，与来源无关）。
+- 任何批量（含单子集）都写 manifest 凭据——「跑了什么、成败如何」有落盘记录。
+
+### R9-W2 参考片上传进度与取消
+- XHR 上传替代裸 fetch：`xhr.upload.onprogress` 报字节级百分比（MB 数随进度走）；
+  15 分钟超时预算；「取消」按钮随分析出现（AbortController abort），中断后如实显示已取消。
+
+### R9-W3 向导参考素材双通道合并
+- 「有参考图？」「有参考片？」两个面板合一为「参考素材」——一个 drop zone 按文件
+  MIME/扩展名自动分流（image/* → 配色提取；video/* 或 mp4/webm/mov/mkv → 服务端反推）；
+  不可识别的类型把提示摆出来而不是静默丢。
+
+### R9-W4 frames 段表可视化（R9 命名 W4）
+- 侧栏新增「段表」卡片：每段一行（时间区间 + 标题 input），双击改标题、回车/失焦保存，
+  Escape 还原；改动直接绑 state.meta.segments，导出时差异进 copyPatch（所见即所得）。
+
+### R9-W5 骨架页绘制量优化
+- 四肢中点 tick 的循环内 save/restore 对删除（直写，×4 次/帧）；
+  golden 重基线复验相符。
+
 ## [v3.4.0] - 2026-11-18 — 并行重试 · 向导参考片 · 文案回填 · golden 演示基线
 
 ### cvs demo 并行与重试（R8-W1）

@@ -162,3 +162,27 @@ test('copyPatch：帧工作台导出的标题回填在 compile 标记中生效',
   }
 });
 
+
+// ── R9-W1：--only 子集与非法名单 ──────────────────────────────
+test('demo all --only fractal：只出指定子集；非法名 exit 2', () => {
+  // 非法名单直接退 2（组合器校验，宁可报错不出错片）
+  const bad = spawnSync(process.execPath, [
+    path.join(ROOT, 'scripts/demo.mjs'), 'all', '--only', 'bogus',
+  ], { cwd: ROOT, encoding: 'utf8', timeout: 60000 });
+  assert.equal(bad.status, 2, (bad.stderr || '') + (bad.stdout || ''));
+  assert.match((bad.stderr || ''), /E_DEMO_ONLY/);
+
+  // 合法子集：dry-run 下只跑一个风格并成功
+  const ok = spawnSync(process.execPath, [
+    path.join(ROOT, 'scripts/demo.mjs'), 'all', '--only', 'fractal',
+    '--seconds', '4', '--dry-run',
+  ], { cwd: ROOT, encoding: 'utf8', timeout: 300000 });
+  try {
+    assert.equal(ok.status, 0, (ok.stderr || '') + (ok.stdout || ''));
+    const man = JSON.parse(fs.readFileSync(path.join(ROOT, 'out/demo-all/manifest.json'), 'utf8'));
+    assert.equal(man.rows.length, 1);
+    assert.equal(man.rows[0].style, 'fractal');
+  } finally {
+    try { fs.rmSync(path.join(ROOT, 'out/demo-all'), { recursive: true, force: true }); } catch { /* ignore */ }
+  }
+});

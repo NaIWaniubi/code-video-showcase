@@ -988,6 +988,12 @@
       "auto": true,
       "meaning": "参考片反推失败（CLI 退出非 0：读不了/解码错/python 或 ffmpeg 不可用）",
       "action": "检查文件与编码；FFMPEG/PYTHON 可用环境变量覆盖"
+    },
+    "E_DEMO_ONLY": {
+      "phase": "usage",
+      "exit": 2,
+      "meaning": "--only 里的演示风格名不在导演演示集六件内",
+      "action": "用 wireframe|skeleton|fractal|firework|terrain|network 之一"
     }
   }
 }
