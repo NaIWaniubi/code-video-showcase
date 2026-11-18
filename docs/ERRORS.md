@@ -17,7 +17,7 @@
 
 脚本可以用退出码做粗分流，用 `--json` / `error.json` 的 `code` 做精确重试。
 
-## 已注册错误码（143）
+## 已注册错误码（153）
 
 | 错误码 | 阶段 | 退出码 | 含义 | 唯一动作 |
 |---|---|---|---|---|
@@ -26,6 +26,7 @@
 | `E_PLAN_MISSING` | usage | 2 | qa-audio 的 --plan 指向不存在的文件（旧行为静默丢掉 cue/HF 门禁假绿） | 先跑 `cvs plan` 生成 plan.json，或修正 --plan 路径 |
 | `E_UNKNOWN_COMMAND` | usage | 2 | 未知子命令 | 运行 `cvs --help` |
 | `E_UNKNOWN_FLAG` | usage | 2 | 未知命令行 flag（拼错的 --strict 等不再被静默忽略） | 按报错里的 did-you-mean 修正；`cvs <cmd> --help` 看全表 |
+| `E_UNKNOWN_STYLE` | usage | 2 | demo 命令的风格 id 不在 STYLE_IDS 词表内 | 用 cvs --help 列出的风格 id，或 cvs motion list 看目录 |
 | `E_USAGE` | usage | 2 | 命令行参数错误 | 查看 `cvs <cmd> --help` |
 | `E_ACCENT` | spec | 10 | accentOverride 非法 | #rgb/#rrggbb 或 {accent,accentInk,accentSoft} |
 | `E_APCA` | spec | 10 | 主题对比度不足 | 换主题或设置 look.accentOverride |
@@ -79,6 +80,7 @@
 | `E_ROUND_TOTAL` | spec | 10 | E_ROUND_TOTAL：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_ROUNDS` | spec | 10 | rounds[] 为空 | 至少写一轮 |
 | `E_ROUNDS_MAX` | spec | 10 | rounds 超过 24 | 拆成两条片 |
+| `E_SEGMENT_PATCH` | spec | 10 | 帧工作台导出的段表 patch 不可读、格式不对或索引越界 | 确认 patch 是 cvs.segment-patch/v1 结构（patch 数组带合法 index），重新导出 |
 | `E_SHOT` | spec | 10 | E_SHOT：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_SIZE` | spec | 10 | 宽高非法 | 使用偶数正数 |
 | `E_SPEC` | spec | 10 | spec 结构不合法 | 按 issues[] 修正 |
@@ -113,6 +115,7 @@
 | `E_VERSION_UNKNOWN` | qa | 13 | 指定的版本快照不存在 | cvs history 查看可用版本 |
 | `E_AUDIO_NOT_FOUND` | env | 14 | --audio 文件不存在 | 检查路径 |
 | `E_AUDIO_REQUIRED` | env | 14 | 没有音轨且未显式豁免 | 装 Python numpy/scipy 自动合成，或传 --audio，或 --no-audio |
+| `E_DEMO_FAILED` | env | 14 | 演示片编译链失败（compile 返回非 0） | 看下方 compile 的 [error] 明细；python/ffmpeg 缺失会先报环境码 |
 | `E_JOB` | env | 14 | job 失败但没有 error.json（旧 job 或非编译失败） | 看 build.log 与 job.error |
 | `E_NO_FONT_LOCK` | env | 14 | 缺少 shared/fonts.lock.json 或与磁盘不一致 | node scripts/bundle-fonts.mjs --lock-only |
 | `E_SPAWN` | env | 127 | 子进程启动失败 | 检查脚本路径与权限 |
@@ -147,6 +150,7 @@
 | `E_DUP_ID` | ui | 2 | E_DUP_ID：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_DUP_ROW` | ui | 2 | E_DUP_ROW：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_EMPTY_EDL` | ingest | 15 | E_EMPTY_EDL：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
+| `E_EMPTY_UPLOAD` | preview | 0 | 上传的参考片为空 | 换一个有实际内容的文件 |
 | `E_FFMPEG` | ingest | 15 | E_FFMPEG：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_FFPROBE` | ingest | 15 | E_FFPROBE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_FFPROBE_JSON` | ingest | 15 | E_FFPROBE_JSON：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
@@ -154,10 +158,16 @@
 | `E_FRAME` | preview | 0 | 帧请求非法（越界/非整数） | 帧号取 0..frames-1 的整数 |
 | `E_INGEST` | ingest | 15 | E_INGEST：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_LOGO_MISSING` | brand | 10 | E_LOGO_MISSING：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
+| `E_NO_BOUNDARY` | preview | 0 | multipart 请求没有 boundary | 确认 Content-Type 为 multipart/form-data |
 | `E_NO_FFMPEG` | ingest | 15 | E_NO_FFMPEG：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_NO_FFPROBE` | ingest | 15 | E_NO_FFPROBE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
+| `E_NO_FILE_PART` | preview | 0 | multipart 里没有带 filename 的文件分段 | 用 fetch FormData 附加 File |
 | `E_PATH` | preview | 0 | 预览路径非法（穿越/隐藏目录） | 路径必须落在仓库根内 |
 | `E_PAYLOAD_TOO_LARGE` | preview | 413 | 反代请求体超过 1MB 上限（源头掐断，不向上游灌数据） | 缩小提交体：拆小 spec 或分次评论 |
+| `E_READ_ERROR` | preview | 0 | 读取上传数据出错（连接中断或超限已断） | 重试；大文件建议先裁剪 |
+| `E_REF_VIDEO_FAILED` | ingest | 15 | 参考片反推失败（CLI 退出非 0：读不了/解码错/python 或 ffmpeg 不可用） | 检查文件与编码；FFMPEG/PYTHON 可用环境变量覆盖 |
+| `E_REF_VIDEO_TYPE` | preview | 0 | 参考片扩展名不在接受清单（mp4/webm/mov/mkv） | 转成 mp4/webm 再传 |
+| `E_REF_VIDEO_UNPARSEABLE` | preview | 0 | 反推脚本输出不是合法 JSON | 重试或换短一点的参考片 |
 | `E_REF_VIDEO_UNREADABLE` | ingest | 15 | 参考片反推无法读取（路径不存在或 ffmpeg 不可用） | 检查文件路径；FFMPEG/FFPROBE/PYTHON 可用环境变量覆盖 |
 | `E_ROUTE` | preview | 0 | 未知帧 API 路由 | 见 app/frames/README.md 的 API 表 |
 | `E_SCRIPT_COVER` | ui | 2 | E_SCRIPT_COVER：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
@@ -167,8 +177,8 @@
 
 ## 覆盖情况
 
-- 代码中出现的 `E_*`：143
-- 已注册且被使用：143
+- 代码中出现的 `E_*`：153
+- 已注册且被使用：153
 - 未注册：0
 
 - 已注册但当前未使用：0

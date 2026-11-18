@@ -3,6 +3,28 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v3.4.0] - 2026-11-18 — 并行重试 · 向导参考片 · 文案回填 · golden 演示基线
+
+### cvs demo 并行与重试（R8-W1）
+- 批量模式 worker 池（异步 spawn）：`--concurrency <n>` 钳 ≤2（SwiftShader 软件光栅
+  饱和 CPU，与 render-farm cap 同口径），`--retries <n>` 对瞬时渲染失败整条重跑。
+- manifest 行新增 attempts / retried（如实报账，不静默）。
+
+### 向导演示集参考片上传（R8-W2）
+- 向导向 serve 新增 POST /api/analyze-ref：multipart 上传 → 落临时文件 → CLI 全链
+  反推 → 报告 JSON（带 boundary 双形态兼容、大小 400MB 闸、临时文件用完即清）。
+- UI：面板「有参考片？」——拖入/点选即分析，成功后一键套用主题（置信度低的如实
+  不套）、BPM、按结构拟合调时长（5–90s 且相差 ≥2s 才动），失败把错误原文摆出来。
+
+### frames 导出 copyPatch 文案回填（R8-W3）
+- exportSegments 的导出物新增 copyPatch 数组：分割后的片段各自回填标题
+  （原题 + 片段序号），下游重编译不再出现「同一行字每块都挂」。
+- compile --segment-patch 按 index 把 copyPatch 合并进轮记录的 style.copy
+  （真值通道）与 round 级 copy（兼容通道），缺省字段不动。
+
+### golden 位级基线扩展（R8-W4）
+- fixtures/golden/demo-skeleton/spec.json：以骨骼演示页为主风格的小夹具，
+  golden 自检实测入册（4 specs / 12 stills 相符）。
 ## [v3.3.0] - 2026-11-18 — 批量出片 · 编辑闭环 · 长片反推上限 · 向导演示集入口
 
 ### cvs demo all 批量出片

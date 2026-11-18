@@ -945,6 +945,49 @@
       "exit": 10,
       "meaning": "帧工作台导出的段表 patch 不可读、格式不对或索引越界",
       "action": "确认 patch 是 cvs.segment-patch/v1 结构（patch 数组带合法 index），重新导出"
+    },
+    "E_NO_BOUNDARY": {
+      "phase": "preview",
+      "exit": 0,
+      "meaning": "multipart 请求没有 boundary",
+      "action": "确认 Content-Type 为 multipart/form-data"
+    },
+    "E_REF_VIDEO_TYPE": {
+      "phase": "preview",
+      "exit": 0,
+      "meaning": "参考片扩展名不在接受清单（mp4/webm/mov/mkv）",
+      "action": "转成 mp4/webm 再传"
+    },
+    "E_EMPTY_UPLOAD": {
+      "phase": "preview",
+      "exit": 0,
+      "meaning": "上传的参考片为空",
+      "action": "换一个有实际内容的文件"
+    },
+    "E_NO_FILE_PART": {
+      "phase": "preview",
+      "exit": 0,
+      "meaning": "multipart 里没有带 filename 的文件分段",
+      "action": "用 fetch FormData 附加 File"
+    },
+    "E_REF_VIDEO_UNPARSEABLE": {
+      "phase": "preview",
+      "exit": 0,
+      "meaning": "反推脚本输出不是合法 JSON",
+      "action": "重试或换短一点的参考片"
+    },
+    "E_READ_ERROR": {
+      "phase": "preview",
+      "exit": 0,
+      "meaning": "读取上传数据出错（连接中断或超限已断）",
+      "action": "重试；大文件建议先裁剪"
+    },
+    "E_REF_VIDEO_FAILED": {
+      "phase": "ingest",
+      "exit": 15,
+      "auto": true,
+      "meaning": "参考片反推失败（CLI 退出非 0：读不了/解码错/python 或 ffmpeg 不可用）",
+      "action": "检查文件与编码；FFMPEG/PYTHON 可用环境变量覆盖"
     }
   }
 }

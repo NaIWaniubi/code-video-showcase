@@ -1055,19 +1055,35 @@ function exportSegments() {
   const m = state.meta;
   if (!m || !m.segments) { setStatus('没有可导出的段表', 'err'); return; }
   const original = m._originalSegments || null;
-  const patched = m.segments.map((seg, i) => {
+  const patched = [];
+  // 文案回填（R8-W3）：每段 title 与其轮 id 对齐——多片拆分后下游重编译
+  // 每个片段各自成卡，不再共用同一行标题（不然「想 / 看片？」出现在每一块上）。
+  const copyPatch = [];
+  for (let i = 0; i < m.segments.length; i++) {
+    const seg = m.segments[i];
     const base = original ? original[i] : null;
-    if (!base) return { index: i, ...seg };
-    // 只导出与原始不同的（新增的分割段 id 带 a/b 后缀，必不同）
-    const diff = JSON.stringify(base) !== JSON.stringify(seg);
-    return diff ? { index: i, ...seg } : null;
-  }).filter(Boolean);
+    if (!base || JSON.stringify(base) !== JSON.stringify(seg)) {
+      patched.push({ index: i, ...seg });
+      if (base && seg.copy && base.copy && JSON.stringify(base.copy) !== JSON.stringify(seg.copy)) {
+        copyPatch.push({ index: i, ...(seg.copy || {}) });
+      }
+    }
+    // splitAtPlayhead 把标题留在原始值上：导出时按片段序号回填一次，
+    // 保证多段各司其职（不覆盖用户后续真编辑过的文案）。
+    if (seg.id && /[ab]$/.test(String(seg.id)) && seg.copy && base &&
+        seg.copy.title === (base.copy && base.copy.title)) {
+      copyPatch.push({
+        index: i,
+        title: String((base.copy && base.copy.title) || '') + ' · 片段' + String(i + 1),
+      });
+    }
+  }
   const blob = new Blob([JSON.stringify({ schema: 'cvs.segment-patch/v1',
-    sourceFrames: m.frames, patch: patched }, null, 2)], { type: 'application/json' });
+    sourceFrames: m.frames, patch: patched, copyPatch }, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   triggerDownload(url, `spec-patch-${Date.now()}.json`);
   setTimeout(() => URL.revokeObjectURL(url), 4000);
-  setStatus(`已导出 ${patched.length} 条段记录 · 用 cvs build <spec> --segment-patch <patch.json> 套用`, 'ok');
+  setStatus(`已导出 ${patched.length} 条段记录${copyPatch.length ? ` + ${copyPatch.length} 条文案回填` : ''} · 用 cvs build --segment-patch 套用`, 'ok');
 }
 el.btnExportSegs.addEventListener('click', exportSegments);
 

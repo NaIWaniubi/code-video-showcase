@@ -114,3 +114,51 @@ test('segment-patch：坏 schema（缺 patch 数组）退 E_SEGMENT_PATCH exit 1
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
   }
 });
+
+// ── R8-W1：批量并行的 manifest 与重试字段 ──────────────────────
+test('demo all --concurrency 2：manifest 汇总 attempts（dry-run）', () => {
+  const r = spawnSync(process.execPath, [
+    path.join(ROOT, 'scripts/demo.mjs'), 'all', '--seconds', '4',
+    '--dry-run', '--concurrency', '2',
+  ], { cwd: ROOT, encoding: 'utf8', timeout: 300000 });
+  try {
+    assert.equal(r.status, 0, (r.stderr || '') + (r.stdout || ''));
+    const man = JSON.parse(fs.readFileSync(path.join(ROOT, 'out/demo-all/manifest.json'), 'utf8'));
+    assert.equal(man.rows.length, 6);
+    assert.equal(man.summary.total, 6);
+    assert.ok((man.summary.ok) >= 5, `至少 5 个成功：${JSON.stringify(man.summary)}`);
+    for (const row of man.rows) assert.ok(typeof row.attempts === 'number', '每行应带 attempts');
+  } finally {
+    try { fs.rmSync(path.join(ROOT, 'out/demo-all'), { recursive: true, force: true }); } catch { /* ignore */ }
+  }
+});
+
+// ── R8-W3：copyPatch 文案回填（帧工作台导出 → compile 合并） ───
+test('copyPatch：帧工作台导出的标题回填在 compile 标记中生效', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cvs-copypatch-'));
+  const specPath = path.join(dir, 'spec.json');
+  const spec = composeDemoSpec('skeleton');
+  fs.writeFileSync(specPath, JSON.stringify(spec));
+  // 只给 index + title（其余字段省略 = 不动），与 exportSegments 的输出同构。
+  const patchPath = path.join(dir, 'patch.json');
+  fs.writeFileSync(patchPath, JSON.stringify({
+    schema: 'cvs.segment-patch/v1',
+    sourceFrames: 180,
+    patch: [],
+    copyPatch: [{ index: 0, title: spec.rounds[0].style.copy.title + ' · 片段1' }],
+  }, null, 2));
+  const r = spawnSync(process.execPath, [
+    path.join(ROOT, 'bin/cvs.mjs'), 'build', specPath,
+    '--root', ROOT, '--outdir', path.join(dir, 'o'), '--dry-run',
+    '--segment-patch', patchPath,
+  ], { cwd: ROOT, encoding: 'utf8', timeout: 60000 });
+  try {
+    assert.equal(r.status, 0, (r.stderr || '') + (r.stdout || ''));
+    const out = String(r.stdout || '') + String(r.stderr || '');
+    assert.match(out, /copy-patch applied 1/, '应出现 copy-patch 应用标记');
+    assert.match(out, /titles:[^\n]*片段1/, '标记应含回填后的标题（片段1）');
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+  }
+});
+

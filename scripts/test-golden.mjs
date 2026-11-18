@@ -83,7 +83,7 @@ const manifest = readManifest(TMP_MANIFEST);
 test('manifest covers card/cyber/mixed with 3 stills each (9 total)', () => {
   assert(Array.isArray(manifest.specs), 'manifest.specs must be an array');
   const names = manifest.specs.map((s) => s.name);
-  assert(JSON.stringify(names) === JSON.stringify(['card', 'cyber', 'mixed']), `unexpected spec names: ${JSON.stringify(names)}`);
+  assert(JSON.stringify(names) === JSON.stringify(['card', 'cyber', 'demo-skeleton', 'mixed']), `unexpected spec names: ${JSON.stringify(names)}`);
   let count = 0;
   for (const s of manifest.specs) {
     assert(Array.isArray(s.stills) && s.stills.length === 3, `${s.name}: expected 3 stills, got ${s.stills?.length}`);

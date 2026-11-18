@@ -19,6 +19,8 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import os from 'node:os';
+import { spawnSync } from 'node:child_process';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', '..');
@@ -138,7 +140,77 @@ function readBrowserTimeline(filePath) {
   return TIMELINE_SHIM + src;
 }
 
+// R8-W2：参考片反推端点（multipart 上传 → CLI 全链分析 → 报告 JSON）。
+// 为什么要有：反推引擎要 Node+ffmpeg，浏览器跑不动；向导把这层当服务端助手。
+const ALLOWED_VIDEO_EXT = new Set(".mp4 .webm .mov .mkv".split(" "));
+function analyzeRefVideo(req, res, bodyBuf) {
+  const ct = String(req.headers["content-type"] || "");
+  // 两种写法都要认：浏览器发边界带引号，curl 可能不带。
+  const bm = ct.match(/boundary=(?:"([^"]+)"|([^;]+))/);
+  if (!bm) { send(res, 400, JSON.stringify({ ok: false, error: "E_NO_BOUNDARY" })); return; }
+  const boundary = (bm[1] || bm[2]).trim();
+  const sep = Buffer.from("--" + boundary);
+  const HEND = Buffer.from("\r\n\r\n");
+  // 从 0 开始找：首段分隔符就贴在请求体开头（curl/浏览器的边界都带前导 --）。
+  let idx = bodyBuf.indexOf(sep);
+  while (idx >= 0) {
+    const headerEnd = bodyBuf.indexOf(HEND, idx + sep.length);
+    if (headerEnd < 0) break;
+    const headText = bodyBuf.slice(idx + sep.length + 2, headerEnd).toString("utf8");
+    if (/name=/.test(headText)) {
+      const fnMatch = headText.match(/filename="([^"]*)"/);
+      const raw = fnMatch ? fnMatch[1] : "";
+      const bs = String.fromCharCode(92);
+      let base = raw.split("/").pop() || raw;
+      if (base.includes(bs)) base = base.split(bs).pop() || base;
+      const ext = base.includes(".") ? base.slice(base.lastIndexOf(".")).toLowerCase() : "";
+      if (!base || !ALLOWED_VIDEO_EXT.has(ext)) {
+        send(res, 415, JSON.stringify({ ok: false, error: "E_REF_VIDEO_TYPE",
+          message: "不支持的参考片格式 " + (ext || "(无扩展名)") + "; 接受 mp4|webm|mov|mkv" }));
+        return;
+      }
+      const dataStart = headerEnd + 4;
+      const nextIdx = bodyBuf.indexOf(sep, dataStart);
+      const dataEnd = nextIdx >= 0 ? nextIdx - 2 : bodyBuf.length;
+      if (dataEnd <= dataStart) { send(res, 400, JSON.stringify({ ok: false, error: "E_EMPTY_UPLOAD" })); return; }
+      const tmpPath = path.join(os.tmpdir(), "cvs-ref-" + process.pid + "-" + Date.now() + ext);
+      fs.writeFileSync(tmpPath, bodyBuf.slice(dataStart, dataEnd));
+      const r = spawnSync(process.execPath, [
+        path.join(ROOT, "scripts/ref-video.mjs"), "--video", tmpPath, "--json",
+      ], { encoding: "utf8", timeout: 600000, maxBuffer: 32 * 1024 * 1024 });
+      try { fs.rmSync(tmpPath, { force: true }); } catch { /* 尽力清理 */ }
+      if (r.status !== 0 || !r.stdout || !r.stdout.trim()) {
+        const line = String(r.stderr || r.stdout || "").trim().split("/\r?\n/").pop() || "";
+        send(res, 500, JSON.stringify({ ok: false, error: "E_REF_VIDEO_FAILED", message: line.slice(0, 200) }));
+        return;
+      }
+      try {
+        const report = JSON.parse(r.stdout.trim().split("/\r?\n/").filter((l) => l.trim()).pop());
+        send(res, 200, JSON.stringify(report), { "Content-Type": "application/json; charset=utf-8" });
+      } catch (e) {
+        send(res, 500, JSON.stringify({ ok: false, error: "E_REF_VIDEO_UNPARSEABLE", message: String(e.message).slice(0, 120) }));
+      }
+      return;
+    }
+    idx = bodyBuf.indexOf(sep, idx + sep.length);
+  }
+  send(res, 400, JSON.stringify({ ok: false, error: "E_NO_FILE_PART" }));
+}
+
 const server = http.createServer((req, res) => {
+  // R8-W2：POST /api/analyze-ref —— 参考片反推（multipart 上传）。
+  if (req.method === 'POST' && new URL(req.url, 'http://localhost').pathname === '/api/analyze-ref') {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > 400 * 1024 * 1024) { send(res, 413, JSON.stringify({ ok: false, error: 'E_BODY_TOO_LARGE', message: '参考片最大 400MB' })); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => { analyzeRefVideo(req, res, Buffer.concat(chunks)); });
+    req.on('error', () => { try { send(res, 400, JSON.stringify({ ok: false, error: 'E_READ_ERROR' })); } catch { /* 已销毁 */ } });
+    return;
+  }
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     send(res, 405, 'Method Not Allowed\n', { 'Content-Type': 'text/plain; charset=utf-8', Allow: 'GET, HEAD' });
     return;

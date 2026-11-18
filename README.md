@@ -21,6 +21,7 @@ An Agent Skill for producing 30–90 s "style showcase" films: an 8 s opening, e
 **v3.0 flagship（断层领先三件套）**
 
 - **参考片反推 `cvs ref video demo.mp4`**：拖一条成片进来 → 结构模型 + BPM 自相关 + k-means 主题匹配 → 可直接 `--apply` patch 进你的 spec。启发式结果带 confidence/残差/notes，不假装精确。
+- **导演演示集 + 一键出片（v3.2–v3.4）**：白模线框 / 骨骼动画 / L-system 分形 / 弹道喷泉 / 等高线测绘 / 网络脉冲六个闭式确定引擎；`cvs demo <style>` 出单片、`cvs demo all --concurrency/--retries` 批量（manifest 如实报账）；向导向可拖入参考片一键套用主题/BPM/时长；golden 位级基线含 demo-skeleton。
 - **旁白声道**：spec 里给文案行，编译时自动语音合成（piper 优先）+ sidechain 闪避混音 + 词级时间戳，配音不再需要外部 DAW。
 - **程序化生成画面引擎**：种子化流场群游 / 轨道环系 / 脉冲波 / 弹跳字——全部 (t, seed) 纯函数，逐帧确定性不破例。
 - **第 21 画风 `generative`**：已注册为正式配方页（recipe-generative.html），向导可选、combos 矩阵 17×21 同步。

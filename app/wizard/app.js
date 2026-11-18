@@ -1043,6 +1043,33 @@ function fatal(message) {
   }
 }
 
+/** 套用反推报告进向导状态：主题（+强调色）、可选时长、结构信息。 */
+function applyReferenceVideo(report) {
+  const v = report.visual && report.visual.theme;
+  if (!v || !v.id) return;
+  state.theme = v.id;
+  if (v.accentOverride && v.accentOverride.accent) state.accent = v.accentOverride.accent;
+  const total = report.structure && Number(report.structure.totalDuration);
+  if (Number.isFinite(total) && total >= 5 && total <= 90) {
+    const secs = Math.round(total);
+    if (Math.abs(secs - state.duration) >= 2) state.duration = secs;
+  }
+  state.reference = {
+    kind: 'video',
+    theme: v.id,
+    confidence: v.confidence,
+    runnerUp: v.runnerUp,
+    bpm: (report.tempo && report.tempo.bpm) || null,
+    residual: report.structure ? report.structure.residualVsSource : null,
+    at: new Date().toISOString(),
+  };
+  setModeCustom();
+  renderCustom();
+  renderPresets();
+  renderDemoSet();
+  generateNow();
+}
+
 function bindEvents() {
   const toggle = $('#custom-toggle');
   const panel = $('#custom-panel');
@@ -1135,6 +1162,55 @@ function bindEvents() {
       refDrop.style.borderColor = 'rgba(255,255,255,.22)';
     });
     
+  // R8-W2：参考片反推入口——POST 到本机向导服务端 /api/analyze-ref（CLI 全链）。
+  const refvDrop = $('#refv-drop');
+  const refvInput = $('#refv-input');
+  if (refvDrop && refvInput) {
+    const stat = () => $('#refv-status');
+    const submit = async (f) => {
+      if (!f) return;
+      const st = stat();
+      if (!st) return;
+      st.textContent = '分析中（长片会更久）…';
+      const fd = new FormData();
+      fd.append('file', f, f.name || 'reference.mp4');
+      let res, j = null;
+      try { res = await fetch('/api/analyze-ref', { method: 'POST', body: fd }); }
+      catch (e) { st.textContent = '上传失败：' + e.message; return; }
+      try { j = await res.json(); } catch { /* 非 JSON */ }
+      if (!res.ok || !j || !j.ok) {
+        st.textContent = '分析失败：' + ((j && (j.message || j.error)) || ('HTTP ' + res.status));
+        return;
+      }
+      applyReferenceVideo(j);
+      const v = j.visual && j.visual.theme;
+      const t = j.tempo || {};
+      st.textContent = (v
+        ? `已套用「${v.name}」主题（${Math.round(v.confidence * 100)}%）；BPM ${t.bpm != null ? t.bpm : '不可用'}`
+        : '反推未给出主题（置信度过低），未套用') +
+        (j.structure && j.structure.totalDuration
+          ? `；结构拟合 ${j.structure.totalDuration}s（残差 ${j.structure.residualVsSource}s）` : '');
+      if (j.notes && j.notes.length) st.textContent += ' · ' + j.notes[0];
+    };
+    refvDrop.addEventListener('click', () => { refvInput.click(); });
+    refvDrop.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); refvInput.click(); }
+    });
+    refvDrop.addEventListener('dragover', (e) => { e.preventDefault(); refvDrop.style.borderColor = '#d97757'; });
+    refvDrop.addEventListener('dragleave', () => { refvDrop.style.borderColor = 'rgba(255,255,255,.22)'; });
+    refvDrop.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      refvDrop.style.borderColor = 'rgba(255,255,255,.22)';
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) await submit(f);
+    });
+    refvInput.addEventListener('change', async () => {
+      const f = refvInput.files && refvInput.files[0];
+      if (f) await submit(f);
+      refvInput.value = '';
+    });
+  }
+
   const kindSearchInput = document.querySelector('#kind-search');
   if (kindSearchInput) {
     kindSearchInput.addEventListener('input', () => {

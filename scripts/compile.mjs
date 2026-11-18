@@ -215,7 +215,35 @@ if (args['segment-patch']) {
   }
   raw.rounds = origRounds;
   console.error(`[patch]   segment-patch applied ${applied} round record(s) from ${pf}`);
+  // R8-W3：copyPatch —— 帧工作台回填的文案按 index 深合并进对应轮的 copy/card。
+  if (Array.isArray(pdoc.copyPatch)) {
+    let copyApplied = 0;
+    for (const rec of pdoc.copyPatch) {
+      const idx = Number(rec.index);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= origRounds.length) continue;
+      const dst = origRounds[idx];
+      // 文案的真值在 rounds[i].style.copy（渲染器按轮下发 ?vars=）；
+      // 同时保留 round 级 copy 作为兼容通道。
+      if (rec.title != null || rec.subtitle != null) {
+        const nextCopy = { ...(dst.style && dst.style.copy) || {}, ...(dst.copy || {}),
+          title: rec.title ?? dst.copy?.title, subtitle: rec.subtitle ?? dst.copy?.subtitle };
+        dst.copy = nextCopy;
+        if (dst.style && typeof dst.style === 'object') {
+          dst.style = { ...dst.style, copy: nextCopy };
+        }
+      }
+      if (rec.first != null || rec.keyword != null) {
+        dst.card = { ...(dst.card || {}), first: rec.first ?? dst.card?.first,
+                     keyword: rec.keyword ?? dst.card?.keyword };
+      }
+      copyApplied++;
+    }
+    const titles = origRounds.map((r) => ((r.style && r.style.copy && r.style.copy.title)
+      || (r.copy && r.copy.title) || null)).filter(Boolean);
+    console.error(`[patch]   copy-patch applied ${copyApplied} round record(s); titles: ${titles.join(' ﾷ ')}`);
+  }
 }
+
 
 // CLI 转场开关（v2.5）覆盖 spec.render，且必须在校验/建 plan 之前注入，
 // 这样时长/帧数/字幕偏移才会跟着转场一起算。--transition none 显式关闭。

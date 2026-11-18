@@ -61,6 +61,21 @@
           </div>
         </section>
 
+        <!-- R8-W2：参考片反推入口（服务端分析，回填主题/BPM/时长） -->
+        <section class="panel" aria-labelledby="refv-title">
+          <div class="panel-head">
+            <h2 id="refv-title">有参考片？</h2>
+            <span class="hint">结构 / BPM / 主题反推 · 服务端分析 · 启发式结论带置信度</span>
+          </div>
+          <div id="refv-drop" role="button" tabindex="0" aria-label="拖入或选择一支参考片（mp4/webm/mov/mkv），反推后套用"
+               style="display:flex;gap:14px;align-items:center;padding:14px;border:1px dashed rgba(255,255,255,.22);border-radius:12px;cursor:pointer">
+            <div style="flex:1;min-width:0">
+              <p id="refv-status" style="margin:0">拖入或点击选择一支参考片（MP4/WebM 等）。反推给出主题、BPM 与结构草案，可一键套用到右侧 spec。</p>
+            </div>
+            <input id="refv-input" type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.mp4,.webm,.mov,.mkv" hidden />
+          </div>
+        </section>
+
         <section class="panel" aria-labelledby="presets-title">
           <div class="panel-head">
             <h2 id="presets-title">8 组推荐组合</h2>

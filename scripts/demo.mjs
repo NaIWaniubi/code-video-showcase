@@ -14,14 +14,15 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseStrict, rejectUnknown } from './lib/strict-flags.mjs';
 import { composeDemoSpec } from './lib/demo-spec.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROG = 'node scripts/demo.mjs';
-const KNOWN = new Set(['style', 'seconds', 'theme', 'outdir', 'platform', 'dry-run', 'json', 'help']);
+const KNOWN = new Set(['style', 'seconds', 'theme', 'outdir', 'platform', 'dry-run',
+  'json', 'concurrency', 'retries', 'help']);
 const argv = process.argv.slice(2);
 const positional = argv.filter((a) => !String(a).startsWith('--'));
 const { args, unknown } = parseStrict(argv, KNOWN);
@@ -29,33 +30,53 @@ if (unknown.length) rejectUnknown(PROG, unknown, KNOWN);
 
 // `all`：导演演示集六件（不带常规风格——那是 combos 矩阵的事，演示集才有现场感）。
 const DEMO_SET = ['wireframe', 'skeleton', 'fractal', 'firework', 'terrain', 'network'];
-/** 对单个风格跑一遍「组合→写 spec→compile」，返回结果行。 */
-function runOne(styleId) {
+/** 对单个风格跑一遍「组合→写 spec→compile」，可重试，返回结果行。 */
+async function runOne(styleId, { retryCount = 0 } = {}) {
   const seconds = Number(args.seconds || 6);
   let spec;
   try { spec = composeDemoSpec(styleId, { seconds, theme: args.theme || null }); }
   catch (e) {
     return { style: styleId, ok: false, error: e.code || 'E_UNKNOWN_STYLE',
-             message: String(e.message), seconds: 0 };
+             message: String(e.message), attempts: 0 };
   }
   const outDir = path.resolve(process.cwd(), path.join('out', `demo-${styleId}`));
   fs.mkdirSync(outDir, { recursive: true });
   const specPath = path.join(outDir, 'project.spec.json');
-  fs.writeFileSync(specPath, JSON.stringify(spec, null, 2) + '\n');
-
+  fs.writeFileSync(specPath, JSON.stringify(spec, null, 2) + "\n");
   const extra = [];
-  if (args.platform && styleId === positional[0]) extra.push('--platform', String(args.platform));
+  if (args.platform && styles.length === 1 && String(positional[0]) === styleId) {
+    extra.push('--platform', String(args.platform));
+  }
   if (args['dry-run']) extra.push('--dry-run');
-  const r = spawnSync(process.execPath, [
-    path.join(ROOT, 'bin/cvs.mjs'), 'build', specPath,
-    '--root', ROOT, '--outdir', outDir, ...extra,
-  ], { cwd: ROOT, stdio: 'inherit' });
+
+  let attempt = 0;
+  let lastCode = 0;
+  for (;;) {
+    attempt++;
+    lastCode = await runCompile(specPath, outDir, extra);
+    if (lastCode === 0 || attempt > retryCount) break;
+    console.error(`[demo]    ${styleId} 第 ${attempt} 次失败，重试中…`);
+  }
+  const ok = lastCode === 0;
   return {
-    style: styleId, ok: r.status === 0, exitCode: r.status ?? null,
+    style: styleId, ok, exitCode: ok ? 0 : lastCode,
+    attempts: attempt, retried: attempt > 1,
     seconds: spec.format.duration, theme: spec.look.theme,
     outDir: path.relative(process.cwd(), outDir),
-    master: r.status === 0 ? 'master.mp4' : null,
+    master: ok ? 'master.mp4' : null,
   };
+}
+
+/** compile 的异步包装：stdio inherit 透传，退出码 resolve。 */
+function runCompile(specPath, outDir, extra) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [
+      path.join(ROOT, 'bin/cvs.mjs'), 'build', specPath,
+      '--root', ROOT, '--outdir', outDir, ...extra,
+    ], { cwd: ROOT, stdio: 'inherit' });
+    child.on('exit', (code) => resolve(code ?? 1));
+    child.on('error', () => resolve(1));
+  });
 }
 
 if (args.help || !positional.length) {
@@ -69,6 +90,10 @@ if (args.help || !positional.length) {
   --platform <id>       also encode delivery copy (gif/webm/mp3/… or mp4 presets;
                         仅单风格生效)
   --dry-run             validate + plan only (no render)
+  --concurrency <n>     parallel renders in batch mode (default 1, clamped to 2 —
+                        SwiftShader software raster saturates CPU beyond that)
+  --retries <n>         retry failed renders once (default 0; transient CDP timeouts
+                        are the usual cause)
   --json                one-line JSON on stdout, human text to stderr`);
   process.exit(args.help ? 0 : 2);
 }
@@ -78,11 +103,30 @@ const styles = requested === 'all' ? DEMO_SET : [requested];
 
 console.error(`[demo]    ${styles.length === 1 ? `style=${styles[0]}` : `batch=${styles.length} styles (${styles.join(', ')})`}`);
 
+// ── 执行：顺序或有限并行 ────────────────────────────────────
+// 并发钳制 ≤2：SwiftShader 软件光栅下每路渲染都吃满 CPU，
+// 再高只会互相拖慢（与 render-farm 的 cap 同口径，见其注释）。
+let conc = Math.max(1, Math.min(2, Number(args.concurrency || 1)));
+const retryCount = Number(args.retries || 0);
+
 const rows = [];
-for (const s of styles) {
-  console.error(`[demo]    ── ${s} ──`);
-  rows.push(runOne(s));
-  // dry-run/批量时不因单个失败中断：全部跑完再汇总（如实报，不静默吞）
+if (styles.length === 1 || conc <= 1) {
+  for (const s of styles) {
+    console.error(`[demo]    ── ${s} ──`);
+    rows.push(await runOne(s, { retryCount }));
+  }
+} else {
+  console.error(`[demo]    batch concurrency=${conc}`);
+  let nextIdx = 0;
+  const workers = Array.from({ length: conc }, async () => {
+    while (nextIdx < styles.length) {
+      const s = styles[nextIdx++];
+      console.error(`[demo]    ── ${s} ──`);
+      rows.push(await runOne(s, { retryCount }));
+    }
+  });
+  await Promise.all(workers);
+  rows.sort((a, b) => styles.indexOf(a.style) - styles.indexOf(b.style));
 }
 
 // all 模式：manifest.json 汇总每个风格的成败
