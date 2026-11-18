@@ -52,7 +52,8 @@ const run = (label, script, extraEnv = {}) => {
   const t0 = Date.now();
   // script 是 ['scripts/x.mjs', '--check']——不能整体 path.join（flag 会被拼进路径）。
 const r = spawnSync(process.execPath,
-    [path.join(ROOT, script[0]), ...script.slice(1)],
+    // 绝对路径脚本（fixture-lint）直接使用；相对路径按 ROOT 解析
+    [path.isAbsolute(script[0]) ? script[0] : path.join(ROOT, script[0]), ...script.slice(1)],
     { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...extraEnv },
       timeout: 15 * 60 * 1000 });
   checks.push({
@@ -68,6 +69,9 @@ run('doctor', ['scripts/doctor.mjs']);
 run('errors-registry', ['scripts/errors.mjs', '--check']);
 run('combos-matrix', ['scripts/build-combos.mjs', '--check']);
 run('golden-selfcheck', ['scripts/golden.mjs']);
+// R12-W3：golden 与 fixture 的黄金样例双检（矩阵里的最小可编译样片）
+run('fixture-lint',
+  [path.join(ROOT, 'scripts/spec-lint.mjs'), '--spec', path.join(ROOT, 'fixtures/mini-41s/spec.json'), '--root', ROOT]);
 
 // ── 汇总 ─────────────────────────────────────────────────────
 const failed = checks.filter((c) => !c.ok);

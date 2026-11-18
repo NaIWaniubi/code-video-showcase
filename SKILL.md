@@ -1,6 +1,6 @@
 ---
 name: code-video-showcase
-version: 3.7.0   # 与 package.json 同值（test-version-sync 钉死）
+version: 3.8.0   # 与 package.json 同值（test-version-sync 钉死）
 description: |
   用纯代码（HTML/Canvas/SVG/Three.js 逐帧渲染 + Python numpy/scipy 合成配乐 + FFmpeg 合成）制作 30–90 秒卡点风格展示视频的完整技能。
   适用于：复刻/仿制《Opus 5.5 视频风格展示》或 DeepSeek V4.1-Flash 61s 风格样片、多风格切换卡点视频、纯代码视频、程序化视频；要求不使用任何视频/图像/音乐生成模型。
@@ -113,6 +113,9 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
   v3.7：`ship --check` 打包前先跑双闸（未过拒打包，`--force` 可强出）；新增 `cvs health`
   一键全身体检（doctor+错误码矩阵+golden 位级基线，出健康 JSON）；参考反推 top-3 主题
   候选做成可点小色块；SKILL/package/CLI/CHANGELOG 四方版本号由钉子锁死同步。
+  v3.8：ship 交付包自带 QA 报告（--check 时质检结论入库，接收方免重跑）；
+  `cvs build --ref-patch <反推补丁>` 把参考片结论（主题/BPM/结构）直接并入再编译；
+  health 增至五项（+fixture lint）。
   
 - **派生导出格式（v3.1）**：`--platform webm|gif|mp3` 从 master/音轨直接转码（不经 shell 的 mp4+AAC 链），交付清单按扩展名入列。覆盖矩阵单一真值 `docs/COVERAGE.md`。
 - **禁止**：让 LLM 直接生成 HTML/CSS/JS，或绕过 spec 直接改像素。模型只填枚举与文案。

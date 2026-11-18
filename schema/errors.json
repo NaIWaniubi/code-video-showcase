@@ -994,6 +994,12 @@
       "exit": 2,
       "meaning": "--only 里的演示风格名不在导演演示集六件内",
       "action": "用 wireframe|skeleton|fractal|firework|terrain|network 之一"
+    },
+    "E_REF_PATCH": {
+      "phase": "spec",
+      "exit": 10,
+      "meaning": "参考片反推 patch 不可读、缺 specPatch 或结构冲突",
+      "action": "用 `cvs ref video <片> --apply <spec>` 生成合规补丁；结构不一致会被 E_DURATION 如实拦下"
     }
   }
 }

@@ -3,6 +3,29 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v3.8.0] - 2026-11-18 — QA 报告入包 · --ref-patch · health 五项
+
+### R12-W1 ship --check 的 QA 报告入库
+- 预检通过后，`out/qa/qa-video.json` 与 `out/qa/qa-audio.json` 随包交付——
+  接收方不重跑质检就能看到当时的结论（包内 qa-reports/ 目录）。
+
+### R12-W2 cvs build --ref-patch
+- 参考片反推的 specPatch 可直接喂给编译器：`build <spec> --ref-patch <report.json>`，
+  并入 look.theme / audio.bpm / structure 草案；与 segment-patch 正交（一个改意图、
+  一个改轮记录）；结构冲突由既有 E_DURATION 如实拦下。
+- 实测：合法补丁 applied look.theme 生效；缺 specPatch 的坏档 E_REF_PATCH exit 10。
+
+### R12-W3 health 增至五项
+- fixture-lint 步加入（fixtures/mini-41s spec-lint）：黄金样例与位级基线同查。
+- 实测 5/5 全绿（含 golden selfcheck 约 150s）。
+
+### 工程面
+- 错误码 154→155（E_REF_PATCH）覆盖 100%；实施中自查堵掉两处 path.join 对绝对路径
+  的拼接坑（spawn 脚本路径与 flag 混拼）。
+
+### 门禁（本波）
+health 5/5 · version-sync 3/3 · errors 155 覆盖 100% · test:all 全量见提交记录。
+
 ## [v3.7.0] - 2026-11-18 — ship --check · cvs health · 主题候选可视化 · 版本一致性钉子
 
 ### R11-W1 ship --check：打包前质检

@@ -49,6 +49,7 @@ const CLI_VERSION = (() => {
 // 「已按交付态 strict 验收」就成了写进结论的假阳性。现在一律 exit 2 + 指名。
 const KNOWN_FLAGS = new Set(['spec', 'root', 'outdir', 'master', 'audio', 'no-audio', 'platform',
   'segment-patch',
+  'ref-patch',
   'concurrency', 'no-cache', 'no-resume', 'no-qa', 'no-strict', 'deliver', 'no-deliver',
   'strict', 'burn-subtitles', 'cover', 'transition', 'transition-duration', 'dry-run', 'print',
   'json', 'help']);
@@ -244,6 +245,35 @@ if (args['segment-patch']) {
   }
 }
 
+
+// ── 1.6 参考片反推 patch（R12-W2）：cvs ref video 的 --apply 产物直接喂给编译器 ──────
+// 与 segment-patch 正交：本补丁改「设计意图」（主题/BPM/时长/结构草案），不改轮记录；
+// 轮记录若与结构冲突（如轮数对不上新 structure.rounds），由既有 E_DURATION 如实拦下。
+if (args['ref-patch']) {
+  const rf = path.resolve(String(args['ref-patch']));
+  let rdoc;
+  try { rdoc = JSON.parse(fs.readFileSync(rf, 'utf8')); }
+  catch (e) { fail('spec', 'E_REF_PATCH', `cannot read ref patch ${rf}: ${e.message}`); }
+  const sp = rdoc.specPatch;
+  if (!sp || typeof sp !== 'object' || Array.isArray(sp)) {
+    fail('spec', 'E_REF_PATCH', `${rf} 不是参考片反推报告（缺 specPatch 对象）`);
+  }
+  let applied = [];
+  if (sp.look && sp.look.theme) { raw.look = { ...(raw.look || {}), theme: String(sp.look.theme) }; applied.push('look.theme'); }
+  if (sp.audio && sp.audio.bpm != null) { raw.audio = { ...(raw.audio || {}), bpm: Number(sp.audio.bpm) }; applied.push('audio.bpm'); }
+  if (sp.structure && typeof sp.structure === 'object') {
+    // 只接受反推报告里出现的键；rounds 由调用方配合轮记录自洽（不一致会被 E_DURATION 拦）
+    const st = {};
+    for (const k of ['opening', 'rounds', 'card', 'moreCard', 'ending']) {
+      if (sp.structure[k] != null) st[k] = sp.structure[k];
+    }
+    if (Object.keys(st).length) {
+      raw.structure = { ...(raw.structure || {}), ...st };
+      applied.push(`structure(${Object.keys(st).join('/')})`);
+    }
+  }
+  console.error(`[refpatch] applied ${applied.join(', ')} from ${path.basename(rf)}`);
+}
 
 // CLI 转场开关（v2.5）覆盖 spec.render，且必须在校验/建 plan 之前注入，
 // 这样时长/帧数/字幕偏移才会跟着转场一起算。--transition none 显式关闭。

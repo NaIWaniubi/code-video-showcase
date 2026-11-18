@@ -89,6 +89,11 @@ if (args.check && files.has(`${stem}/master/master.mp4`) && !args.force) {
     process.exit(13);
   }
   console.error('[ship]  ✓ 预检通过');
+  // R12-W1：QA 报告一并入库——交付包自带质检凭据，接收方不用重跑就能看到当时的结论
+  for (const qname of ['qa/qa-video.json', 'qa/qa-audio.json']) {
+    const qpath = path.join(deliverableDir, '..', qname);
+    if (fs.existsSync(qpath)) files.set(`${stem}/qa-reports/${qname.split('/').pop()}`, fs.readFileSync(qpath));
+  }
 }
 // ── 自生成 README ──────────────────────────────────────────
 const title = String(raw.meta?.title || raw.meta?.name || stem);
