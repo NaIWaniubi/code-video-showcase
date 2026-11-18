@@ -76,6 +76,9 @@ const state = {
   poll: 0,
   stats: { delivered: [], failures: [] },
   range: { in: null, out: null, on: false },
+  // R15-W3/W4：agent 建议层——ruler 上的建议切点（GET /frames/api/suggestions）
+  suggestCuts: [],        // [{frame, after, before, kind}]
+  suggestSpec: null,
   // R5-W7：段级编辑历史（EditStack：分割 → 撤销）。只作用于内存中的段表；
   // 成片不变——从工作台导出 spec 后再编译。
   editStack: new EditStack(),
@@ -671,6 +674,74 @@ function buildRuler() {
     b.addEventListener('click', () => { stopPlay(); show(seg.startFrame); });
     el.ruler.append(b);
   }
+
+  // R15-W3：建议切点以虚线叠加，点击即套用分割（纯核 splitSegmentAt 所为）
+  for (const cut of state.suggestCuts) {
+    if (!(cut.frame > 0 && cut.frame < m.frames)) continue;
+    const mk = document.createElement('span');
+    mk.className = 'cutmark';
+    mk.style.left = `${(cut.frame / m.frames) * 100}%`;
+    mk.title = `建议切点 · ${cut.at}s（${cut.after} → ${cut.before}）· 点击套用分割`;
+    mk.textContent = '│';
+    mk.setAttribute('role', 'button');
+    mk.setAttribute('tabindex', '0');
+    mk.addEventListener('click', () => applyCutAt(cut));
+    mk.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); applyCutAt(cut); }
+    });
+    el.ruler.append(mk);
+  }
+}
+
+/** R15-W4：`[` / `]` 逐段跳（前一段末尾 / 后一段开头）。 */
+function jumpSegment(dir) {
+  const m = state.meta;
+  if (!m || !m.segments) return;
+  const n = m.segments.length;
+  if (!n) return;
+  let idx = m.segments.findIndex((s) => state.n >= s.startFrame && state.n < s.endFrame);
+  if (idx < 0) idx = dir > 0 ? -1 : n;
+  const next = Math.max(0, Math.min(n - 1, idx + dir));
+  show(m.segments[next].startFrame);
+  setStatus(`段 ${m.segments[next].id} · 帧 ${m.segments[next].startFrame}`, 'ok');
+}
+
+/** 在建议帧处套用户可见地分割当前段表（内存级，操作与手动分割同一纯核）。 */
+function applyCutAt(cut) {
+  const m = state.meta;
+  if (!m || !m.segments) { setStatus('没有段表，无法套用', 'err'); return; }
+  // 建议切点天然落在段边界上，而分割核拒绝边界帧——向切点两侧各找一格，
+  // 取第一个能落地的分割（±2 内必有落点；极短段如实报原因）。
+  let res = null;
+  let landed = cut.frame;
+  for (const d of [0, -1, 1, -2, 2]) {
+    const f = cut.frame + d;
+    if (!(f > 1 && f < m.frames - 1)) continue;
+    const r = splitSegmentAt(m.segments, f, m.fps);
+    if (r.ok) { res = r; landed = f; break; }
+  }
+  if (!res) {
+    setStatus(`建议切点 @${cut.at}s 附近无可分割帧（段太短或越界）`, 'warn');
+    return;
+  }
+  state.editStack.push(m.segments);
+  m.segments = res.segments;
+  buildRuler();
+  markStrip();
+  updateHud();
+  updateEditButtons();
+  renderSegList();
+  rebuildStrip(landed);        // R15-W4：立即重建胶片条——所见即所得
+  setStatus(`已套用建议切点 @${cut.at}s（帧 ${landed}）→ ${res.segments.map((x) => x.id).slice(-2).join(' + ')}`, 'ok');
+}
+
+/** 胶片条重建（R15-W4）：编辑/套用后当前帧的缩略图必须即时刷新。 */
+function rebuildStrip(center) {
+  state.stripRange = null;
+  state.stripToken++;
+  clearTimeout(state.stripTimer);
+  state.stripTimer = 0;
+  buildStrip(center || state.n);
 }
 
 // ── 源信息 / 最近产物 ───────────────────────────────────────────────────────
@@ -692,6 +763,24 @@ function splitAtPlayhead() {
   updateHud();
   updateEditButtons();
   setStatus(`已分割 → ${res.segments.map((x) => x.id).join(' + ')}`, 'ok');
+
+  rebuildStrip(state.n);          // R15-W4：分割后胶片条即时刷新
+}
+
+/** R15-W4：撤销最近一次段编辑（EditStack 快照语义，ruler/胶片条/HUD 全同步）。 */
+function undoEdit() {
+  const m = state.meta;
+  if (!m || !m.segments) { setStatus('没有可撤销的编辑', 'warn'); return; }
+  if (!state.editStack.size) { setStatus('没有可撤销的编辑', 'warn'); return; }
+  const snap = state.editStack.pop();
+  m.segments = snap;
+  buildRuler();
+  markStrip();
+  updateHud();
+  updateEditButtons();
+  rebuildStrip(state.n);            // R15-W4：撤销后胶片条即时刷新——所见即所得
+  renderSegList();
+  setStatus(`已撤销 → ${snap.length} 段`, 'ok');
 }
 
 /** 编辑按钮可用态：仅 live（spec/plan）源且至少一段可分时可用。 */
@@ -829,6 +918,9 @@ function clearSource() {
   state.live = { url: null, pendingUrl: null, ready: false, token: state.live.token + 1, ms: 0, renders: 0, active: null, segId: null, prefetchQueue: [], prefetching: false };
   // R3-审计（RT-02 F2）：A-B 循环区间以前不重置，换源后新片被锁进旧区间。
   state.range = { in: null, out: null, on: false };
+  // R15-W3：换源后旧源的建议切点必须清掉，否则会叠加到新片的 ruler 上。
+  state.suggestCuts = [];
+  state.suggestSpec = null;
   state.editStack = new EditStack();
   el.rangebar.hidden = true;
   el.ruler.hidden = true;
@@ -838,6 +930,25 @@ function clearSource() {
   el.stageWrap.classList.add('no-source');
   setControlsEnabled(false);
   setStageMsg('');
+}
+
+/** 拉取 agent 建议层：spec → 建议切点（秒转帧）。失败不打扰主流程（如实写状态行）。 */
+async function fetchSuggestions(specPath) {
+  if (!specPath) return;
+  try {
+    const res = await api(`/frames/api/suggestions?spec=${encodeURIComponent(specPath)}`, { timeoutMs: 15000 });
+    if (res && res.ok) {
+      state.suggestCuts = (res.cuts || []).map((c) => ({
+        frame: Math.round(c.at * res.fps),
+        at: c.at, after: c.after, before: c.before, kind: c.kind,
+      }));
+      state.suggestSpec = specPath;
+      buildRuler();            // 切点叠加层：状态到了立即重画 ruler
+      setStatus(`建议层：${state.suggestCuts.length} 个建议切点（ruler 上可点套分割）`);
+    }
+  } catch (e) {
+    setStatus('建议层不可用：' + e.message, 'warn');
+  }
 }
 
 function attach(id, meta) {
@@ -866,7 +977,7 @@ function attach(id, meta) {
   state.editStack = new EditStack();
   updateEditButtons();
   // 编辑基准：打开时的原始段表（导出时只报差异）
-  state.meta._originalSegments = (m.segments || []).map((x) => ({ ...x }));
+  state.meta._originalSegments = (meta.segments || []).map((x) => ({ ...x }));
   updateEditButtons();
   renderSegList();
 }
@@ -1133,6 +1244,15 @@ function exportSegments() {
 }
 el.btnExportSegs.addEventListener('click', exportSegments);
 
+/** R15-W3：建议层入口——读输入框里的 spec（缺省 project.spec.json）→ GET 建议切点。 */
+async function loadSuggestions() {
+  const input = $('suggest-spec');
+  if (!input) return;
+  await fetchSuggestions(input.value.trim() || 'project.spec.json');
+}
+const elSuggestLoad = $('btn-load-suggest');
+if (elSuggestLoad) elSuggestLoad.addEventListener('click', loadSuggestions);
+
 el.slider.addEventListener('pointerdown', stopPlay);
 el.slider.addEventListener('input', () => show(Number(el.slider.value)));
 el.frameNum.addEventListener('change', () => {
@@ -1177,6 +1297,16 @@ window.addEventListener('keydown', (ev) => {
       ev.preventDefault();
       if (!document.fullscreenElement) el.stageWrap.requestFullscreen?.().catch(() => {});
       else document.exitFullscreen?.().catch(() => {});
+      break;
+    case '[':
+      ev.preventDefault(); stopPlay();
+      { const m2 = state.meta; const si = m2 && state.n >= (m2.segments || []).reduce((acc, s) => acc, null);
+        void si; }
+      jumpSegment(-1);
+      break;
+    case ']':
+      ev.preventDefault(); stopPlay();
+      jumpSegment(1);
       break;
     case 'i': case 'I':
       ev.preventDefault();
@@ -1238,6 +1368,8 @@ async function boot() {
   else if (params.get('spec')) { el.kind.value = 'spec'; el.path.value = params.get('spec'); q.set('spec', params.get('spec')); }
   if (params.get('fps')) { el.fps.value = params.get('fps'); q.set('fps', params.get('fps')); }
   if (![...q.keys()].length) {
+    // 防御：boot 重入/查询串丢失时不得打断已挂载的会话（历史缺陷曾让控件集体失灵）。
+    if (state.id) { setStatus('已就绪 · ' + fmtInt(state.meta?.frames || 0) + ' 帧', 'ok'); return; }
     setStatus('选一个帧源：右侧「最近产物」或填路径', '');
     setStageMsg('还没有打开帧源。\n\n① 右侧「最近产物」点一项\n② 或在上方选类型、填路径，再点「打开」\n③ 打开后：← / → 逐帧，空格播放，D 下载当前帧');
     setControlsEnabled(false);

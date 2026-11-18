@@ -28,6 +28,7 @@ import { fileURLToPath } from 'node:url';
 import { createStaticServer } from '../canvas/serve.mjs';
 import { openSource, defaultCacheRoot, timecodeOf } from './source.mjs';
 import { staticCacheControl } from '../shared/static-cache.mjs';
+import { layoutSeconds } from '../../scripts/lib/spec-edit.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_ROOT = path.resolve(HERE, '..', '..');
@@ -185,6 +186,35 @@ export function createFrameServer(root = DEFAULT_ROOT, opts = {}) {
 
     if (route === 'health') {
       sendJson(res, 200, { ok: true, sources: sources.size, version: 1 });
+      return;
+    }
+
+    // R15-W3：agent 向的建议层——把 spec 的结构展开为建议切点（每段边界）。
+    // 任何 agent/算法都能 GET 这个端点拿到「在哪切、每段是什么」，前端 ruler 叠加显示。
+    if (route === 'suggestions') {
+      const specPath = resolveUnderRoot(ROOT, q.get('spec'), 'spec');
+      let doc;
+      try { doc = JSON.parse(fs.readFileSync(specPath, 'utf8')); }
+      catch (e) {
+        throw httpError(404, `spec 读取失败：${e.message}`, 'E_SPEC');
+      }
+      let lay;
+      try { lay = layoutSeconds(doc); }
+      catch (e) {
+        throw httpError(400, `spec 结构不可展开：${e.message}`, 'E_SPEC');
+      }
+      const cuts = [];
+      for (let i = 1; i < lay.rows.length; i++) {
+        const prev = lay.rows[i - 1], cur = lay.rows[i];
+        if (prev.kind === 'card' && cur.kind === 'style') continue;   // 卡/风格之间不算是切点
+        cuts.push({ at: Number(cur.start.toFixed(2)), after: prev.id, before: cur.id,
+                    kind: cur.kind });
+      }
+      sendJson(res, 200, { ok: true, spec: path.basename(specPath),
+        total: Number(lay.total.toFixed(2)), fps: Number(doc.format?.fps || 30),
+        segments: lay.rows.map((r) => ({ id: r.id, kind: r.kind,
+          start: Number(r.start.toFixed(2)), end: Number(r.end.toFixed(2)) })),
+        cuts });
       return;
     }
 

@@ -1,9 +1,9 @@
 # 优化方案落地状态（v1.0 → v2.5.2）
 
-> ## v3.x 时代能力清单（v3.9.0，2026-11-18 · v2.8.1 → v3.9.0 共 11 个大版本）
+> ## v3.x 时代能力清单（v4.0.0，2026-11-18 · v2.8.1 → v4.0.0 共 12 个大版本）
 >
-> 本节为 v3.x 全波次（第三轮十视角审计 + 断层领先三件套 + 产品面补齐）的落地总账。
-> 逐版明细以 CHANGELOG 为准；以下为能力级索引：
+> 本节为 v3.x + v4.0 全波次（第三轮十视角审计 + 断层领先三件套 + 产品面补齐 +
+> agent 向剪辑）的落地总账。逐版明细以 CHANGELOG 为准；以下为能力级索引：
 >
 > - **第三轮审计收口（v2.9.0）**：内容寻址缓存闭合（url()/asset 字节重算/工具链指纹）·
 >   用户链路断点清零（cvs qa 复活/install 字体/剧本防覆盖）· serve 层收敛（Range206/
@@ -24,10 +24,16 @@
 >   段表可视化 · cvs ship 自研 ZIP 交付打包（--check 预检+报告入库）· cvs qa 双闸聚合 ·
 >   doctor 编码器探测 · npm run gate 发布门禁 · cvs health 五项全身体检。
 > - **终极闭环（v3.9.0）**：`cvs ref video --emit-spec` 把参考片一步展开成可编译新片 spec。
+> - **agent 向剪辑（v4.0.0）**：`cvs edit` 结构四件套（split/drop/move/trim，默认 dry-run、
+>   lint 验证后落盘、D 公式恒闭合）+ EDL/OTIO 行业交换格式导出 +
+>   frames 工作台建议层（GET /frames/api/suggestions → ruler 虚线切点可点套用）。
+>   同版修复 v3.1.0 起 `undoEdit` 未定义导致工作台加载即崩的潜伏缺陷；
+>   reflow 重写两位小数精确闭合（短片骨架不再被整数秒地板撑散架）。
 >
-> **当前门禁口径（v3.9.0 实测）**：test:all 29 套件 486 通过 · health 5/5 ·
-> golden 4 specs/12 stills 相符 · errors 155 码覆盖 100% · version-sync 四方一致 ·
-> npm run gate 全绿。原第 8 条「未 commit」早已过时——所有改动按版本提交。
+> **当前门禁口径（v4.0.0 实测）**：test:all **30 套件 496 通过 / 0 失败** ·
+> frames 浏览器套件 **73/73**（挂载→播放全链此前因潜伏缺陷从未真正跑通，本版修复后全绿）·
+> health 5/5 · golden 位级基线含 demo-skeleton · errors 158 码覆盖 100% ·
+> version-sync 四方一致（4.0.0）· npm run gate 全绿。原第 8 条「未 commit」早已过时——所有改动按版本提交。
 >
 对照 [BACKLOG.json](BACKLOG.json) 的 26 项，逐项说明落地情况。
 > 判定口径：**已落地** = 代码 + 回归测试 + 文档齐；**部分** = 主路径可用但仍有明确缺口；**未做** = 未开始。

@@ -3,6 +3,54 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.0.0] - 2026-11-18 — agent 向剪辑：结构编辑核 + EDL/OTIO 交换 + 工作台建议层
+
+### R15-W1 结构剪辑操作核（scripts/lib/spec-edit.mjs）
+- 四件套语义对齐 auto-editor / Kdenlive：splitAtSeconds（轮内拆分 a/b）、
+  dropRound、moveRound（换序）、trimToSeconds（全片重拟合）；
+- 所有结构操作走 reflow() 重分配，D 公式不变式恒成立：
+  D = opening + N×round + moreCard + flash.count×each；
+- reflow 重写为两位小数浮点精确闭合（余数吸收进 opening）：旧整数秒地板 +
+  6s 总长下限会把几秒的短片骨架撑散架——golden demo-skeleton（2s）实测复现并钉死修复；
+- card 推导修短轮塌陷：旧公式 min(1, max(1, floor(round/3))) 对 round<3 全塌成 1
+  （卡片比轮还长），短轮改按 40% 保底且留足风格段。
+
+### R15-W2 cvs edit <spec> [actions] CLI（scripts/edit.mjs）
+- --split-at=sec --drop=id --move=id:pos --trim=sec，两种写法都收
+  （--key=v 与 --key v，agent 从 shell 直接拼参数最顺手）；
+- 默认 dry-run：改动先落临时文件过 lint 子进程验证再丢弃，exit 13 如实回滚不落盘，
+  --apply 才写回；--json 一行给机器（ok/edited/applied/duration/lintExit）；
+- 行业交换格式导出：--edl a.edl（CMX 事件行）与 --otio b.json
+  （OpenTimelineIO tracks/clips 结构与 source_range）——外部剪辑软件可直接打开这条时间线；
+- 参数类错误（轮 id 不存在 / 时刻越界 / 目标过短）→ exit 2，其余结构异常 → 13。
+
+### R15-W3 工作台建议层（实时可见）
+- GET /frames/api/suggestions?spec=…：把 spec 结构展开为建议切点数组
+  （每段边界 + 前一段/后一段 id + kind），任何 agent 都能拿到「在哪切、每段是什么」；
+- frames 工作台新增「建议层」输入框 + 按钮：ruler 上以虚线叠加切点，点击即套用分割
+  （切点天然落在段边界上，向 ±2 帧内找第一个可落地的分割）；
+- 编辑/撤销/套用建议后胶片条即时重建（rebuildStrip），所见即所得；[ / ] 键逐段跳。
+
+### R15-W4 缺陷修复（v3.1.0 起潜伏）
+- undoEdit 自引入段级剪辑起从未定义——btn-undo 点击与 Ctrl+Z 一律 ReferenceError，
+  且模块顶层求值中断让整个工作台页自那时起加载即崩（total 恒为 0）。
+  v4.0.0 补全实现（快照恢复 + ruler/胶片条/HUD 全同步）。排查入口：真机冒烟复现。
+
+- 同版再挖出两处同族潜伏缺陷（真机探针 + disabled-setter 调用栈定位）：
+  `attach()` 内 `(m.segments || []).map(...)` 的 m 未定义——attach 在写回 total/
+  使能控件后抛 ReferenceError，被 boot 的 catch 吞掉并落入无参分支把控件集体禁用，
+  工作台自此永远「能看不能播」；boot 无参路径补防御守卫，已挂载会话不再被打断。
+- 帧断言像素口径修正：live iframe 与服务端取帧是两个独立 Chrome 进程的 SwiftShader
+  光栅化，实测确定性抖动 meanDiff≈0.07–21.5（与 golden envCompare 同口径）——
+  test-frames 改容差 25 并披露实测值；内容级损坏（错帧/黑屏）diff ≫100 不受影响。
+- frames 套件 73/73 全绿（含此前从未真正跑通过的挂载→播放全链）。
+
+### 工程面
+- 错误码 156→158（E_EDIT / E_EDIT_USAGE），注册表覆盖 100%（158/158）；
+- test-spec-edit 内核 7 项 + CLI 级钉子 3 项（dry-run 不落盘字节钉、EDL/OTIO 结构、
+  未知轮可读报错）；test-all UNIT_SUITES 登记；
+- 四方版本号同步 4.0.0。
+
 ## [v3.9.0] - 2026-11-18 — cvs ref video --emit-spec：参考片 → 新片一步展开
 
 ### R13-W：终极闭环

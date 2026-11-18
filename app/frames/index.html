@@ -78,6 +78,10 @@
         <button id="btn-split" class="ghost tiny" disabled title="在当前帧把所在段一分为二（仅 spec/plan 现场渲染源）">分割段</button>
         <button id="btn-undo" class="ghost tiny" disabled title="撤销上一次分割（Ctrl+Z）">撤销</button>
         <button id="btn-export-segments" class="ghost tiny" disabled title="把当前编辑后的段表导出为 spec patch（cvs build ... --segment-patch 可套用）">导出段表</button>
+        <!-- R15-W3：agent 建议层——输入 spec 路径，服务端算切点，ruler 虚线叠加可点套用。 -->
+        <input id="suggest-spec" type="text" placeholder="spec（如 project.spec.json）" size="14"
+               title="agent 建议切点（GET /frames/api/suggestions?spec=…）：切点叠加到时间尺上，点击即套用分割" />
+        <button id="btn-load-suggest" class="ghost tiny" title="读取 spec → 计算建议切点 → ruler 虚线叠加，点击套用分割">建议层</button>
       </div>
     </div>
 

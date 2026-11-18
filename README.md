@@ -22,6 +22,7 @@ An Agent Skill for producing 30–90 s "style showcase" films: an 8 s opening, e
 
 - **参考片反推 `cvs ref video demo.mp4`**：拖一条成片进来 → 结构模型 + BPM 自相关 + k-means 主题匹配 → 可直接 `--apply` patch 进你的 spec。启发式结果带 confidence/残差/notes，不假装精确。
 - **参考片 → 新片一步展开（v3.9）**：`cvs ref video demo.mp4 --emit-spec new.spec.json` 把反推结构展开成可直接编译的新 spec（精确闭合；lint → build 全链实测过）。
+- **agent 向剪辑 `cvs edit`（v4.0）**：`cvs edit project.spec.json --split-at=10 --drop=r03 --trim=35`——auto-editor/Kdenlive 式结构四件套，默认 dry-run 过 lint 才落盘，D 公式恒闭合；`--edl/--otio` 导出 EDL/OpenTimelineIO 时间线（外部剪辑软件直接打开）；帧工作台「建议层」把切点画成 ruler 虚线，点击即套用、实时可见。
 - **导演演示集 + 一键出片（v3.2–v3.5）**：白模线框 / 骨骼动画 / L-system 分形 / 弹道喷泉 / 等高线测绘 / 网络脉冲六个闭式确定引擎；`cvs demo <style>` 出单片、`cvs demo all --only a,b --concurrency/--retries` 批量（manifest 如实报账、上传带进度+取消）。
 - **交付打包与发布门禁**： v3.7：`ship --check` 打包前双闸质检、`cvs health` 一键全身体检、参考反推 top-3 主题可点切换。`cvs ship <spec>` 把 spec+成片+字幕+清单+自生成 README 打成开箱即用 zip（竞赛「作品四件套」同形，缺成片如实退 13）；`cvs qa` 视频+音频双闸一次跑完；doctor 告知 VP9/MP3lame/Opus/subtitles 编码器是否就位；`npm run gate` 发布前四项一键全查。；向导向可拖入参考片一键套用主题/BPM/时长；golden 位级基线含 demo-skeleton。 v3.8：ship --check 质检报告随包入库、build --ref-patch 直接套用反推结论、health 五项全查。
 - **旁白声道**：spec 里给文案行，编译时自动语音合成（piper 优先）+ sidechain 闪避混音 + 词级时间戳，配音不再需要外部 DAW。
@@ -345,6 +346,11 @@ node bin/cvs.mjs rollback v001 --spec project.spec.json
 
 # 4) image set from the same spec (cover/card/poster/story)
 node bin/cvs.mjs image --spec project.spec.json --set cover,card,poster,story
+
+# 5) agent-grade structural editing (v4.0): dry-run by default, writes only with --apply
+node bin/cvs.mjs edit project.spec.json --split-at=10 --drop=r03 --trim=35   # verify-only first pass
+node bin/cvs.mjs edit project.spec.json --split-at=10 --apply                # actually rewrite the spec
+node bin/cvs.mjs edit project.spec.json --edl out/timeline.edl --otio out/timeline.json
 ```
 
 `master.mp4` is always encoded with the **master** preset (1920×1080). A `--platform`
@@ -627,6 +633,11 @@ node bin/cvs.mjs demo all --only fractal,terrain --seconds 8
 node bin/cvs.mjs ref video my-demo.mp4 --emit-spec inspired.spec.json   # 结构+BPM+主题 → 可编译新 spec
 node bin/cvs.mjs build inspired.spec.json
 node bin/cvs.mjs ship inspired.spec.json --check   # QA 预检 + 自研 ZIP 交付包（spec+成片+字幕+清单+README+QA 报告）
+
+# 5) agent 向剪辑（v4.0）：结构四件套 + 行业交换格式，默认 dry-run
+node bin/cvs.mjs edit inspired.spec.json --split-at=10 --drop=r03   # 只验证不落盘（D 公式恒闭合）
+node bin/cvs.mjs edit inspired.spec.json --trim=35 --apply          # 验证过才真写回
+node bin/cvs.mjs edit inspired.spec.json --edl out/timeline.edl --otio out/timeline.json
 
 
 # 3) 版本快照 → 审片 → 校验后回滚

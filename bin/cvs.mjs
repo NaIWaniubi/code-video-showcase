@@ -96,6 +96,8 @@ const commands = {
   // R11-W2：一键全身体检（doctor + 错误码注册表 + 矩阵 + golden 位级基线）
   health: (a) => node('scripts/health.mjs', a),
   ship:   (a) => node('scripts/ship.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
+  // R15-W5：cvs edit — agent 向结构剪辑（split/drop/move/trim，D 公式闭合，默认 dry-run）。
+  edit:   (a) => node('scripts/edit.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
   api:      (a) => node('server/api.mjs', a),
   wizard:   (a) => surface('wizard', SURFACES.wizard, a),
   canvas:   (a) => surface('canvas', SURFACES.canvas, a),
@@ -143,6 +145,8 @@ usage: cvs <command> [args]
                                          per-frame realtime preview workbench
   ui [--port 5180]                       one server for all six surfaces (start at /app/)
   ship <spec> [--check]   package delivery bundle (spec+film+subs+manifest+README)
+  edit <spec> [--split-at=sec] [--drop=id] [--move=id:pos] [--trim=sec] [--edl f] [--otio f]
+                                        agent-grade structural edits (D-closed, default dry-run)
   health                 full checkup: doctor + error registry + combos + golden
   test [--browser]                       run all suites
   doctor                                 environment check (renderer capability probe)

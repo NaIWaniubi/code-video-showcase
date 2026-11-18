@@ -446,3 +446,24 @@ button:focus-visible {
 .segrow { display: grid; grid-template-columns: 92px 1fr; gap: 8px; align-items: center; font-size: 12px; }
 .seg-time { color: var(--muted); white-space: nowrap; }
 .segrow input { font-size: 12px; padding: 3px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,.18); background: transparent; color: inherit; }
+
+/* R15-W3：建议切点虚线——与 .band 同坐标系（ruler 内绝对定位），悬停加亮。 */
+.cutmark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: repeating-linear-gradient(to bottom, var(--accent) 0 3px, transparent 3px 6px);
+  opacity: .85;
+  cursor: pointer;
+}
+.cutmark:hover { opacity: 1; }
+#suggest-spec {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: transparent;
+  color: inherit;
+}

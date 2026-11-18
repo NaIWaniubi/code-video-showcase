@@ -59,6 +59,18 @@
       "meaning": "spec 结构不合法",
       "action": "按 issues[] 修正"
     },
+    "E_EDIT_USAGE": {
+      "phase": "edit",
+      "exit": 2,
+      "meaning": "edit 参数类错误（轮 id 不存在/时刻越界/目标时长过短/move 写法）",
+      "action": "改参数重试：--split-at 秒须落在轮区间；--drop/--move 用 rounds[].id；--trim ≥0.6s"
+    },
+    "E_EDIT": {
+      "phase": "edit",
+      "exit": 13,
+      "meaning": "edit 结构异常（reflow 无法闭合 D 公式等）",
+      "action": "检查 structure 字段与 flash/count 是否自洽；dry-run 会先过 lint 再落盘"
+    },
     "E_VERSION": {
       "phase": "spec",
       "exit": 10,

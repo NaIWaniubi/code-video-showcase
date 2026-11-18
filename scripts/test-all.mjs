@@ -50,6 +50,7 @@ const UNIT_SUITES = [
   'scripts/test-hardening.mjs',
   'scripts/test-strict-flags.mjs',
   'scripts/test-segment-edit.mjs',
+  'scripts/test-spec-edit.mjs',   // R15：agent 向剪辑内核 + edit CLI（EDL/OTIO/dry-run）
   'scripts/test-zip-lib.mjs',
   'scripts/test-version-sync.mjs',
   'scripts/test-demo-spec.mjs',
