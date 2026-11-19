@@ -27,7 +27,7 @@ import {
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROG = 'node scripts/edit.mjs';
 const KNOWN = new Set(['spec', 'split-at', 'drop', 'move', 'trim', 'edl',
-  'otio', 'dry-run', 'apply', 'json', 'help']);
+  'otio', 'dry-run', 'apply', 'json', 'suggest', 'help']);
 // --key=value 与 --key value 两种写法都收（agent 从 shell 直接拼参数最顺手）。
 const argv = process.argv.slice(2).map((a) => {
   const m = /^--([A-Za-z0-9-]+)=(.*)$/.exec(a);
@@ -47,6 +47,7 @@ if (args.help || !positional.length) {
   --dry-run              verify without writing (default; write with --apply)
   --edl <file>           export an EDL (CMX interchange) timeline
   --otio <file>          export an OpenTimelineIO JSON timeline
+  --suggest              print the suggested cut points (same as /frames/api/suggestions)
   --json                 one-line JSON on stdout, human text to stderr`);
   process.exit(args.help ? 0 : 2);
 }
@@ -82,6 +83,21 @@ console.error(`# ${spec.meta?.title || spec.meta?.name || path.basename(specPath
 for (const row of lay.rows) {
   const mark = row.kind === 'flash' ? '*' : ' ';
   console.error(`${mark} ${row.id.padEnd(16)} ${(row.start).toFixed(2).padStart(6)}–${(row.end).toFixed(2).padStart(6)}  ${row.kind}${row.note ? ` · ${row.note}` : ''}`);
+}
+
+// R17-W：agent 建议层（与 GET /frames/api/suggestions 同口径）——每个段边界都是
+// 一个候选切点；卡→风格之间不算是切点（同一轮内部）。
+let cuts = [];
+if (args.suggest) {
+  for (let i = 1; i < lay.rows.length; i++) {
+    const prev = lay.rows[i - 1], cur = lay.rows[i];
+    if (prev.kind === 'card' && cur.kind === 'style') continue;
+    cuts.push({ at: Number(cur.start.toFixed(2)), after: prev.id, before: cur.id, kind: cur.kind });
+  }
+  console.error('suggested cuts:');
+  for (const c of cuts) {
+    console.error(`  ${c.at.toFixed(2).padStart(6)}s  ${c.after} → ${c.before}  (${c.kind})`);
+  }
 }
 
 // ── 交换格式导出 ──────────────────────────────────────────
@@ -145,7 +161,9 @@ if (result.applied) {
 }
 
 if (args.json) {
-  process.stdout.write(JSON.stringify({ ok: lintExit !== 1, edited: result.applied, applied: apply,
-    duration: lay.total, rows: lay.rows.length, lintExit }) + '\n');
+  const out = { ok: lintExit !== 1, edited: result.applied, applied: apply,
+    duration: lay.total, rows: lay.rows.length, lintExit };
+  if (args.suggest) out.suggestions = cuts;
+  process.stdout.write(JSON.stringify(out) + '\n');
 }
 process.exit(lintExit === 1 ? 13 : 0);

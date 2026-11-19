@@ -59,15 +59,37 @@ test('duration 按 fps 折算（非硬编 30）', () => {
   assert.equal(r.segments[1].duration, 1);
 });
 
-test('EditStack：快照深拷贝、超限丢最旧、pop 取回', () => {
+// R17-W：指针式历史链——commit / undo / redo / 分支截断 / 深拷贝 / 超限丢最旧
+test('EditStack：commit 落定 → undo 回原始 → redo 回来；新编辑截断重做链', () => {
+  const st = new EditStack(4);
+  const s0 = [{ id: 'x', frames: 10 }, { id: 'y', frames: 20 }];
+  st.commit(s0);
+  assert.equal(st.canUndo, false, '未编辑过不可撤销');
+  const s1 = [{ id: 'xa' }, { id: 'xb' }, { id: 'y' }];   // 一次分割后
+  st.commit(s1);
+  assert.equal(st.canUndo, true);
+  assert.deepEqual(st.undo(), s0, 'undo 回到打开时的原始段表');
+  assert.equal(st.canRedo, true);
+  assert.deepEqual(st.redo(), s1, 'redo 精确恢复被撤销的状态');
+  // 撤销后再编辑 → 重做链被截断
+  const s2 = [{ id: 's2a' }, { id: 's2b' }];
+  st.commit(s2);
+  assert.equal(st.canRedo, false, '新编辑截断重做链');
+  assert.deepEqual(st.undo(), s1, '回退到前一步状态（s1）');
+  assert.deepEqual(st.undo(), s0, '连续撤销回到打开时的原始段表');
+  assert.equal(st.canRedo, true, '重做链保留 s1 这一支');
+});
+
+test('EditStack：快照深拷贝 + 超限丢最旧（历史不受原数组后续改动影响）', () => {
   const st = new EditStack(2);
-  st.push(segs);                                    // 快照：原始段表的逐段拷贝
-  segs[0] = { id: 'mutated-in-place' };             // 原数组就地改
-  const back = st.pop();
-  assert.equal(back.length, 2);
-  assert.equal(back[0].id, '00-opening', '快照不受原数组后续改动影响（深拷贝契约）');
-  st.push(segs); st.push(segs); st.push(segs);
+  const arr = [{ id: 'keep', startFrame: 0, endFrame: 10 }];
+  st.commit(arr);
+  arr[0] = { id: 'mutated-in-place' };             // 原数组就地改
+  assert.equal(st.entries[0][0].id, 'keep', '快照不受原数组后续改动影响（深拷贝契约）');
+  st.commit([{ id: 'a' }]);
+  st.commit([{ id: 'b' }]); st.commit([{ id: 'c' }]);
   assert.equal(st.size, 2, '超限丢最旧');
+  assert.equal(st.entries[0][0].id, 'b', '保留的最近两步（b、c）');
 });
 
 console.log(`\n${passed} checks passed`);

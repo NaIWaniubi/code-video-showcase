@@ -77,6 +77,7 @@
              只改内存中的段表；成片不变，需要时从工作台导出 spec 再编译。 -->
         <button id="btn-split" class="ghost tiny" disabled title="在当前帧把所在段一分为二（仅 spec/plan 现场渲染源）">分割段</button>
         <button id="btn-undo" class="ghost tiny" disabled title="撤销上一次分割（Ctrl+Z）">撤销</button>
+        <button id="btn-redo" class="ghost tiny" disabled title="重做被撤销的分割（Ctrl+Shift+Z / Ctrl+Y）">重做</button>
         <button id="btn-export-segments" class="ghost tiny" disabled title="把当前编辑后的段表导出为 spec patch（cvs build ... --segment-patch 可套用）">导出段表</button>
         <!-- R15-W3：agent 建议层——输入 spec 路径，服务端算切点，ruler 虚线叠加可点套用。 -->
         <input id="suggest-spec" type="text" placeholder="spec（如 project.spec.json）" size="14"

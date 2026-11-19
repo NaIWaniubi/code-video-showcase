@@ -3,6 +3,28 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.2.0] - 2026-11-19 — 编辑历史可重做 · CLI 建议层
+
+### R17-W1 工作区编辑历史升级为指针式（Undo/Redo）
+- EditStack 从 push/pop（只能撤销）重构为 commit/undo/redo 指针链：entries[k]
+  为第 k 步之后的状态（entries[0] = 打开源时的原始段表）；undo/redo 只移指针不毁
+  记录；新编辑自动截断被撤销的分支；超限丢最旧、深拷贝契约不变；
+- frames 工作区新增「重做」按钮 + Ctrl+Shift+Z / Ctrl+Y（编辑软件通行约定）；
+  分割 → 撤销 → 重做全链路状态精确往返（套件 79/79，新增 redo 双钉子）。
+
+### R17-W2 cvs edit --suggest：CLI 建议层
+- `cvs edit <spec> --suggest` 打印建议切点表（与 GET /frames/api/suggestions 同口径：
+  每段边界一个候选切点，卡→风格之间不算）；`--json` 时输出 suggestions 数组
+  （at/after/before/kind），agent 从命令行即可拿到「在哪切、每段是什么」。
+
+### 套件稳定性
+- frames 编辑钉子固定到安全帧 15（s1-style 中段）——播放头停在片尾时分割贴边的
+  偶发消除（此前两次跑出 4 连红的根因）。
+
+### 工程面
+- 单测 30 套件 498 通过（含 EditStack 指针链钉子与 --suggest 契约钉子）；
+- 四方版本号同步 4.2.0。
+
 ## [v4.1.1] - 2026-11-19 — D7 位级钉修复：像素摘要口径 + 内容基线恢复真保护
 
 ### 背景（v4.1.0 已登记的 reflow-pages 红，本波落地）

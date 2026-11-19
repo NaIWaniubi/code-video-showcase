@@ -50,6 +50,7 @@ const el = {
   restrip: $('restrip'),
   btnSplit: $('btn-split'),
   btnUndo: $('btn-undo'),
+  btnRedo: $('btn-redo'),
   btnExportSegs: $('btn-export-segments'),
   segList: $('segList'),
   sourceInfo: $('sourceInfo'),
@@ -724,8 +725,8 @@ function applyCutAt(cut) {
     setStatus(`建议切点 @${cut.at}s 附近无可分割帧（段太短或越界）`, 'warn');
     return;
   }
-  state.editStack.push(m.segments);
   m.segments = res.segments;
+  state.editStack.commit(m.segments);      // R17-W：编辑落定 → 指针式历史链
   buildRuler();
   markStrip();
   updateHud();
@@ -756,8 +757,8 @@ function splitAtPlayhead() {
     setStatus(why, res.reason === 'too-close-to-edge' ? 'warn' : 'err');
     return;
   }
-  state.editStack.push(m.segments);
   m.segments = res.segments;
+  state.editStack.commit(m.segments);      // R17-W：编辑落定 → 指针式历史链
   buildRuler();
   markStrip();
   updateHud();
@@ -767,12 +768,12 @@ function splitAtPlayhead() {
   rebuildStrip(state.n);          // R15-W4：分割后胶片条即时刷新
 }
 
-/** R15-W4：撤销最近一次段编辑（EditStack 快照语义，ruler/胶片条/HUD 全同步）。 */
+/** R15-W4/R17-W：撤销最近一次段编辑（指针式历史链，ruler/胶片条/HUD 全同步）。 */
 function undoEdit() {
   const m = state.meta;
   if (!m || !m.segments) { setStatus('没有可撤销的编辑', 'warn'); return; }
-  if (!state.editStack.size) { setStatus('没有可撤销的编辑', 'warn'); return; }
-  const snap = state.editStack.pop();
+  const snap = state.editStack.undo();
+  if (!snap) { setStatus('没有可撤销的编辑', 'warn'); return; }
   m.segments = snap;
   buildRuler();
   markStrip();
@@ -783,12 +784,29 @@ function undoEdit() {
   setStatus(`已撤销 → ${snap.length} 段`, 'ok');
 }
 
+/** R17-W：重做被撤销的段编辑（Ctrl+Shift+Z / Ctrl+Y）。 */
+function redoEdit() {
+  const m = state.meta;
+  if (!m || !m.segments) { setStatus('没有可重做的编辑', 'warn'); return; }
+  const snap = state.editStack.redo();
+  if (!snap) { setStatus('没有可重做的编辑', 'warn'); return; }
+  m.segments = snap;
+  buildRuler();
+  markStrip();
+  updateHud();
+  updateEditButtons();
+  rebuildStrip(state.n);
+  renderSegList();
+  setStatus(`已重做 → ${snap.length} 段`, 'ok');
+}
+
 /** 编辑按钮可用态：仅 live（spec/plan）源且至少一段可分时可用。 */
 function updateEditButtons() {
   const ok = state.mode === 'live' && !!state.meta?.segments?.length &&
              state.meta.segments.some((s) => s.endFrame - s.startFrame >= 3);
   el.btnSplit.disabled = !ok;
-  el.btnUndo.disabled = !state.editStack.size;
+  el.btnUndo.disabled = !state.editStack.canUndo;
+  el.btnRedo.disabled = !state.editStack.canRedo;
 }
 
 function kvRows(rows) {
@@ -975,6 +993,8 @@ function attach(id, meta) {
   startPolling();
   startStatsTimer();          // clearSource 会停表，这里重新启（R3 RT-02 F9）
   state.editStack = new EditStack();
+  // R17-W：历史链第 0 位 = 打开时的原始段表（undo 的落点、redo 的起点）。
+  state.editStack.commit(meta.segments || []);
   updateEditButtons();
   // 编辑基准：打开时的原始段表（导出时只报差异）
   state.meta._originalSegments = (meta.segments || []).map((x) => ({ ...x }));
@@ -1162,6 +1182,7 @@ el.download.addEventListener('click', downloadFrame);
 el.restrip.addEventListener('click', () => { state.stripRange = null; buildStrip(state.n); });
 el.btnSplit.addEventListener('click', () => { stopPlay(); splitAtPlayhead(); });
 el.btnUndo.addEventListener('click', undoEdit);
+el.btnRedo.addEventListener('click', redoEdit);
 /** R9-W4：段表渲染——时间 → 标题。input 直接绑 state.meta.segments，
  * 导出时由 exportSegments 把差异记进 copyPatch（所见即所得）。 */
 function renderSegList() {
@@ -1272,9 +1293,14 @@ window.addEventListener('resize', fitLiveFrames);
 if (typeof ResizeObserver === 'function') new ResizeObserver(fitLiveFrames).observe(el.stageWrap);
 
 window.addEventListener('keydown', (ev) => {
-  // R5-W7：Ctrl/Cmd+Z 撤销段分割（其他组合键保持让位给浏览器）。
+  // R5-W7/R17-W：Ctrl/Cmd+Z 撤销段分割；Ctrl+Shift+Z / Ctrl+Y 重做（编辑软件通行约定）。
   if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'z' || ev.key === 'Z')) {
-    if (state.editStack.size) { ev.preventDefault(); undoEdit(); }
+    if (ev.shiftKey) { if (state.editStack.canRedo) { ev.preventDefault(); redoEdit(); } }
+    else if (state.editStack.canUndo) { ev.preventDefault(); undoEdit(); }
+    return;
+  }
+  if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'y' || ev.key === 'Y') && state.editStack.canRedo) {
+    ev.preventDefault(); redoEdit();
     return;
   }
   const t = ev.target;

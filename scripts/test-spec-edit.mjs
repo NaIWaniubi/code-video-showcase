@@ -153,4 +153,17 @@ test('edit CLI：未知轮 --drop 报错且可读（不静默）', () => {
   assert.match(r.stderr || '', /找不到轮 nope/);
 });
 
+test('edit CLI：--suggest 建议层（CLI 与 /frames/api/suggestions 同口径：切点数组、跳过卡→风格）', () => {
+  const r = cvsEdit([path.join(ROOT, 'fixtures/mini-41s/spec.json'), '--suggest', '--json']);
+  assert.equal(r.status, 0, (r.stdout || '') + (r.stderr || ''));
+  const j = JSON.parse(r.stdout);
+  assert.ok(Array.isArray(j.suggestions) && j.suggestions.length > 0, 'suggestions 非空');
+  assert.ok(j.suggestions.every((c) => Number.isFinite(c.at) && c.after && c.before && c.kind),
+    '每条带 at/after/before/kind');
+  // 卡→风格之间不算是切点（同一轮内部）
+  assert.ok(!j.suggestions.some((c, i) =>
+    i > 0 && c.after.endsWith('-card') && c.before.endsWith('-style')), '无卡→风格伪切点');
+  assert.match(r.stderr || '', /suggested cuts:/);
+});
+
 console.log(`\n${passed} checks passed`);

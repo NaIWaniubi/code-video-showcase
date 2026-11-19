@@ -37,14 +37,31 @@ export function splitSegmentAt(segments, n, fps = 30) {
   return { ok: true, segments: next };
 }
 
-/** 撤销栈：push 深拷贝快照，超限丢最旧；pop 取回。 */
+/** R17-W：指针式历史栈——commit / undo / redo 链。
+ *  entries[k] 为第 k 步之后的状态（entries[0] 是打开源时的原始段表）；
+ *  undo/redo 只移指针不毁记录；新编辑自动截断被撤销的分支。
+ *  快照契约不变：逐段拷贝，原数组后续改动不影响历史。 */
 export class EditStack {
-  constructor(limit = EDIT_UNDO_LIMIT) { this.limit = limit; this.snapshots = []; }
-  push(segments) {
-    this.snapshots.push(segments.map((s) => ({ ...s })));
-    if (this.snapshots.length > this.limit) this.snapshots.shift();
-    return this.snapshots.length;
+  constructor(limit = EDIT_UNDO_LIMIT) { this.limit = limit; this.entries = []; this.idx = -1; }
+  /** 提交当前段表（每次编辑落定后调用）。返回当前链长。 */
+  commit(segments) {
+    this.entries.length = this.idx + 1;               // 新编辑作废重做链
+    this.entries.push((Array.isArray(segments) ? segments : []).map((s) => ({ ...s })));
+    while (this.entries.length > this.limit) this.entries.shift();
+    this.idx = this.entries.length - 1;
+    return this.entries.length;
   }
-  pop() { return this.snapshots.pop() || null; }
-  get size() { return this.snapshots.length; }
+  undo() {
+    if (this.idx <= 0) return null;
+    this.idx--;
+    return this.entries[this.idx].map((s) => ({ ...s }));
+  }
+  redo() {
+    if (this.idx >= this.entries.length - 1) return null;
+    this.idx++;
+    return this.entries[this.idx].map((s) => ({ ...s }));
+  }
+  get canUndo() { return this.idx > 0; }
+  get canRedo() { return this.idx < this.entries.length - 1; }
+  get size() { return this.entries.length; }
 }

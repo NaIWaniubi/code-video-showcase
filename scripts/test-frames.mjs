@@ -415,7 +415,15 @@ async function testSpecAndUi() {
     check('渲染耗时读数 < 20ms', (() => { const m = playing.perf.match(/渲染 ([\d.]+) ms/); return m && Number(m[1]) < 20; })(), playing.perf);
     check('工作台全程无未捕获异常', pageExc.length === 0, pageExc.slice(0, 2).join(' | ').slice(0, 160));
 
-    // ── R16-3：段级编辑接线钉子（btn-split → btn-undo 往返；段表/状态行全回报）──
+    // ── R16-3/R17-W：段级编辑接线钉子（split → undo → redo 全往返）──
+    // R17-W：播放头可能停在片尾（分割贴边偶发），编辑钉子固定到安全帧 15（s1-style
+    // 中段），等 HUD 就位再动按钮。
+    await ev(() => { const f = document.getElementById('frameNum'); f.value = '15'; f.dispatchEvent(new Event('change', { bubbles: true })); });
+    for (let i = 0; i < 60; i++) {
+      const hud = String(await ev(() => document.getElementById('hudFrame').textContent));
+      if (hud.startsWith('#15 ')) break;
+      await sleep(250);
+    }
     const bandsBefore = Number(await ev(() => document.querySelectorAll('#ruler .band').length));
     await ev(() => document.getElementById('btn-split').click());
     await sleep(250);
@@ -433,6 +441,30 @@ async function testSpecAndUi() {
     }));
     const un = JSON.parse(undoInfo);
     check('撤销按钮接线', Number(un.bands) === bandsBefore && /已撤销/.test(un.status), `${sp.bands} → ${un.bands} · ${un.status}`);
+
+    // R17-W：重做链路——按钮一次、再撤销后键盘 Ctrl+Shift+Z 一次（状态精确回到分割态）。
+    await ev(() => document.getElementById('btn-redo').click());
+    await sleep(250);
+    const redoInfo = await ev(() => JSON.stringify({
+      bands: document.querySelectorAll('#ruler .band').length,
+      status: document.getElementById('status').textContent,
+    }));
+    const rd = JSON.parse(redoInfo);
+    check('重做按钮接线', Number(rd.bands) === bandsBefore + 1 && /已重做/.test(rd.status), `${un.bands} → ${rd.bands} · ${rd.status}`);
+    await ev(() => document.getElementById('btn-undo').click());
+    await sleep(200);
+    await ev(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true, bubbles: true })));
+    await sleep(250);
+    const kbInfo = await ev(() => JSON.stringify({
+      bands: document.querySelectorAll('#ruler .band').length,
+      status: document.getElementById('status').textContent,
+    }));
+    const kb = JSON.parse(kbInfo);
+    check('Ctrl+Shift+Z 键盘重做', Number(kb.bands) === bandsBefore + 1 && /已重做/.test(kb.status), `${rd.bands} → ${kb.bands} · ${kb.status}`);
+
+    // 编辑链路收尾：回到打开时的原始段表，后面「段落条 2 块」等计数断言才有基准。
+    await ev(() => document.getElementById('btn-undo').click());
+    await sleep(200);
 
     // 段条 / 胶片条
     check('段落条 2 块', await ev(() => document.querySelectorAll('#ruler .band').length) === 2);
