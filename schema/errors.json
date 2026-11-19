@@ -71,6 +71,12 @@
       "meaning": "edit 结构异常（reflow 无法闭合 D 公式等）",
       "action": "检查 structure 字段与 flash/count 是否自洽；dry-run 会先过 lint 再落盘"
     },
+    "E_BACKUP": {
+      "phase": "edit",
+      "exit": 13,
+      "meaning": "--apply 写回前备份原 spec 失败（磁盘只读/权限等）——已中止写回，原文件未动",
+      "action": "修复磁盘/权限后重试；dry-run 验证不涉及备份"
+    },
     "E_VERSION": {
       "phase": "spec",
       "exit": 10,

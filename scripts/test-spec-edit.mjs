@@ -166,4 +166,42 @@ test('edit CLI：--suggest 建议层（CLI 与 /frames/api/suggestions 同口径
   assert.match(r.stderr || '', /suggested cuts:/);
 });
 
+test('内核 suggestedCuts：卡→风格不算切点、时间单调、段 id 可对应', () => {
+  const sug = L.suggestedCuts(base());
+  assert.ok(sug.cuts.length > 0);
+  assert.ok(sug.cuts.every((c) => Number.isFinite(c.at)));
+  assert.ok(sug.cuts.every((c, i) => i === 0 || c.at >= sug.cuts[i - 1].at), '时间单调不减');
+  // 无卡→风格内部对（同一轮内部不算切点）
+  assert.ok(!sug.cuts.some((c) => c.after.endsWith('-card') && c.before.endsWith('-style')));
+  // 每条切点的 after/before 都是 layout 里真实存在的相邻段
+  const ids = new Set(sug.rows.map((r) => r.id));
+  assert.ok(sug.cuts.every((c) => ids.has(c.after) && ids.has(c.before)));
+  // 每条切点的 before 恰是 after 在 rows 中的下一段（或被跳过的内部对之后的段）
+  assert.ok(sug.cuts.every((c) => {
+    const i = sug.rows.findIndex((r) => r.id === c.after);
+    return i >= 0 && sug.rows[i + 1]?.id === c.before;
+  }), 'before == after 的下一可见段');
+});
+
+test('edit CLI：--apply 真正写回原文件 + .bak 备份原字节（v4.2.1 审查修复）', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'edit-apply-'));
+  try {
+    const src = path.join(ROOT, 'fixtures/mini-41s/spec.json');
+    const target = path.join(d, 'named.spec.json');   // 非 project.spec.json 名
+    fs.copyFileSync(src, target);
+    const before = fs.readFileSync(target);
+    const r = cvsEdit([target, '--trim=35', '--apply']);
+    assert.equal(r.status, 0, (r.stdout || '') + (r.stderr || ''));
+    // 原文件原地被写回（此前版本写到 dir/project.spec.json，原文件纹丝不动）
+    const after = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.equal(after.rounds.length, 6, '轮数保留');
+    assert.equal(Math.round(after.format.duration * 100), 3500, 'D=35s 写回');
+    assert.match(r.stderr || '', /已写回/, '写回状态行');
+    // .bak = 写回前的原始字节
+    const bak = fs.readFileSync(target + '.bak');
+    assert.equal(sha(bak), sha(before), '.bak 与写回前字节一致');
+    assert.notEqual(sha(bak), sha(fs.readFileSync(target)), '写回后与 .bak 已不同');
+  } finally { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
+});
+
 console.log(`\n${passed} checks passed`);

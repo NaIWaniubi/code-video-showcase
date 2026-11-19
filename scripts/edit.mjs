@@ -21,7 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseStrict, rejectUnknown } from './lib/strict-flags.mjs';
 import {
-  splitAtSeconds, dropRound, moveRound, trimToSeconds, layoutSeconds,
+  splitAtSeconds, dropRound, moveRound, trimToSeconds, layoutSeconds, suggestedCuts,
 } from './lib/spec-edit.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -85,15 +85,10 @@ for (const row of lay.rows) {
   console.error(`${mark} ${row.id.padEnd(16)} ${(row.start).toFixed(2).padStart(6)}–${(row.end).toFixed(2).padStart(6)}  ${row.kind}${row.note ? ` · ${row.note}` : ''}`);
 }
 
-// R17-W：agent 建议层（与 GET /frames/api/suggestions 同口径）——每个段边界都是
-// 一个候选切点；卡→风格之间不算是切点（同一轮内部）。
+// R17-W：agent 建议层（与 GET /frames/api/suggestions 同口径——内核单一真值 suggestedCuts）。
 let cuts = [];
 if (args.suggest) {
-  for (let i = 1; i < lay.rows.length; i++) {
-    const prev = lay.rows[i - 1], cur = lay.rows[i];
-    if (prev.kind === 'card' && cur.kind === 'style') continue;
-    cuts.push({ at: Number(cur.start.toFixed(2)), after: prev.id, before: cur.id, kind: cur.kind });
-  }
+  cuts = suggestedCuts(spec).cuts;
   console.error('suggested cuts:');
   for (const c of cuts) {
     console.error(`  ${c.at.toFixed(2).padStart(6)}s  ${c.after} → ${c.before}  (${c.kind})`);
@@ -142,9 +137,12 @@ if (args.otio) {
 const apply = !!args.apply;
 let lintExit = null;
 if (result.applied) {
-  // dry-run（默认）：临时文件过 lint 子进程，只验证不落盘
+  // dry-run（默认）：临时文件过 lint 子进程，只验证不落盘；--apply：同目录临时件过
+  // lint 后原子改名写回原文件（v4.2.1 审查发现：旧版写到固定名 project.spec.json，
+  // 原文件原地未动，--apply 名存实亡）。
   const dir = apply ? path.dirname(specPath) : fs.mkdtempSync(path.join(os.tmpdir(), 'cvs-edit-'));
-  const tmp = path.join(dir, apply ? 'project.spec.json' : `spec-${process.pid}.json`);
+  const tmpName = `spec-${process.pid}.tmp`;
+  const tmp = path.join(dir, tmpName);
   fs.mkdirSync(path.dirname(tmp), { recursive: true });
   fs.writeFileSync(tmp, JSON.stringify(spec, null, 2));
   const lr = spawnSync(process.execPath, ['bin/cvs.mjs', 'lint', tmp, '--root', ROOT],
@@ -153,11 +151,31 @@ if (result.applied) {
   if (lintExit !== 0) {
     console.error(`[edit] ✗ lint 未过（exit ${lr.status}）——改动已撤销，不落盘`);
     console.error([...(lr.stderr || '').split('\n'), ...(lr.stdout || '').split('\n')].filter((l) => /\S/.test(l)).slice(0, 8).join('\n'));
-    if (!apply) try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try { fs.rmSync(tmp); } catch { /* ignore */ }
     process.exit(13);
   }
   console.error('[edit] ✓ lint 通过');
-  if (!apply) try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+  if (!apply) { try { fs.rmSync(tmp); } catch { /* ignore */ } }
+  else {
+    // R18-W：写回安全——先备份原 spec（失败即中止，E_BACKUP），再临时件原子改名覆盖。
+    if (fs.existsSync(specPath)) {
+      const bak = specPath + '.bak';
+      try { fs.copyFileSync(specPath, bak); }
+      catch (e) {
+        console.error(`[error] [E_BACKUP] 无法备份原 spec（${bak}）：${e.message}——已中止写回`);
+        process.exit(13);
+      }
+      console.error(`[edit] 原 spec 已备份 → ${bak}`);
+    }
+    try {
+      fs.writeFileSync(tmp, JSON.stringify(spec, null, 2));
+      fs.renameSync(tmp, specPath);
+    } catch (e) {
+      console.error(`[edit] ✗ 写回失败：${e.message}（原文件与备份完好）`);
+      process.exit(13);
+    }
+    console.error(`[edit] ✓ 已写回 ${specPath}`);
+  }
 }
 
 if (args.json) {

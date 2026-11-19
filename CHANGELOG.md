@@ -3,6 +3,23 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.2.1] - 2026-11-19 — 全面审查清扫：--apply 名存实亡修复 + 建议口径统一
+
+### R18-W1 审查发现头号缺陷：--apply 从不写回原文件（名存实亡）
+- 旧实现把改动写到**固定名** `project.spec.json`（同目录），原文件原地未动——
+  除非 spec 恰好叫 project.spec.json，否则文档宣称的「确实改盘」从未发生；
+- 修复：lint 过后先备份原 spec（`.bak`），再临时件**原子改名**覆盖原路径；
+  备份失败 → E_BACKUP 错误码、注册表 159 码、exit 13，原文件与备份完好；
+- 钉子：非默认文件名的 spec 走 --apply → 原文件被写回（轮数/D 精确）、
+  `.bak` 字节与写回前一致；dry-run 不产生任何副作用（无 .bak、原文件不动）。
+
+### R18-W2 建议切点口径统一（单一真值）
+- CLI（cvs edit --suggest）与 HTTP（GET /frames/api/suggestions）此前各自内联同一
+  循环——收敛为内核 `suggestedCuts(spec)`，卡→风格不算切点等语义只在一处定义；
+- serve 路由同步瘦身（去掉重复 layout 计算）。
+
+### 验证
+- 单测 30 套件 499 通过 · errors 159/159 100% · frames --no-browser 57/57（端点契约不变）· version-sync 四方一致。
 ## [v4.2.0] - 2026-11-19 — 编辑历史可重做 · CLI 建议层
 
 ### R17-W1 工作区编辑历史升级为指针式（Undo/Redo）

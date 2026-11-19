@@ -22,7 +22,7 @@ An Agent Skill for producing 30–90 s "style showcase" films: an 8 s opening, e
 
 - **参考片反推 `cvs ref video demo.mp4`**：拖一条成片进来 → 结构模型 + BPM 自相关 + k-means 主题匹配 → 可直接 `--apply` patch 进你的 spec。启发式结果带 confidence/残差/notes，不假装精确。
 - **参考片 → 新片一步展开（v3.9）**：`cvs ref video demo.mp4 --emit-spec new.spec.json` 把反推结构展开成可直接编译的新 spec（精确闭合；lint → build 全链实测过）。
-- **agent 向剪辑 `cvs edit`（v4.0）**：`cvs edit project.spec.json --split-at=10 --drop=r03 --trim=35`——auto-editor/Kdenlive 式结构四件套，默认 dry-run 过 lint 才落盘，D 公式恒闭合；`--edl/--otio` 导出 EDL/OpenTimelineIO 时间线（外部剪辑软件直接打开）；帧工作台「建议层」把切点画成 ruler 虚线，点击即套用、实时可见。
+- **agent 向剪辑 `cvs edit`（v4.0/v4.2.1）**：`cvs edit project.spec.json --split-at=10 --drop=r03 --trim=35`——auto-editor/Kdenlive 式结构四件套，默认 dry-run 过 lint 才落盘，D 公式恒闭合；`--apply` 原子写回原文件并自动 `.bak`（v4.2.1 审查修复此前「名存实亡」缺陷）；`--edl/--otio` 导出 EDL/OpenTimelineIO 时间线；帧工作台「建议层」把切点画成 ruler 虚线，点击即套用、实时可见。
 - **预览帧 == 成片帧的位级硬证据（v4.1）**：frames 服务端取帧可连入与 live iframe 同一浏览器进程（同 URL、同光栅化），测试实测 meanDiff=0；根因修复为预览路径保留页面查询参数（theme/layout 等不再被渲染器剥掉）。
 - **编辑历史可重做 + CLI 建议层（v4.2）**：帧工作台撤销/重做全往返（Ctrl+Shift+Z / Ctrl+Y，指针式历史链）；`cvs edit <spec> --suggest` 打印建议切点表（与 `/frames/api/suggestions` 同口径，`--json` 出 suggestions 数组）。
 - **导演演示集 + 一键出片（v3.2–v3.5）**：白模线框 / 骨骼动画 / L-system 分形 / 弹道喷泉 / 等高线测绘 / 网络脉冲六个闭式确定引擎；`cvs demo <style>` 出单片、`cvs demo all --only a,b --concurrency/--retries` 批量（manifest 如实报账、上传带进度+取消）。

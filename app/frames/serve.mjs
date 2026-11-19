@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 import { createStaticServer } from '../canvas/serve.mjs';
 import { openSource, defaultCacheRoot, timecodeOf } from './source.mjs';
 import { staticCacheControl } from '../shared/static-cache.mjs';
-import { layoutSeconds } from '../../scripts/lib/spec-edit.mjs';
+import { suggestedCuts } from '../../scripts/lib/spec-edit.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_ROOT = path.resolve(HERE, '..', '..');
@@ -201,23 +201,17 @@ export function createFrameServer(root = DEFAULT_ROOT, opts = {}) {
       catch (e) {
         throw httpError(404, `spec 读取失败：${e.message}`, 'E_SPEC');
       }
-      let lay;
-      try { lay = layoutSeconds(doc); }
+      // R17-W：口径与 CLI（cvs edit --suggest）同源——suggestedCuts 内核单一真值。
+      let sug;
+      try { sug = suggestedCuts(doc); }
       catch (e) {
         throw httpError(400, `spec 结构不可展开：${e.message}`, 'E_SPEC');
       }
-      const cuts = [];
-      for (let i = 1; i < lay.rows.length; i++) {
-        const prev = lay.rows[i - 1], cur = lay.rows[i];
-        if (prev.kind === 'card' && cur.kind === 'style') continue;   // 卡/风格之间不算是切点
-        cuts.push({ at: Number(cur.start.toFixed(2)), after: prev.id, before: cur.id,
-                    kind: cur.kind });
-      }
       sendJson(res, 200, { ok: true, spec: path.basename(specPath),
-        total: Number(lay.total.toFixed(2)), fps: Number(doc.format?.fps || 30),
-        segments: lay.rows.map((r) => ({ id: r.id, kind: r.kind,
+        total: Number(sug.total.toFixed(2)), fps: Number(doc.format?.fps || 30),
+        segments: sug.rows.map((r) => ({ id: r.id, kind: r.kind,
           start: Number(r.start.toFixed(2)), end: Number(r.end.toFixed(2)) })),
-        cuts });
+        cuts: sug.cuts });
       return;
     }
 
