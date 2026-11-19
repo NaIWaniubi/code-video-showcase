@@ -159,3 +159,18 @@ export function applyStructure(spec, r) {
     },
   };
 }
+/**
+ * 建议切点（R17-W 统一口径）：每个段边界都是一个候选切点；卡→风格之间不算
+ * （同一轮内部）。CLI（cvs edit --suggest）与 HTTP（GET /frames/api/suggestions）
+ * 必须同口径——故收敛到内核，单一真值。
+ */
+export function suggestedCuts(spec) {
+  const lay = layoutSeconds(spec);
+  const cuts = [];
+  for (let i = 1; i < lay.rows.length; i++) {
+    const prev = lay.rows[i - 1], cur = lay.rows[i];
+    if (prev.kind === 'card' && cur.kind === 'style') continue;
+    cuts.push({ at: Number(cur.start.toFixed(2)), after: prev.id, before: cur.id, kind: cur.kind });
+  }
+  return { rows: lay.rows, total: lay.total, cuts };
+}
