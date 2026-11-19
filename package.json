@@ -1,6 +1,6 @@
 {
   "name": "code-video-showcase",
-  "version": "4.2.1",
+  "version": "4.3.0",
   "description": "Pure-code, beat-synced showcase video skill: deterministic HTML/Canvas frames, synthesized score, FFmpeg assembly.",
   "type": "module",
   "license": "MIT",

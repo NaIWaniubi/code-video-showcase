@@ -1,6 +1,6 @@
 # 优化方案落地状态（v1.0 → v2.5.2）
 
-> ## v3.x 时代能力清单（v4.2.1，2026-11-19 · v2.8.1 → v4.2.1 共 16 个大版本）
+> ## v3.x 时代能力清单（v4.3.0，2026-11-20 · v2.8.1 → v4.3.0 共 17 个大版本）
 >
 > 本节为 v3.x + v4.0 全波次（第三轮十视角审计 + 断层领先三件套 + 产品面补齐 +
 > agent 向剪辑）的落地总账。逐版明细以 CHANGELOG 为准；以下为能力级索引：
@@ -29,6 +29,7 @@
 >   frames 工作台建议层（GET /frames/api/suggestions → ruler 虚线切点可点套用）。
 >   同版修复 v3.1.0 起 `undoEdit` 未定义导致工作台加载即崩的潜伏缺陷；
 >   reflow 重写两位小数精确闭合（短片骨架不再被整数秒地板撑散架）。
+> - **剪辑闭环索引安全（v4.3.0）**：修复 frames 导出的段表与 rounds 索引空间错位（旧版把段记录静默合并进错轮）——compile 按 roundId 定位 + id 对齐校验；frames 导出只回填文案进 copyPatch，结构改动记 notes 如实告知走 cvs edit。
 > - **全面审查清扫（v4.2.1）**：修复 `--apply` 名存实亡（旧版写固定名 project.spec.json、
   原文件未动——现原子写回 + `.bak` 自动备份，E_BACKUP 码）；建议切点口径收敛内核单一真值。
 - **编辑历史可重做 + CLI 建议层（v4.2.0）**：帧工作台撤销/重做全往返（Ctrl+Shift+Z /
@@ -38,11 +39,11 @@
 >   剥掉页面自带查询参数（theme/layout 等）——此前「预览帧 ≠ 成片帧」的根因；
 >   同进程实测 meanDiff=0，frames 套件位级三连转硬钉子。
 >
-> **当前门禁口径（v4.2.1 实测）**：test:all **30 套件 499 通过 / 0 失败** ·
+> **当前门禁口径（v4.3.0 实测）**：test:all **30 套件 503 通过 / 0 失败** ·
 > frames 浏览器套件 **79/79**（位级三连 meanDiff=0 + 编辑往返钉子含 redo；--no-browser 57/57）·
 > reflow-pages 浏览器套件 **55/55**（D7 像素摘要口径，内容形态真保护，双连跑全绿）·
 > health 5/5 · golden 位级基线含 demo-skeleton · errors 159 码覆盖 100% ·
-> version-sync 四方一致（4.2.1）· npm run gate 全绿。
+> version-sync 四方一致（4.3.0）· npm run gate 全绿。
 > 原第 8 条「未 commit」早已过时——所有改动按版本提交。
 >
 对照 [BACKLOG.json](BACKLOG.json) 的 26 项，逐项说明落地情况。

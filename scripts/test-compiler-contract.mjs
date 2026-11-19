@@ -546,6 +546,68 @@ test('R2-07：page 含 .. 穿越被拒（E_PAGE_TRAVERSAL），非 HTML 被拒�
   assert.match(r2.stdout + r2.stderr, /E_PAGE_EXT/);
 });
 
+// ── R19-W：segment-patch 应用语义（roundId 主解析，防段→轮错位）─────────────
+
+test('R19 segment-patch：copyPatch roundId 文案落回正确的轮（端到端 build --dry-run）', () => {
+  const dir = tmp();
+  try {
+    const spec = path.join(dir, 'spec.json');
+    fs.copyFileSync(FIXTURE, spec);
+    const patchPath = path.join(dir, 'patch.json');
+    writeJson(patchPath, {
+      schema: 'cvs.segment-patch/v1',
+      sourceFrames: 1230,
+      patch: [],
+      copyPatch: [{ roundId: 'r02', index: 1, title: '帧工作台新标题', subtitle: '新副题' }],
+    });
+    const r = run([BIN, 'build', spec, '--dry-run',
+      '--segment-patch', patchPath]);
+    assert.equal(r.status, 0, (r.stdout || '') + (r.stderr || ''));
+    assert.match(r.stderr || '', /copy-patch applied 1/);
+    const plan = readJson(path.join(ROOT, 'out', 'mini-41s', 'plan.json'));
+    // 文案真值通道：round copy → 段页 URL 的 ?title=/?sub=（渲染器按轮下发）。
+    const segOf = (id) => plan.segments.find((s) => s.id === id);
+    const withTitle = (seg) => decodeURIComponent(String(seg && seg.page || ''));
+    const hit = withTitle(segOf('r02-style'));
+    assert.match(hit, /帧工作台新标题/, 'r02 风格段页拿到新标题');
+    assert.match(hit, /新副题/, 'r02 风格段页拿到新副题');
+    const others = plan.segments.filter((s) => /^r\d+-style$/.test(s.id) && s.id !== 'r02-style')
+      .map((s) => withTitle(s));
+    assert.ok(!others.some((u) => u.includes('帧工作台新标题')), '其他轮不受污染');
+  } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} }
+});
+
+test('R19 segment-patch：roundId+index 不一致 → E_SEGMENT_PATCH 如实拦下（不猜）', () => {
+  const dir = tmp();
+  try {
+    const spec = path.join(dir, 'spec.json');
+    fs.copyFileSync(FIXTURE, spec);
+    const p = path.join(dir, 'p.json');
+    writeJson(p, { schema: 'cvs.segment-patch/v1', sourceFrames: 1230,
+      patch: [{ index: 3, roundId: 'r02' }] });
+    const r = run([BIN, 'build', spec, '--root', dir, '--dry-run', '--segment-patch', p]);
+    assert.equal(r.status, 10, '应为 exit 10');
+    assert.match(r.stdout + r.stderr, /E_SEGMENT_PATCH/);
+    assert.match(r.stdout + r.stderr, /disagrees/i, '必须指出不一致而非静默选边');
+  } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} }
+});
+
+test('R19 segment-patch：仅 index 时要求 id 对齐（防段表索引静默错轮）', () => {
+  const dir = tmp();
+  try {
+    const spec = path.join(dir, 'spec.json');
+    fs.copyFileSync(FIXTURE, spec);
+    // 旧版 frames 导出的形状：index 是**段**索引（19 段），id 是段 id。
+    // 指向段索引 5（> rounds 数 6 时仍可能落进 range）→ 必须因 id 不匹配被拦。
+    const p = path.join(dir, 'p.json');
+    writeJson(p, { schema: 'cvs.segment-patch/v1', sourceFrames: 1230,
+      patch: [{ index: 2, id: 'r01-style' }] });
+    const r = run([BIN, 'build', spec, '--root', dir, '--dry-run', '--segment-patch', p]);
+    assert.equal(r.status, 10, 'id 与 rounds[2] 不符必须拒');
+    assert.match(r.stdout + r.stderr, /does not match/i);
+  } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} }
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 
 test('R3 并发钳制：--concurrency 超 cap 被钳并告警（RT-09 F3）', () => {

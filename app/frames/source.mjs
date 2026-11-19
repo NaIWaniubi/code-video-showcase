@@ -415,8 +415,15 @@ export class SpecSource {
     this.frames = Number(plan?.stats?.frames) || frameCountOf(Number(fmt.duration) || 0, this.fps);
     this.width = this.widthOpt || Number(fmt.width) || 1920;
     this.height = this.heightOpt || Number(fmt.height) || 1080;
-    if (!this.frames) throw new Error('plan has no frames');
     this.duration = this.frames / this.fps;
+    if (!this.frames) throw new Error('plan has no frames');
+    // R19-W：轮元数据——exportSegments 需要把段级编辑落回正确的轮（frames 的段表
+    // 含 opening/card/style/more/flash/ending，与 rounds 的索引空间不同）。
+    const planSpec = plan?.spec || {};
+    this.rounds = Array.isArray(planSpec.rounds)
+      ? planSpec.rounds.map((r) => ({ id: String(r.id || ''), copy: r.copy || null,
+                                        card: r.card || null, style: r.style || null }))
+      : null;
     this.segments = (plan.segments || []).map((s) => ({
       id: s.id, kind: s.kind, label: s.label || s.kind || s.id,
       startFrame: s.startFrame, endFrame: s.endFrame, frames: s.frames,
@@ -667,6 +674,8 @@ export class SpecSource {
       ready: this.frames, decoded: this.frames, done: true,
       error: this.error ? String(this.error.message || this.error) : null,
       segments: segs, rendered: this.renders, cachedFrames: this._cache.size,
+      // R19-W：轮元数据（exportSegments 把段级文案编辑落回正确的轮）。
+      rounds: this.rounds,
       theme: this.plan?.meta?.theme || null,
       name: this.plan?.meta?.name || null,
     };

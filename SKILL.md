@@ -1,6 +1,6 @@
 ---
 name: code-video-showcase
-version: 4.2.1   # 与 package.json 同值（test-version-sync 钉死）
+version: 4.3.0   # 与 package.json 同值（test-version-sync 钉死）
 description: |
   用纯代码（HTML/Canvas/SVG/Three.js 逐帧渲染 + Python numpy/scipy 合成配乐 + FFmpeg 合成）制作 30–90 秒卡点风格展示视频的完整技能。
   适用于：复刻/仿制《Opus 5.5 视频风格展示》或 DeepSeek V4.1-Flash 61s 风格样片、多风格切换卡点视频、纯代码视频、程序化视频；要求不使用任何视频/图像/音乐生成模型。
@@ -131,6 +131,9 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
   `cvs edit <spec> --suggest` CLI 建议层（与 HTTP 端点同口径）。
   v4.2.1：审查修复——`--apply` 名存实亡（旧版写到固定名 project.spec.json、原文件未动），
   现原子写回原文件并自动 `.bak`；建议切点口径收敛内核单一真值。
+  v4.3：剪辑闭环索引空间修复——frames 导出的段表与 rounds 错位（旧版静默错轮合并）；
+  compile 按 roundId 定位 + id 对齐校验，frames 导出只回填文案进 copyPatch，
+  结构改动记 notes 如实告知（成片结构改动请用 cvs edit）。
   
 - **派生导出格式（v3.1）**：`--platform webm|gif|mp3` 从 master/音轨直接转码（不经 shell 的 mp4+AAC 链），交付清单按扩展名入列。覆盖矩阵单一真值 `docs/COVERAGE.md`。
 - **禁止**：让 LLM 直接生成 HTML/CSS/JS，或绕过 spec 直接改像素。模型只填枚举与文案。

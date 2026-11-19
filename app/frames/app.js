@@ -939,6 +939,7 @@ function clearSource() {
   // R15-W3：换源后旧源的建议切点必须清掉，否则会叠加到新片的 ruler 上。
   state.suggestCuts = [];
   state.suggestSpec = null;
+  state._segmentRound = new Map();
   state.editStack = new EditStack();
   el.rangebar.hidden = true;
   el.ruler.hidden = true;
@@ -998,6 +999,20 @@ function attach(id, meta) {
   updateEditButtons();
   // 编辑基准：打开时的原始段表（导出时只报差异）
   state.meta._originalSegments = (meta.segments || []).map((x) => ({ ...x }));
+  // R19-W：段 → 轮映射——frames 的段表含 opening/card/style/more/flash/ending，
+  // 与 rounds 的索引空间不同；导出 patch 必须先把编辑落回正确的轮。
+  const segToRound = new Map();
+  for (const seg of meta.segments || []) {
+    const m = /^([A-Za-z0-9]+)-(?:card|style)$/.exec(String(seg.id || ''));
+    if (!m) continue;
+    const roundId = m[1];
+    let roundIndex = null;
+    if (Array.isArray(meta.rounds) && meta.rounds.length) {
+      roundIndex = meta.rounds.findIndex((r) => String(r.id) === roundId);
+    }
+    segToRound.set(String(seg.id), { roundId, roundIndex });
+  }
+  state._segmentRound = segToRound;
   updateEditButtons();
   renderSegList();
 }
@@ -1227,41 +1242,61 @@ function renderSegList() {
   }
 }
 
-/** R7：导出当前编辑后的段表为 spec patch（JSON 下载）。
- * 只含「与原始 spec 不一致的段」——把 frames 的编辑结果变成可编译的输入。 */
+/** R7/R19-W：导出当前编辑后的段表为 spec patch（JSON 下载）。
+ * R19-W：索引空间修正——frames 的段表含 opening/card/style/more/flash/ending，
+ * 与 spec.rounds 完全错位；旧实现把段记录静默合并进错轮。导出语义：
+ *   - **文案类编辑**（title/subtitle/first/keyword）→ copyPatch，按所属轮定位
+ *     （roundId 主 + index 辅），可安全编译回成片；
+ *   - **结构类编辑**（分割/换序/删段）→ 不进 rounds patch（成片结构改动请用
+ *     cvs edit——D 公式闭合），记进 notes 如实告知。
+ */
+function isCopyDiff(base, seg) {
+  if (!base || !seg) return false;
+  const copyEq = JSON.stringify(base.copy || {}) === JSON.stringify(seg.copy || {});
+  const cardEq = JSON.stringify(base.card || {}) === JSON.stringify(seg.card || {});
+  return !copyEq || !cardEq;
+}
+
 function exportSegments() {
   const m = state.meta;
   if (!m || !m.segments) { setStatus('没有可导出的段表', 'err'); return; }
   const original = m._originalSegments || null;
   const patched = [];
-  // 文案回填（R8-W3）：每段 title 与其轮 id 对齐——多片拆分后下游重编译
-  // 每个片段各自成卡，不再共用同一行标题（不然「想 / 看片？」出现在每一块上）。
   const copyPatch = [];
+  const notes = new Set();
   for (let i = 0; i < m.segments.length; i++) {
     const seg = m.segments[i];
     const base = original ? original[i] : null;
     if (!base || JSON.stringify(base) !== JSON.stringify(seg)) {
-      patched.push({ index: i, ...seg });
-      if (base && seg.copy && base.copy && JSON.stringify(base.copy) !== JSON.stringify(seg.copy)) {
-        copyPatch.push({ index: i, ...(seg.copy || {}) });
+      const rd = state._segmentRound?.get(String(seg.id));
+      if (rd && isCopyDiff(base, seg)) {
+        // 文案真值通道：copy（style.copy/copy 双写，compile 按轮深合并）
+        const cp = {};
+        if (seg.copy && base.copy) {
+          if (seg.copy.title !== base.copy.title) cp.title = seg.copy.title;
+          if (seg.copy.subtitle !== base.copy.subtitle) cp.subtitle = seg.copy.subtitle;
+        }
+        const bk = base.card || {}, sk = seg.card || {};
+        if (sk.first != null && String(sk.first) !== String(bk.first ?? '')) cp.first = sk.first;
+        if (sk.keyword != null && String(sk.keyword) !== String(bk.keyword ?? '')) cp.keyword = sk.keyword;
+        if (Object.keys(cp).length) copyPatch.push({ ...cp, index: rd.roundIndex, roundId: rd.roundId });
+      } else if (rd) {
+        notes.add(`${seg.id} 的结构编辑不进 rounds patch（成片结构改动请用 cvs edit）`);
+      } else {
+        notes.add(`${seg.id}（非轮段）不进 rounds patch（成片结构改动请用 cvs edit）`);
       }
-    }
-    // splitAtPlayhead 把标题留在原始值上：导出时按片段序号回填一次，
-    // 保证多段各司其职（不覆盖用户后续真编辑过的文案）。
-    if (seg.id && /[ab]$/.test(String(seg.id)) && seg.copy && base &&
-        seg.copy.title === (base.copy && base.copy.title)) {
-      copyPatch.push({
-        index: i,
-        title: String((base.copy && base.copy.title) || '') + ' · 片段' + String(i + 1),
-      });
     }
   }
   const blob = new Blob([JSON.stringify({ schema: 'cvs.segment-patch/v1',
-    sourceFrames: m.frames, patch: patched, copyPatch }, null, 2)], { type: 'application/json' });
+    sourceFrames: m.frames, patch: patched, copyPatch,
+    ...(notes.size ? { notes: [...notes] } : {}) }, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   triggerDownload(url, `spec-patch-${Date.now()}.json`);
   setTimeout(() => URL.revokeObjectURL(url), 4000);
-  setStatus(`已导出 ${patched.length} 条段记录${copyPatch.length ? ` + ${copyPatch.length} 条文案回填` : ''} · 用 cvs build --segment-patch 套用`, 'ok');
+  const msg = [`已导出 ${copyPatch.length} 条文案回填` +
+    (notes.size ? ` · ${notes.size} 项结构改动不进入 patch（用 cvs edit 改结构）` : '') +
+    ' · 用 cvs build --segment-patch 套用'];
+  setStatus(msg.join(''), copyPatch.length ? 'ok' : 'warn');
 }
 el.btnExportSegs.addEventListener('click', exportSegments);
 

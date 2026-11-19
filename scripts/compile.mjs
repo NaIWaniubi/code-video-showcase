@@ -193,6 +193,31 @@ try {
 
 // R7-W2：套用帧工作台导出的段表 patch（schema cvs.segment-patch/v1）。
 // 只覆盖 patch 里显式给出的段，不整表替换——原 spec 的页面/文案照旧。
+// R19-W：把 patch/copyPatch 的条目解析到**轮**上——帧工作台的段表索引空间与 rounds
+// 完全错位（segments 含 opening/card/style/more/flash/ending，rounds 只有轮），旧实现
+// 把段记录静默合并进错轮。解析规则：roundId 主定位；仅 index 时要求 id 对齐；
+// roundId 与 index 同时给出且不一致 → E_SEGMENT_PATCH（如实拦下，不猜）。
+function resolveRound(origRounds, rec, label) {
+  const hasRoundId = rec.roundId != null && String(rec.roundId).trim() !== '';
+  const idx = Number(rec.index);
+  const hasIdx = Number.isInteger(idx) && idx >= 0 && idx < origRounds.length;
+  let resolved;
+  if (hasRoundId) {
+    resolved = origRounds.findIndex((r) => String(r.id) === String(rec.roundId));
+    if (resolved < 0) fail('spec', 'E_SEGMENT_PATCH', `${label} roundId ${rec.roundId} not found among rounds`);
+    if (hasIdx && resolved !== idx) {
+      fail('spec', 'E_SEGMENT_PATCH', `${label} index ${idx} disagrees with roundId ${rec.roundId} (round ${rec.roundId} is at ${resolved})`);
+    }
+  } else {
+    if (!hasIdx) fail('spec', 'E_SEGMENT_PATCH', `${label} index ${rec.index} out of rounds range (0..${origRounds.length - 1})`);
+    if (rec.id != null && String(rec.id) !== String(origRounds[idx].id)) {
+      fail('spec', 'E_SEGMENT_PATCH', `${label} record id ${rec.id} does not match rounds[${idx}].id ${origRounds[idx].id}`);
+    }
+    resolved = idx;
+  }
+  return resolved;
+}
+
 if (args['segment-patch']) {
   const pf = path.resolve(String(args['segment-patch']));
   let pdoc;
@@ -204,24 +229,23 @@ if (args['segment-patch']) {
   const origRounds = raw.rounds || [];
   let applied = 0;
   for (const rec of pdoc.patch) {
-    const idx = Number(rec.index);
-    if (!Number.isInteger(idx) || idx < 0 || idx >= origRounds.length) {
-      fail('spec', 'E_SEGMENT_PATCH', `patch entry index ${idx} out of rounds range (0..${origRounds.length - 1})`);
-    }
+    const idx = resolveRound(origRounds, rec, 'patch entry');
     const src = origRounds[idx];
-    // 帧工作台导出的记录带原始轮的全部字段（id/card/style/…），
-    // 以导出记录为准深合并，轮结构完整替换。
+    // 以导出记录为准深合并，轮结构完整替换（frames 现在导出的是轮形状的记录）。
     origRounds[idx] = { ...src, ...rec, id: rec.id || src.id };
     applied++;
   }
   raw.rounds = origRounds;
   console.error(`[patch]   segment-patch applied ${applied} round record(s) from ${pf}`);
-  // R8-W3：copyPatch —— 帧工作台回填的文案按 index 深合并进对应轮的 copy/card。
+  // R8-W3：copyPatch —— 帧工作台回填的文案按 round 深合并进对应轮的 copy/card。
   if (Array.isArray(pdoc.copyPatch)) {
     let copyApplied = 0;
+    let skipped = 0;
     for (const rec of pdoc.copyPatch) {
-      const idx = Number(rec.index);
-      if (!Number.isInteger(idx) || idx < 0 || idx >= origRounds.length) continue;
+      // 无定位信息的条目无法安全应用——跳过并计数，绝不猜。
+      const idx = rec.roundId != null || (Number(rec.index) >= 0 && Number(rec.index) < origRounds.length)
+        ? resolveRound(origRounds, rec, 'copy entry') : null;
+      if (idx === null) { skipped++; continue; }
       const dst = origRounds[idx];
       // 文案的真值在 rounds[i].style.copy（渲染器按轮下发 ?vars=）；
       // 同时保留 round 级 copy 作为兼容通道。
@@ -239,9 +263,10 @@ if (args['segment-patch']) {
       }
       copyApplied++;
     }
+    if (skipped) console.error(`[patch]   copy-patch skipped ${skipped} unlocated record(s)`);
     const titles = origRounds.map((r) => ((r.style && r.style.copy && r.style.copy.title)
       || (r.copy && r.copy.title) || null)).filter(Boolean);
-    console.error(`[patch]   copy-patch applied ${copyApplied} round record(s); titles: ${titles.join(' ﾷ ')}`);
+    console.error(`[patch]   copy-patch applied ${copyApplied} round record(s); titles: ${titles.join(' ｜ ')}`);
   }
 }
 

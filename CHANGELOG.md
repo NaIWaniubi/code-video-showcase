@@ -3,6 +3,34 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.3.0] - 2026-11-20 — 剪辑闭环索引空间修复：帧工作台导出不再静默错轮
+
+### R19-W 审查发现：frames 导出的段表与 rounds 索引空间错位
+- frames 的段表含 opening/card/style/more/flash/ending（与 timeline-core 同构），
+  spec.rounds 只有轮——旧实现把「index=2 的段记录」静默合并进 rounds[2]（r03），
+  实测确认：套件模拟导出物喂给 build，exit 0、无告警，错轮已被污染；
+- 这是继 undoEdit 未定义（R15）、attach m 未定义（R15）之后第三个同族缺陷：
+  顶层一路绿、真实语义静默错。
+
+### 三层修复
+1. compile `resolveRound`：roundId 主定位；仅 index 时要求 id 与 rounds[idx].id 对齐；
+   roundId+index 不一致 → E_SEGMENT_PATCH（如实拦下不猜）；无定位信息的 copyPatch
+   条目跳过并计数，绝不猜；
+2. SpecSource.meta 出口补 rounds 元数据；frames attach 建段→轮映射（rNN-card/style 前缀）；
+3. exportSegments 重写语义：文案类编辑（title/subtitle/first/keyword）→ copyPatch，
+   带 roundId+index，可安全编译回成片；结构类编辑（分割/换序/删段）→ 不进 rounds patch，
+   记 notes 如实告知——成片结构改动请用 cvs edit（D 公式闭合，权威在编译链）。
+
+### 钉子（四条，端到端 build --dry-run）
+- copyPatch roundId 文案落回正确的轮（段页 URL ?title= 验证 + 其他轮零污染）；
+- roundId+index 不一致退 E_SEGMENT_PATCH exit 10 且指出矛盾；
+- 仅 index 时 id 对齐不符即拒（防旧段索引再犯）；
+- schema 坏档退 E_SEGMENT_PATCH（既有钉子保持）。
+
+### 验证
+- 合同套件 35/0 · 单测 30 套件 503 通过 / 0 · frames --no-browser 57/57；
+- 四方版本号同步 4.3.0。
+
 ## [v4.2.1] - 2026-11-19 — 全面审查清扫：--apply 名存实亡修复 + 建议口径统一
 
 ### R18-W1 审查发现头号缺陷：--apply 从不写回原文件（名存实亡）
