@@ -1,6 +1,6 @@
 # 优化方案落地状态（v1.0 → v2.5.2）
 
-> ## v3.x 时代能力清单（v4.1.0，2026-11-19 · v2.8.1 → v4.1.0 共 13 个大版本）
+> ## v3.x 时代能力清单（v4.1.1，2026-11-19 · v2.8.1 → v4.1.1 共 14 个大版本）
 >
 > 本节为 v3.x + v4.0 全波次（第三轮十视角审计 + 断层领先三件套 + 产品面补齐 +
 > agent 向剪辑）的落地总账。逐版明细以 CHANGELOG 为准；以下为能力级索引：
@@ -34,12 +34,12 @@
 >   剥掉页面自带查询参数（theme/layout 等）——此前「预览帧 ≠ 成片帧」的根因；
 >   同进程实测 meanDiff=0，frames 套件位级三连转硬钉子。
 >
-> **当前门禁口径（v4.1.0 实测）**：test:all **30 套件 496 通过 / 0 失败** ·
+> **当前门禁口径（v4.1.1 实测）**：test:all **30 套件 496 通过 / 0 失败** ·
 > frames 浏览器套件 **77/77**（含位级三连 meanDiff=0 + 编辑接线钉子）·
-> health 5/5 · golden 位级基线含 demo-skeleton · errors 158 码覆盖 100% ·
-> version-sync 四方一致（4.1.0）· npm run gate 全绿。已知环境漂移（与 v4.1.0 无关，
-> HEAD 同口径复验）：test-reflow-pages 的 D7 冻结哈希 4 条在本机 SwiftShader 上不再逐字节
-> 复现（Chrome 版本漂移，HEAD 基线同败），与 golden envCompare 同属环境属性，待重冻。
+> reflow-pages 浏览器套件 **55/55**（D7 钉改像素灰度摘要口径——Chrome JPEG 编码器
+> 非确定是根因之一；内容形态经 --keep-page-params 恢复真保护，双连跑全绿）·
+> health 5/5 · golden 位级基线含 demo-skeleton ·
+> errors 158 码覆盖 100% · version-sync 四方一致（4.1.1）· npm run gate 全绿。
 > 原第 8 条「未 commit」早已过时——所有改动按版本提交。
 >
 对照 [BACKLOG.json](BACKLOG.json) 的 26 项，逐项说明落地情况。

@@ -117,6 +117,8 @@ export function optionsFromArgs(args) {
     format: str('format', 'raw'),
     capture: str('capture', 'auto'),
     headed: !!args.headed,
+    // R16-W：CLI --keep-page-params（对象路径经 opts 直接传入；此处兜住 flag 写法）。
+    keepPageParams: !!args['keep-page-params'] || !!args.keepPageParams,
     timeout: num('timeout', 120000),
     launchTimeout: num('launch-timeout', 30000),
     warmup: args['no-warmup'] ? false : bool(args.warmup, true),

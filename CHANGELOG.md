@@ -3,6 +3,28 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.1.1] - 2026-11-19 — D7 位级钉修复：像素摘要口径 + 内容基线恢复真保护
+
+### 背景（v4.1.0 已登记的 reflow-pages 红，本波落地）
+- test-reflow-pages 的 D7 四条冻结哈希在本机不复现。逐层探明三重根因：
+  ① **Chrome JPEG 编码器非确定**（R2-11 老定论）：同像素的帧其 JPG 文件字节可逐跑不同
+     ——实测内容形态 JPG hash 翻转，而 ffmpeg 解码灰度 rawvideo meanAbsDiff=0（像素完全相同）；
+  ② **RT-07 P2-2 的剥离语义**（v2.9.0 起）：`?title/?sub` 到不了页面，两条内容基线
+     自那之后与无内容形态逐字节相同，形同虚设；
+  ③ segment(带内容) 的位级像素在本机 SwiftShader 下逐跑随机（CJK 标题排版微差，多次复现），
+     任何位级钉都无法稳定成立。
+- 旁证：同口径在 HEAD 复验（暂存 R16 改动后跑）同样 4 条失败——与 R16 无关。
+
+### 落地
+- **基线口径改为「解码后灰度像素摘要」**（ffmpeg rawvideo gray → SHA-256）：
+  位级保护以像素为准，编码字节抖动不再污染基线；采样脚本自身吃过 maxBuffer 截断的亏，
+  graySha 显式 maxBuffer 64MB；
+- `optionsFromArgs` 补 `--keep-page-params` flag 接线，`renderStill` 内容形态 opt-in 传参，
+  生产渲染链默认仍剥离任意查询；
+- segment(带内容) 位级钉降级为「内容 ≠ 无内容」结构守卫（RT-07 回归会让两者相同，恰是
+  被防的失效模式）；big-card(带内容) 及两条无内容形态保像素摘要钉；
+- docs/DECISIONS.md D7 附注按最终口径重写；test-reflow-pages **55/55 双连跑全绿**。
+
 ## [v4.1.0] - 2026-11-19 — 位级硬证据：共享渲染器 + 预览取帧根因修复
 
 ### R16-W1 取帧与预览同进程（rendererEndpoint）

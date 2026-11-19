@@ -54,15 +54,16 @@ window.__patch   = (id, props) => diff;   // 改内存 spec → renderFrame(curr
 - 页面**不得**再硬编码 `1920×1080`。画布尺寸取 `window.innerWidth` / `window.innerHeight`（取整、偶数），缺省回退 1920×1080。
 - 布局按 `W/H > 1`（横）、`< 1`（竖）、`= 1`（方）分支；竖屏必须重排，不许把横屏画面整体缩进竖框。
 - 默认 16:9（1920×1080）输出必须逐字节不变。基线（**v2.5.2 重定**，`render-segment --still` 的 JPG SHA-256，jpeg/q92）：
-  - `templates/big-card.html` @ t=0.5 → `af48254753aeaa0758b2489b285e259e50d8b876460d43e2ab22b63ba298dc0c`
-  - `templates/segment.html` @ t=1.2 → `1eef52a0ca28fea5b8bce8880927657894ab96f516ef93620d7f2cdbcf30602c`
-  - `templates/big-card.html?first=契约&keyword=基线？&brand=CVS` @ t=0.5 → `416a84f63e44e33266c12f9f7c548ecf10a4ce5b9b246e575c3bc0e6610988d3`
-  - `templates/segment.html?title=契约基线&sub=副标题&brand=CVS` @ t=1.2 → `eaaf26ab95a00ed8ba7da5f09246ac2c70f9b08f0b0d3b119628ffa86057ebac`
+  - `templates/big-card.html` @ t=0.5 像素摘要 → `ce6c4242e76a2c168ea040162b6fa6ff613a498339ac98851839b7cbd76ed6a5`
+  - `templates/segment.html` @ t=1.2 像素摘要 → `5c5a0dd6a70426246953f8c025c4c6e08d7b1ae56e0e0d3783fb27eefa19b981`
+  - `templates/big-card.html?first=契约&keyword=基线？&brand=CVS` @ t=0.5 像素摘要 → `de85c5cc2388136e32179c3c7dab33cd6a6a2a98626cb1fd53bd54f0ca457b5d`
+  - `templates/segment.html?title=契约基线&sub=副标题&brand=CVS` @ t=1.2 → `a1d6f652a5f8f15dae9870d8ec435bbba7ae001789fb1b36649a1c19f122fc9b`
 - **v2.5.2 重定 segment 两条的理由（不是回归）**：R2-06 给 `drawCapsuleLabel` 补 `ctx.textAlign = 'left'`——旧版从不设对齐，胶囊文字继承场景标题的 `center`/`right`，向左溢出药丸框，浅色主题下整条不可读（全主题全帧中招）。胶囊只在 segment 上画，big-card 两条基线因此不变。另 R2-29 把胶囊兜底由标题改成品牌（`?title=` 独占时标题不再复读两遍），只影响带内容形态（无内容时两者都落到 `'预览'`）。
   - 重定验证：① 临时删掉 `ctx.textAlign='left'` 一行，`segment.html` @1.2 逐字节复现旧哈希 `b39be972…`，证明漂移全部来自该有意改动；② big-card 两条哈希不变，说明改动范围与胶囊一致。
   - 旧基线（v2.4，仅作历史）：segment `b39be97209eba14714bd57b9d313779eb3882d4d371c74d6c43aab08bfd8f08e`、segment-content `cd9142a5fe5499e316914318ff1b30d769a7235970722117eaec0fd1b1c19641`。
 - **v2.4 重定的理由**：v2.3.5 有意删掉开发者占位文案（"风格段标题 / 替换 drawScene()"），v2.4 引入排版 token（`templates/tokens.mjs`）改了标题字号。两者都**有意**改变 16:9 像素。重定前做过两步验证：① 用 `git show HEAD:` 取出旧页面渲染，仍能逐字节复现旧哈希 `6915e0bf…` / `16cadad4…`，说明漂移全部来自工作区的有意改动；② 本轮 D3 接线修复（`eff()` 以 `SPEC.params` 为合并基座）对基线**零像素漂移**。
   - 旧基线（v2.2–v2.3.4，仅作历史）：big-card `6915e0bf21ce229725c577f45bdddfe4599b423187553b7f641fde36f477eff0`、segment `16cadad4252c12462cdc92a1c6ca502293e5aed99fc8a595707011c362641905`。
+- **v4.1.1 重定四条的理由（不是回归）**：① **哈希口径从「JPG 文件字节」改为「解码后灰度像素摘要」**——本仓库 R2-11 已定论 Chrome JPEG 编码器非确定：同像素的帧其 JPG 文件字节可逐跑不同（实测内容形态 JPG hash 翻转，而 ffmpeg 解码灰度 rawvideo meanAbsDiff=0，像素完全相同）。位级保护以像素为准，编码字节抖动不再污染基线；② 自 v2.9.0（RT-07 P2-2）起渲染器默认剥离页面自带查询参数，`?title/?sub` 到不了页面——两条内容基线自此与无内容形态相同、形同虚设；本版起内容形态经 `--keep-page-params` opt-in 恢复真保护，生产链默认仍剥离；③ `segment(带内容)` 的位级钉在本机 SwiftShader 下逐跑随机（CJK 标题排版微差，多次复现），无法稳定冻结——降级为「内容 ≠ 无内容」的结构守卫（RT-07 回归会让两者相同，恰是被防的失效模式），big-card(带内容) 保像素摘要钉。换机重冻时按此三件套重新校准。
 - **为什么加带内容的基线**：旧基线渲染的是**无 `?title/?sub`** 的页面。v2.3.5 之后这一形态几乎只剩 HUD 与背景，冻结它等于冻结一张近乎空白的帧——守不住标题排版，而标题排版正是 D7 要保护的东西。因此每个页面各冻两条：无内容形态 + 带内容形态。
 - 命中表 rect 必须跟随新布局；`__inspect` 在竖屏下仍能点中。
 - **空文本不注册命中区**（v2.4）：`addTextHit` / `addStampHit` 对空字符串直接返回。否则 D3 会对外宣告一个宽度 0、没有像素的「可编辑目标」，用户改它的颜色看不到任何变化。与 `templates/recipes/util.js` `drawTopMeta` 的既有约定一致。

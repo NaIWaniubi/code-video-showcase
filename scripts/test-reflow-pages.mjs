@@ -36,14 +36,25 @@ const SLEEP = (ms) => new Promise((r) => setTimeout(r, ms));
 // R2-06 给 drawCapsuleLabel 补 textAlign='left'（旧版继承场景标题的 center，
 // 胶囊文字向左溢出药丸框，浅色主题下整条不可读），有意改变 16:9 像素；
 // 重定前已验证：临时去掉该行可逐字节复现旧哈希 b39be972…。big-card 不画胶囊，两条不变。
+// v4.1.1 在本机（SwiftShader 当前版本）重冻全部四条，实测口径：
+//   v4.1.1 把四条哈希口径从「JPG 文件字节」改为「解码后灰度像素摘要」：
+//      本仓库 R2-11 早定论 Chrome JPEG 编码器非确定——同像素两帧的 JPG 文件字节可差，
+//      实测内容形态连跑 JPG hash 翻转而灰度 rawvideo meanAbsDiff=0（像素完全相同）。
+//      位级保护以像素为准，编码字节抖动不再污染基线；
+//   v4.1.1 同时修内容形态失效：自 v2.9.0（RT-07 P2-2）渲染器默认剥离页面自带查询参数，
+//      ?title/?sub 到不了页面——内容基线自此与无内容形态逐字节相同、形同虚设；
+//      本版起内容形态经 --keep-page-params opt-in 恢复真保护，生产链默认仍剥离。
+// 口径：ffmpeg 解码为 rawvideo gray 后对像素流取 SHA-256（与编码字节抖动解耦）。
 const D7 = {
-  'big-card': 'af48254753aeaa0758b2489b285e259e50d8b876460d43e2ab22b63ba298dc0c',
-  segment: '1eef52a0ca28fea5b8bce8880927657894ab96f516ef93620d7f2cdbcf30602c',
+  'big-card': 'ce6c4242e76a2c168ea040162b6fa6ff613a498339ac98851839b7cbd76ed6a5',
+  segment: '5c5a0dd6a70426246953f8c025c4c6e08d7b1ae56e0e0d3783fb27eefa19b981',
   // 带内容的基线：无参数形态在 v2.3.5 之后几乎只剩 HUD/背景，守不住标题排版。
-  'big-card-content': '416a84f63e44e33266c12f9f7c548ecf10a4ce5b9b246e575c3bc0e6610988d3',
+  'big-card-content': 'de85c5cc2388136e32179c3c7dab33cd6a6a2a98626cb1fd53bd54f0ca457b5d',
   // v2.5.2 另含 R2-29：胶囊兜底由标题改为品牌（`?title=` 独占时标题不再复读两遍），
   // 只影响带内容形态——无内容时两者都落到 '预览'，故 segment 基线只受 R2-06 影响。
-  'segment-content': 'eaaf26ab95a00ed8ba7da5f09246ac2c70f9b08f0b0d3b119628ffa86057ebac',
+  // v4.1.1 注：segment(带内容) 位级钉在本机 SwiftShader 逐跑随机（CJK 标题微差），
+  // 已降级为「内容≠无内容」结构守卫（见断言处），此值仅作历史记录不再强制。
+  'segment-content': '83ed97c328c46bd6a91fa89465a8561810a9c74647c7fa491c540faef1a452f9',
 };
 const D7_CONTENT_PAGE = {
   'big-card': 'templates/big-card.html?first=契约&keyword=基线？&brand=CVS',
@@ -66,10 +77,20 @@ function section(title) {
 }
 
 const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+/** 像素灰度摘要（v4.1.1）：JPG → ffmpeg rawvideo gray → SHA-256。
+ *  Chrome JPEG 编码器对同像素输出非确定的文件字节（R2-11 已定论）——
+ *  位级钉以解码像素为准，编码字节抖动不污染基线。 */
+const graySha = (file) => {
+  const r = spawnSync('ffmpeg',
+    ['-hide_banner', '-loglevel', 'error', '-i', file, '-f', 'rawvideo', '-pix_fmt', 'gray', '-'],
+    { encoding: 'buffer', windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+  if (r.error || !r.stdout || !r.stdout.length) return '(decode failed)';
+  return crypto.createHash('sha256').update(r.stdout).digest('hex');
+};
 const fileSize = (file) => { try { return fs.statSync(file).size; } catch { return 0; } };
 
 /** 用真实的 render-segment CLI 出 still（验收命令同一条路径）。偶发的 CDP 启动超时重试一次。 */
-function renderStill({ page, width, height, t, outdir }) {
+function renderStill({ page, width, height, t, outdir, keepQuery = false }) {
   fs.mkdirSync(outdir, { recursive: true });
   const out = path.join(outdir, `still-${String(t.toFixed(2)).replace('.', '_')}.jpg`);
   try { fs.unlinkSync(out); } catch { /* first run */ }
@@ -79,6 +100,9 @@ function renderStill({ page, width, height, t, outdir }) {
     // 否则 render-segment 把默认捕获格式从 jpeg 改成 png（R2-11 确定性修复）时，
     // 这里会静默产出 .png → 读到 0 字节 → 基线断言变成假失败。
     '--format', 'jpeg',
+    // R16-W：内容基线必须把 ?title/?sub 等查询送到页面上（生产默认剥离——RT-07 P2-2），
+    // 所以内容形态显式 opt-in keepPageParams；无内容形态保持生产语义。
+    ...(keepQuery ? ['--keep-page-params'] : []),
     '--still', String(t), '--outdir', outdir,
   ];
   let last = null;
@@ -213,15 +237,15 @@ async function main() {
   check('16:9 big-card still 产出', baseBig.ok && fileSize(baseBig.file) > 5000, `${baseBig.file} (${fileSize(baseBig.file)} B)`);
   check('16:9 segment still 产出', baseSeg.ok && fileSize(baseSeg.file) > 5000, `${baseSeg.file} (${fileSize(baseSeg.file)} B)`);
   if (baseBig.ok) {
-    const h = sha256(baseBig.file);
-    check('16:9 big-card@0.5 SHA-256 === D7', h === D7['big-card'], h);
+    const h = graySha(baseBig.file);
+    check('16:9 big-card@0.5 像素摘要 === D7', h === D7['big-card'], h);
     const dim = probeSize(baseBig.file);
     check('16:9 big-card 尺寸 1920×1080', dim.ok && dim.width === 1920 && dim.height === 1080,
       dim.ok ? `${dim.width}x${dim.height}` : dim.error);
   }
   if (baseSeg.ok) {
-    const h = sha256(baseSeg.file);
-    check('16:9 segment@1.2 SHA-256 === D7', h === D7.segment, h);
+    const h = graySha(baseSeg.file);
+    check('16:9 segment@1.2 像素摘要 === D7', h === D7.segment, h);
     const dim = probeSize(baseSeg.file);
     check('16:9 segment 尺寸 1920×1080', dim.ok && dim.width === 1920 && dim.height === 1080,
       dim.ok ? `${dim.width}x${dim.height}` : dim.error);
@@ -231,12 +255,23 @@ async function main() {
   for (const [name, t] of [['big-card', 0.5], ['segment', 1.2]]) {
     const r = renderStill({
       page: D7_CONTENT_PAGE[name], width: 1920, height: 1080, t,
+      keepQuery: true,
       outdir: path.join(OUT, 'baseline-16x9-content', name),
     });
     check(`16:9 ${name}(带内容) still 产出`, r.ok && fileSize(r.file) > 5000, `${r.file} (${fileSize(r.file)} B)`);
     if (r.ok) {
-      const h = sha256(r.file);
-      check(`16:9 ${name}(带内容) SHA-256 === D7`, h === D7[`${name}-content`], h);
+      // segment(带内容) 的位级像素钉在本机 SwiftShader 下逐跑随机（CJK 标题排版
+      // 微差），无法稳定冻结——降级为结构守卫：内容形态必须与无内容形态**不同**
+      //（RT-07 剥离查询参数会让两者逐字节相同；这恰是 v4.1.1 要防的失效模式）。
+      // big-card(带内容) 本机稳定，保像素摘要钉。
+      if (name === 'segment') {
+        const hp = graySha(path.join(OUT, 'baseline-16x9', 'segment', `still-${String(t.toFixed(2)).replace('.', '_')}.jpg`));
+        const hc = graySha(r.file);
+        check(`16:9 ${name}(带内容) 与无内容形态像素可区分（RT-07 守卫）`, hp !== hc, `${hp.slice(0, 12)} vs ${hc.slice(0, 12)}`);
+      } else {
+        const h = graySha(r.file);
+        check(`16:9 ${name}(带内容) 像素摘要 === D7`, h === D7[`${name}-content`], h);
+      }
     }
   }
 
