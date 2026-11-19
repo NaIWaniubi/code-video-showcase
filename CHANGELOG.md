@@ -3,6 +3,35 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.1.0] - 2026-11-19 — 位级硬证据：共享渲染器 + 预览取帧根因修复
+
+### R16-W1 取帧与预览同进程（rendererEndpoint）
+- render-segment/openBrowser 新增 endpoint 分支：连入调用方已启动的浏览器（ws://…/devtools/browser/…），
+  不拥有进程、close 为空操作；SpecSource/serve/frames 三层贯通（CVS 无新依赖）；
+- frames 套件重构为「浏览器先行 + endpoint 注入」——live iframe 与服务端取帧共享同一 GPU/SwiftShader。
+
+### R16-W2 根因修复：预览帧与成片帧根本不是同一页面
+- withSegmentParams（RT-07 P2-2 有意剥掉页面自带查询）在 frames 取帧路径上把 theme/layout/
+  index/first/keyword 等参数全部丢弃，服务端渲染的是默认页；live iframe 侧保留原样。
+  这才是此前所有像素差异的根因（此前误判为跨实例 AA 抖动）。
+- 新增 keepPageParams 开关（仅 SpecSource 启用）：取帧页保留原查询、只覆盖 seg/t0/speed/dur；
+  生产渲染链默认行为不变（仍剥离任意查询，防注入）。
+- 同进程 + 同 URL + 字体 settle 后实测 **meanDiff = 0**——「预览帧 == 成片帧」首次拿到位级硬证据。
+
+### R16-W3 共享浏览器的两个坑（实测钉死）
+- 标签遮挡：headless 单进程仅最新目标有可见性，服务端取帧开的渲染器标签页会冻结 UI 页的
+  requestAnimationFrame（playing=true 但帧号不动）——套件播放前 Page.bringToFront 前台化；
+- 字体换装：比对前两侧 document.fonts.ready settle（webfont swap 会改像素）。
+
+### 工程面
+- frames 套件新增钉子：分割/撤销按钮接线往返（段表+1/-1 + 状态行回报）、suggestions 端点契约、
+  工作台全程零未捕获异常、胶片条窗口自适应（播放修复后 n 已推进到片尾，旧 13 张硬断言失效）；
+  位级断言收紧为共享进程 meanDiff===0（非零即确定性信号，回头排查）。
+- frames 套件 73 → 77 全绿（含位级三连）；四方版本号同步 4.1.0。
+- 已知环境漂移（与本波无关，HEAD 同口径复验）：test-reflow-pages 的 D7 冻结哈希
+  4 条在本机 SwiftShader 上不再逐字节复现（Chrome 版本漂移），HEAD 基线同败——
+  与 golden envCompare 同属环境属性，待基线在新环境重冻。
+
 ## [v4.0.0] - 2026-11-18 — agent 向剪辑：结构编辑核 + EDL/OTIO 交换 + 工作台建议层
 
 ### R15-W1 结构剪辑操作核（scripts/lib/spec-edit.mjs）

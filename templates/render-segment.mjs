@@ -47,7 +47,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { launch as launchCdp, evaluate as cdpEvaluate, waitFor as cdpWaitFor } from './cdp.mjs';
+import { launch as launchCdp, connect, evaluate as cdpEvaluate, waitFor as cdpWaitFor } from './cdp.mjs';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -184,6 +184,10 @@ export function normalizeOptions(raw = {}) {
     noPlaywright: !!raw.noPlaywright,
     profileDir: raw.profileDir ? path.resolve(String(raw.profileDir)) : null,
     removeProfile: !!raw.removeProfile,
+    // R16-W：共享浏览器端点（ws://…/devtools/browser/…）；连入既有进程不拥有它。
+    endpoint: raw.endpoint ? String(raw.endpoint) : null,
+    // R16-W：预览取帧保留页面自带查询参数（theme/layout 等）——与 live iframe 同 URL 语义。
+    keepPageParams: !!raw.keepPageParams,
     log,
     warn,
   };
@@ -345,11 +349,14 @@ function isPrivateHost(url) {
   return !!host && PRIVATE_HOST_RE.test(host);
 }
 
-function withSegmentParams(page, port, t) {
+function withSegmentParams(page, port, t, keepQuery = false) {
   const u = new URL(`http://127.0.0.1:${port}/${page.replace(/^\/+/, '')}`);
   // R3-审计（RT-07 P2-2）：页面自带的其它查询参数一律剥掉，只留渲染器显式 set 的
   // seg/t0/speed/dur（vars 由 buildPageUrl 再追加）——以前 ?logo=… 能原样进成片 URL。
-  for (const k of [...u.searchParams.keys()]) u.searchParams.delete(k);
+  // R16-W：frames 取帧预览例外（keepPageParams）——预览的定义就是「页面原样」，
+  // 剥离 theme/layout 等等于预览与 plan 语义脱节（实测服务端帧丢 theme 后与
+  // live iframe 逐像素对不上）。
+  if (!keepQuery) for (const k of [...u.searchParams.keys()]) u.searchParams.delete(k);
   u.searchParams.set('seg', '1');
   u.searchParams.set('t0', String(t.t0));
   u.searchParams.set('speed', String(t.speed));
@@ -358,7 +365,7 @@ function withSegmentParams(page, port, t) {
 }
 
 function buildPageUrl(page, port, t) {
-  let pageUrl = /^https?:\/\//i.test(String(page)) ? page : withSegmentParams(page, port, t);
+  let pageUrl = /^https?:\/\//i.test(String(page)) ? page : withSegmentParams(page, port, t, !!t.keepPageParams);
   if (/^https?:\/\//i.test(String(page))) {
     if (isPrivateHost(pageUrl)) {
       throw new Error(`remote page blocked: ${page} points at a loopback/private range (SSRF guard)`);
@@ -435,16 +442,43 @@ async function openPlaywright(opts) {
   };
 }
 
+/** R16-W：连入既有浏览器（不拥有 → close 不杀进程，供同进程位级对比用）。 */
+function attachCreatePage(b, opts) {
+  return async ({ width = opts.width, height = opts.height } = {}) => {
+    const { targetId: tid } = await b.send('Target.createTarget', { url: 'about:blank' });
+    const { sessionId } = await b.send('Target.attachToTarget', { targetId: tid, flatten: true });
+    await b.send('Page.enable', {}, sessionId);
+    await b.send('Runtime.enable', {}, sessionId);
+    await b.send('Emulation.setDeviceMetricsOverride',
+      { width, height, deviceScaleFactor: 1, mobile: false, screenWidth: width, screenHeight: height }, sessionId);
+    return {
+      sessionId, targetId: tid,
+      close: async () => { try { await b.send('Target.closeTarget', { targetId: tid }); } catch { /* already gone */ } },
+    };
+  };
+}
+
 async function openCdp(opts) {
-  const b = await launchCdp({
-    executablePath: opts.browser || undefined,
-    width: opts.width,
-    height: opts.height,
-    headed: opts.headed,
-    timeout: opts.launchTimeout,
-    profileDir: opts.profileDir,
-    removeProfile: opts.removeProfile,
-  });
+  // R16-W：opts.endpoint（ws://127.0.0.1:port/devtools/browser/…）连入已启动的浏览器，
+  // 与调用方（如 frames 工作台的 live iframe）共享同一个 GPU/SwiftShader 进程——
+  // 同参数同进程渲染必然逐像素一致，这是「预览帧 == 成片帧」的位级硬证据。
+  let b;
+  if (opts.endpoint) {
+    // R16-W：连入已启动的浏览器（不拥有）。句柄伪装成 launch() 的形状——内部适配器
+    // 通过 b.client / b.createPage 与之交互；__owns=false 让 close() 不杀共享进程。
+    const c = await connect(opts.endpoint, opts.launchTimeout);
+    b = { client: c, createPage: attachCreatePage(c, opts), __owns: false, close: async () => {} };
+  } else {
+    b = await launchCdp({
+      executablePath: opts.browser || undefined,
+      width: opts.width,
+      height: opts.height,
+      headed: opts.headed,
+      timeout: opts.launchTimeout,
+      profileDir: opts.profileDir,
+      removeProfile: opts.removeProfile,
+    });
+  }
   return {
     kind: 'cdp',
     async newPage({ url, initScript, width = opts.width, height = opts.height }) {
@@ -494,12 +528,19 @@ async function openCdp(opts) {
         throw e;
       }
     },
-    close: () => b.close(),
+    // R16-W：共享浏览器由调用方拥有，close 必须是空操作（杀了它等于杀掉工作台页面）。
+    close: () => (b.__owns === false ? Promise.resolve() : b.close()),
   };
 }
 
 /** Open one browser (Playwright when installed, raw CDP otherwise). */
 export async function openBrowser(opts) {
+  // R16-W：显式 endpoint 必须走 CDP 共享路径——Playwright 分支会自行启动，
+  // 端点被静默忽略，位级一致性就无从谈起。
+  if (!opts.cdp && opts.endpoint) {
+    try { return await openCdp(opts); }
+    catch (e) { throw new Error('no renderer available:\n  - cdp(shared): ' + String(e.message).split('\n')[0]); }
+  }
   const tried = [];
   if (!opts.cdp && !opts.noPlaywright) {
     try { return await openPlaywright(opts); }
@@ -647,7 +688,7 @@ export async function withRenderer(rawOptions, fn) {
       const o = pageOptions(pageOpts);
       const page = o.page || opts.page;
       if (!page) throw new Error('--page is required');
-      const url = buildPageUrl(page, port, { t0: o.t0, speed: o.speed, duration: o.duration, vars: o.vars });
+      const url = buildPageUrl(page, port, { t0: o.t0, speed: o.speed, duration: o.duration, vars: o.vars, keepPageParams: o.keepPageParams });
       const initScript = o.vars ? `window.__vars = ${JSON.stringify(o.vars)};` : '';
       const log = typeof pageOpts.log === 'function' ? pageOpts.log : opts.log;
       log(`[page] ${url}`);

@@ -29,10 +29,11 @@ const ROOT = path.resolve(HERE, '..');
 const TMP = path.join(ROOT, 'out', '_test-frames');
 const NO_BROWSER = process.argv.includes('--no-browser');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-// 跨浏览器实例像素容差（R15-W5 探明）：live iframe 与服务端取帧走**两个独立 Chrome
-// 进程的 SwiftShader 光栅化，实测确定性抖动 meanDiff ≈ 0.07–21.5（内容一致、仅抗锯齿
-// 差），与 golden 位级基线的 envCompare 同口径。同机实例间不为 0 是环境属性；真正的
-// 内容损坏（错帧/黑屏/整页错位）diff 会 ≫100，容差足以区分。数值随断言输出供追踪。
+// 像素断言口径（R16-W 探明）：
+//   rendererEndpoint 注入后 live iframe 与服务端取帧**同进程同 URL**——实测位级一致
+//   （meanDiff=0，这是「预览帧 == 成片帧」的硬证据；非零是确定性信号，回头排查）。
+//   --no-browser 时服务端自起独立 Chrome，跨实例仍有 ~0.07–21 的 AA 级抖动
+//   （与 golden envCompare 同口径），此时按 PIXEL_TOL 容差兜底。
 const PIXEL_TOL = 25;
 
 let passed = 0;
@@ -183,8 +184,20 @@ async function testSpecAndUi() {
     return;
   }
   section('spec 源（真实 Chrome）');
-  const { server, url } = await startFrameServer({ root: ROOT, port: 0, cacheRoot: path.join(TMP, 'cache-spec'), host: '127.0.0.1' });
+  // R16-W：浏览器先行——先起工作台那台 Chrome，spec 源的服务端取帧经 rendererEndpoint
+  // 连入同一进程（与 live iframe 同光栅化）。位级对比的前提是同进程；--no-browser 时
+  // 不注入，渲染器自起独立 Chrome（历史行为）。
   let browser = null;
+  let sharedEndpoint = null;
+  if (!NO_BROWSER) {
+    browser = await launch({ executablePath: process.env.CHROME_EXE || candidates[0], width: 1440, height: 900, timeout: 30000 });
+    const lines = fs.readFileSync(path.join(browser.userDataDir || '', 'DevToolsActivePort'), 'utf8').trim().split(/\r?\n/);
+    sharedEndpoint = `ws://127.0.0.1:${Number(lines[0])}${lines[1] || ''}`;
+  }
+  const { server, url } = await startFrameServer({
+    root: ROOT, port: 0, cacheRoot: path.join(TMP, 'cache-spec'), host: '127.0.0.1',
+    ...(sharedEndpoint ? { rendererEndpoint: sharedEndpoint } : {}),
+  });
   try {
     const open = await apiJson(url, '/frames/api/open?spec=' + encodeURIComponent('fixtures/mini-41s/spec.json'));
     check('spec open 200', open.res.status === 200, String(open.res.status));
@@ -193,6 +206,12 @@ async function testSpecAndUi() {
     check('spec fps 30', meta && meta.fps === 30);
     check('spec 有段', meta && meta.segments.length > 5, String(meta && meta.segments.length));
     check('spec 每段带 page', meta && meta.segments.every((s) => typeof s.page === 'string' && s.page.length > 0));
+
+    // R16-3：agent 建议层契约——结构切点数组（每段边界；卡→风格内部不算切点）。
+    const sug = await apiJson(url, '/frames/api/suggestions?spec=' + encodeURIComponent('fixtures/mini-41s/spec.json'));
+    check('suggestions 结构', sug.res.status === 200 && sug.body.ok === true && Array.isArray(sug.body.cuts) &&
+      sug.body.cuts.length > 0 && sug.body.cuts.every((c) => Number.isFinite(c.at) && c.before && c.after && c.kind),
+      `cuts=${sug.body && sug.body.cuts ? sug.body.cuts.length : 0} total=${sug.body && sug.body.total}`);
     const id = open.body && open.body.id;
 
     const t0 = Date.now();
@@ -249,8 +268,16 @@ async function testSpecAndUi() {
     check('UI plan 60 帧', uiOpen.body && uiOpen.body.meta.frames === 60, String(uiOpen.body && uiOpen.body.meta.frames));
 
     section('工作台 UI（live iframe）');
-    browser = await launch({ executablePath: process.env.CHROME_EXE || candidates[0], width: 1440, height: 900, timeout: 30000 });
+    // R16-W：浏览器已在 spec 段先行启动并注入 rendererEndpoint——这里复用同一台，
+    // live iframe 与服务端取帧同进程，光栅化状态一致。
     const page = await browser.createPage({ width: 1440, height: 900 });
+    // R16-W：页面级未捕获异常捕获——tick/showLive 抛错会让 rAF 循环静默死亡（实测坑），
+    // UI 段结束时断言零异常，让这类「不报错只死机」的故障进回归。
+    const pageExc = [];
+    browser.client.on('Runtime.exceptionThrown', (m) => {
+      const d = m.params?.exceptionDetails;
+      pageExc.push(String(d?.exception?.description || d?.text || '').slice(0, 160));
+    });
     const ev = (fn, arg) => evaluate(browser.client, page.sessionId, fn, arg);
     await browser.client.send('Page.navigate', { url: `${url}/app/frames/?id=${uiId}` }, page.sessionId);
     const started = Date.now();
@@ -287,6 +314,8 @@ async function testSpecAndUi() {
       const cv = active.contentWindow.document.querySelector('canvas');
       const out = [];
       for (const offset of [0, 1]) {
+        // R16-W：字体换装会改像素——两侧都 settle（服务端页创建时已等过 fonts.ready）。
+        await active.contentWindow.document.fonts.ready;
         const t0 = performance.now();
         active.contentWindow.renderFrame(offset / arg.fps);
         const ms = performance.now() - t0;
@@ -316,8 +345,14 @@ async function testSpecAndUi() {
       }
       return { w: cv.width, h: cv.height, out };
     }, { id: uiId, n: 0, fps: 30 });
-    check('live 画布 = 服务端 PNG（段首帧）', live.out[0].meanDiff <= PIXEL_TOL, `meanDiff=${live.out[0].meanDiff} ${live.w}×${live.h}${live.out[0].meanDiff === 0 ? '（位级一致）' : '（跨实例 AA 容差内）'}`);
-    check('live 画布 = 服务端 PNG（段内 +1 帧）', live.out[1].meanDiff <= PIXEL_TOL, `meanDiff=${live.out[1].meanDiff}${live.out[1].meanDiff === 0 ? '（位级一致）' : '（跨实例 AA 容差内）'}`);
+    // R16-W：rendererEndpoint 注入时 live iframe 与服务端取帧同进程——期望位级一致（==0，
+    // 非零是确定性信号而非抖动，回头排查）；--no-browser（独立 Chrome）时跨实例容差兜底。
+    const shared = !!sharedEndpoint;
+    const diffTag = (d) => d === 0 ? '（位级一致·同进程）' : shared ? `（共享进程未归零 ${d} → 待排查）` : '（跨实例 AA 容差内）';
+    check('live 画布 = 服务端 PNG（段首帧）', shared ? live.out[0].meanDiff === 0 : live.out[0].meanDiff <= PIXEL_TOL,
+      `meanDiff=${live.out[0].meanDiff} ${live.w}×${live.h}${diffTag(live.out[0].meanDiff)}`);
+    check('live 画布 = 服务端 PNG（段内 +1 帧）', shared ? live.out[1].meanDiff === 0 : live.out[1].meanDiff <= PIXEL_TOL,
+      `meanDiff=${live.out[1].meanDiff}${diffTag(live.out[1].meanDiff)}`);
     check('live 单帧渲染 < 20ms', live.out[0].ms < 20, `${live.out[0].ms}ms`);
 
     // 跨段：跳到第 30 帧（另一段、另一个页面）
@@ -342,6 +377,7 @@ async function testSpecAndUi() {
         const frames = [...document.querySelectorAll('.live-frame')];
         const active = frames.find((f) => !f.classList.contains('off'));
         const cv = active.contentWindow.document.querySelector('canvas');
+        await active.contentWindow.document.fonts.ready;   // R16-W：同 pixel-compare 的 settle 口径
         active.contentWindow.renderFrame(0);
         const canvasData = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
         const blob = await (await fetch(`/frames/api/frame?id=${arg.id}&n=30&fmt=png&q=90`)).blob();
@@ -353,7 +389,8 @@ async function testSpecAndUi() {
         for (let i = 0; i < canvasData.length; i += 4) diff += Math.abs(canvasData[i] - serverData[i]);
         return +(diff / (canvasData.length / 4)).toFixed(4);
       }, { id: uiId });
-      check('跨段帧同样逐像素一致', cross <= PIXEL_TOL, `meanDiff=${cross}${cross === 0 ? '（位级一致）' : '（跨实例 AA 容差内）'}`);
+      check('跨段帧同样逐像素一致', shared ? cross === 0 : cross <= PIXEL_TOL,
+        `meanDiff=${cross}${cross === 0 ? '（位级一致·同进程）' : shared ? '（共享进程未归零 → 待排查）' : '（跨实例 AA 容差内）'}`);
     }
 
     // 逐帧步进 / 播放
@@ -366,6 +403,9 @@ async function testSpecAndUi() {
     await ev(() => document.getElementById('prev').click());
     await sleep(120);
     check('上一步 -1 帧', await ev(() => document.getElementById('hudFrame').textContent) === hudBefore);
+    // R16-W：共享浏览器里服务端取帧开的渲染器标签页会遮挡本页（headless 仅最新
+    // 目标有可见性，rAF 对后台标签冻结）——播放前必须前台化，否则 tick 死停。
+    try { await browser.client.send('Page.bringToFront', {}, page.sessionId); } catch { /* ignore */ }
     await ev(() => document.getElementById('play').click());
     await sleep(900);
     const playing = await ev(() => ({ hud: document.getElementById('hudFrame').textContent, perf: document.getElementById('perf').textContent }));
@@ -373,10 +413,42 @@ async function testSpecAndUi() {
     check('播放推进帧号', playing.hud !== hudBefore, `${hudBefore} → ${playing.hud}`);
     check('实时帧率读数存在', /实测 \d+ fps/.test(playing.perf), playing.perf);
     check('渲染耗时读数 < 20ms', (() => { const m = playing.perf.match(/渲染 ([\d.]+) ms/); return m && Number(m[1]) < 20; })(), playing.perf);
+    check('工作台全程无未捕获异常', pageExc.length === 0, pageExc.slice(0, 2).join(' | ').slice(0, 160));
+
+    // ── R16-3：段级编辑接线钉子（btn-split → btn-undo 往返；段表/状态行全回报）──
+    const bandsBefore = Number(await ev(() => document.querySelectorAll('#ruler .band').length));
+    await ev(() => document.getElementById('btn-split').click());
+    await sleep(250);
+    const splitInfo = await ev(() => JSON.stringify({
+      bands: document.querySelectorAll('#ruler .band').length,
+      status: document.getElementById('status').textContent,
+    }));
+    const sp = JSON.parse(splitInfo);
+    check('分割段按钮接线', Number(sp.bands) === bandsBefore + 1 && /已分割/.test(sp.status), `${bandsBefore} → ${sp.bands} · ${sp.status}`);
+    await ev(() => document.getElementById('btn-undo').click());
+    await sleep(250);
+    const undoInfo = await ev(() => JSON.stringify({
+      bands: document.querySelectorAll('#ruler .band').length,
+      status: document.getElementById('status').textContent,
+    }));
+    const un = JSON.parse(undoInfo);
+    check('撤销按钮接线', Number(un.bands) === bandsBefore && /已撤销/.test(un.status), `${sp.bands} → ${un.bands} · ${un.status}`);
 
     // 段条 / 胶片条
     check('段落条 2 块', await ev(() => document.querySelectorAll('#ruler .band').length) === 2);
-    check('胶片条 13 张', await ev(() => document.querySelectorAll('#strip .thumb').length) === 13);
+    // R16-W：播放修复后 n 已推进到片尾——buildStrip 以当前帧为中心的窗口自适应
+    // （≤13 张、步长 stride、边界截断）。旧断言写死在冻结时代（n 恒 0 时才恒 13 张）。
+    check('胶片条窗口自适应（1–13 张 · stride 步进 · 含当前帧）', await ev(() => {
+      const frames = Number(document.getElementById('total').textContent);
+      const stride = Number(document.getElementById('stride').textContent) || 1;
+      const thumbs = [...document.querySelectorAll('#strip .thumb')];
+      if (!thumbs.length || thumbs.length > 13 || thumbs.length > frames) return false;
+      const ns = thumbs.map((t) => Number(t.dataset.n));
+      const okSeq = ns.every((n, i) => Number.isInteger(n) && n >= 0 && n < frames &&
+        (i === 0 || n - ns[i - 1] === stride));
+      const cur = Number(String(document.getElementById('hudFrame').textContent).split(' ')[0].replace('#', ''));
+      return okSeq && thumbs.some((t) => t.classList.contains('active') && Number(t.dataset.n) === cur);
+    }));
   } finally {
     if (browser) await browser.close().catch(() => {});
     await new Promise((r) => server.close(r));

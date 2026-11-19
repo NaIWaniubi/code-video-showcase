@@ -149,6 +149,9 @@ export function candidates(root) {
 export function createFrameServer(root = DEFAULT_ROOT, opts = {}) {
   const ROOT = path.resolve(root);
   const cacheRoot = opts.cacheRoot ? path.resolve(String(opts.cacheRoot)) : defaultCacheRoot(ROOT);
+  // R16-W：共享渲染器端点——spec 源的服务端取帧连入调用方已启动的浏览器，
+  // 与 live iframe 同进程光栅化（位级一致证据）。
+  const rendererEndpoint = opts.rendererEndpoint ? String(opts.rendererEndpoint) : null;
   const log = typeof opts.log === 'function' ? opts.log : () => {};
   const sources = new Map();
   let nextId = 1;
@@ -247,7 +250,7 @@ export function createFrameServer(root = DEFAULT_ROOT, opts = {}) {
       delete common.log;                       // openSource 不吃 log
       let source;
       try {
-        source = await openSource({ ...common, log });
+        source = await openSource({ ...common, log, ...(rendererEndpoint ? { endpoint: rendererEndpoint } : {}) });
       } catch (e) {
         // 把底层英文错误包装成可操作的中文（保留原始信息便于排障）。
         const raw = String((e && e.message) || e);
@@ -370,8 +373,12 @@ export function createFrameServer(root = DEFAULT_ROOT, opts = {}) {
   return server;
 }
 
-export function startFrameServer({ root = DEFAULT_ROOT, port = DEFAULT_PORT, host = '127.0.0.1', cacheRoot = null } = {}) {
-  const server = createFrameServer(root, { cacheRoot });
+export function startFrameServer({ root = DEFAULT_ROOT, port = DEFAULT_PORT, host = '127.0.0.1', cacheRoot = null, rendererEndpoint = null, log = null } = {}) {
+  const server = createFrameServer(root, {
+    cacheRoot,
+    ...(rendererEndpoint ? { rendererEndpoint } : {}),
+    ...(typeof log === 'function' ? { log } : {}),
+  });
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(port, host, () => {

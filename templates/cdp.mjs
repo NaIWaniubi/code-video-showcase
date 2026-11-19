@@ -141,7 +141,7 @@ export class Cdp {
   }
 }
 
-async function connect(wsUrl, timeout = 15000) {
+export async function connect(wsUrl, timeout = 15000) {   // R16-W：导出供共享渲染器连入既有浏览器
   if (typeof WebSocket === 'undefined') throw new Error('Node WebSocket is unavailable; use Node ≥ 22 or install playwright');
   const started = Date.now();
   let lastErr;

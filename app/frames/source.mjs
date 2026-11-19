@@ -372,11 +372,14 @@ export class VideoSource {
  * getFrame(n) → 与 render-segment 完全相同的画面（同 URL / 同 t / 同 renderFrame）。
  */
 export class SpecSource {
-  constructor({ root, planPath = null, specPath = null, width = null, height = null, quality = 88, cacheSize = 240, pageLimit = 1, log = null }) {
+  constructor({ root, planPath = null, specPath = null, width = null, height = null, quality = 88, cacheSize = 240, pageLimit = 1, log = null, endpoint = null }) {
     this.kind = 'spec';
     this.root = path.resolve(String(root));
     this.planPath = planPath ? path.resolve(String(planPath)) : null;
     this.specPath = specPath ? path.resolve(String(specPath)) : null;
+    // R16-W：共享渲染器端点——连入调用方已启动的浏览器（与 live iframe 同进程），
+    // 同参数渲染逐像素一致；缺省自起独立 Chrome（历史行为）。
+    this.endpoint = endpoint ? String(endpoint) : null;
     this.widthOpt = Number(width) || 0;
     this.heightOpt = Number(height) || 0;
     this.quality = Math.min(100, Math.max(30, Number(quality) || 88));
@@ -458,6 +461,8 @@ export class SpecSource {
       capture: 'auto',
       warmup: false,
       browser: process.env.CHROME_EXE || null,
+      ...(this.endpoint ? { endpoint: this.endpoint } : {}),   // R16-W：共享浏览器
+      keepPageParams: true,    // R16-W：取帧页保留 theme/layout 等查询——预览即 plan 语义
       log: (line) => self.log(line),
       warn: (line) => self.log('[warn] ' + line),
     }, async (ctx) => {
@@ -759,11 +764,11 @@ export class ImageSource {
 
 // ── 构造入口 ────────────────────────────────────────────────────────────────
 
-export async function openSource({ kind = null, root = process.cwd(), plan = null, spec = null, video = null, dir = null, fps = null, maxWidth = 1280, quality = null, refresh = false, cacheRoot = null, width = null, height = null, log = null } = {}) {
+export async function openSource({ kind = null, root = process.cwd(), plan = null, spec = null, video = null, dir = null, fps = null, maxWidth = 1280, quality = null, refresh = false, cacheRoot = null, width = null, height = null, log = null, endpoint = null } = {}) {
   const type = kind || (video ? 'video' : dir ? 'images' : (plan || spec) ? 'spec' : null);
   if (type === 'video') return new VideoSource({ file: video, root, maxWidth, quality: quality == null ? 3 : quality, refresh, fps, cacheRoot }).open();
   if (type === 'images') return new ImageSource({ dir, root, fps: fps || 1 }).open();
-  if (type === 'spec') return new SpecSource({ root, planPath: plan, specPath: spec, width, height, quality: quality == null ? 88 : quality, log }).open();
+  if (type === 'spec') return new SpecSource({ root, planPath: plan, specPath: spec, width, height, quality: quality == null ? 88 : quality, log, endpoint }).open();
   throw new Error('no frame source: pass --video, --plan/--spec, or --dir');
 }
 
