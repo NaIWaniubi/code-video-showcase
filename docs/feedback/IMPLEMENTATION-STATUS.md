@@ -1,6 +1,6 @@
 # 优化方案落地状态（v1.0 → v2.5.2）
 
-> ## v3.x 时代能力清单（v4.4.0，2026-11-21 · v2.8.1 → v4.4.0 共 18 个大版本）
+> ## v3.x 时代能力清单（v4.5.0，2026-11-21 · v2.8.1 → v4.5.0 共 19 个大版本）
 >
 > 本节为 v3.x + v4.0 全波次（第三轮十视角审计 + 断层领先三件套 + 产品面补齐 +
 > agent 向剪辑）的落地总账。逐版明细以 CHANGELOG 为准；以下为能力级索引：
@@ -29,6 +29,8 @@
 >   frames 工作台建议层（GET /frames/api/suggestions → ruler 虚线切点可点套用）。
 >   同版修复 v3.1.0 起 `undoEdit` 未定义导致工作台加载即崩的潜伏缺陷；
 >   reflow 重写两位小数精确闭合（短片骨架不再被整数秒地板撑散架）。
+> - **MCP 接口实测打磨（v4.5.0）**：补 cvs_image 出图工具；修正 build apply/seconds
+  语义（真实端到端调测暴露）；长城艺术照+10s 介绍视频全链实跑通过。
 > - **任意 agent 一行接入 MCP 接口（v4.4.0）**：`npm run mcp` stdio 服务——10 工具覆盖全链路，写盘默认 dry-run，Claude Desktop/Cursor/Claude Code/ZCode 一行 command 接入。
 > - **剪辑闭环索引安全（v4.3.0）**：修复 frames 导出的段表与 rounds 索引空间错位（旧版把段记录静默合并进错轮）——compile 按 roundId 定位 + id 对齐校验；frames 导出只回填文案进 copyPatch，结构改动记 notes 如实告知走 cvs edit。
 > - **全面审查清扫（v4.2.1）**：修复 `--apply` 名存实亡（旧版写固定名 project.spec.json、
@@ -44,7 +46,7 @@
 > frames 浏览器套件 **79/79**（位级三连 meanDiff=0 + 编辑往返钉子含 redo；--no-browser 57/57）·
 > reflow-pages 浏览器套件 **55/55**（D7 像素摘要口径，内容形态真保护，双连跑全绿）·
 > health 5/5 · golden 位级基线含 demo-skeleton · errors 159 码覆盖 100% ·
-> version-sync 四方一致（4.4.0）· npm run gate 全绿。
+> version-sync 四方一致（4.5.0）· npm run gate 全绿。
 > 原第 8 条「未 commit」早已过时——所有改动按版本提交。
 >
 对照 [BACKLOG.json](BACKLOG.json) 的 26 项，逐项说明落地情况。

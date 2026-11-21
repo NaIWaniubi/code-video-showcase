@@ -3,6 +3,23 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.5.0] - 2026-11-21 — MCP 接口实测打磨：补 cvs_image · 修正 apply/seconds 语义
+
+### 真实端到端调测驱动（长城艺术照 + 10s 介绍视频）
+- 用 MCP 全链（八步：new → lint → suggest → build dry-run → image → build apply）
+  实跑一条真实需求：自然语言「做一条 10 秒长城介绍视频，水墨国风主题」→ spec（celadon-paper）→ 封面 1920×1080 / 海报 1080×1350 两张艺术静帧 → master.mp4（h264+AAC，精确 10.000s，3.7MB）双闸 QA 全过（video 18 pass / audio 7 pass）；
+- 过程中暴露并修掉三个工具层问题：
+  ① cvs_image 缺失（image 出图在 CLI 有、MCP 没有——真实 agent 一用就撞墙）；
+  ② cvs_build 的 seconds 参数指向不存在的 --seconds flag（E_UNKNOWN_FLAG exit 2）——删除该参数，片长由 spec 决定；
+  ③ cvs_build 的 apply 语义错误（compile 无 --apply flag，dry-run 才是开关）——apply = 不带 --dry-run 直接编译；
+- cvs_build 新增 concurrency 参数（本机 SwiftShader 弱并发时给 1 更稳）+ outPath 输出隔离。
+
+### 文档
+- mcp/README.md 工具表补 cvs_image（11 工具）、范式示例与计数同步；主 README 工具列表同步。
+
+### 验证
+- test-mcp-server.mjs 全过（11 工具握手+schema）；单测全绿；四方版本号同步 4.5.0。
+
 ## [v4.4.0] - 2026-11-21 — MCP stdio 接口：任意 agent 一行接入
 
 ### R20-W：mcp/server.mjs（零依赖手写最小协议，与官方 SDK 互通）

@@ -1,7 +1,7 @@
 # CVS MCP 接口（任意 agent 一行接入）
 
 `npm run mcp`（= `node mcp/server.mjs`）启动一个 **MCP stdio 服务**：把 `cvs`
-全链路的语义级能力暴露为 10 个工具，任意支持 MCP 的 agent（Claude Desktop、
+全链路的语义级能力暴露为 11 个工具，任意支持 MCP 的 agent（Claude Desktop、
 Cursor、Claude Code、ZCode…）零端口、零 token、零常驻地直调。
 
 ## 接入配置（一行 command，无需网络）
@@ -33,6 +33,7 @@ Cursor、Claude Code、ZCode…）零端口、零 token、零常驻地直调。
 | `cvs_build` | lint→plan→渲染→concat→QA 全链 | **默认 dry-run**，显式 apply 才落盘 |
 | `cvs_edit` | 结构四件套 split/drop/move/trim（D 公式闭合） | 默认 dry-run；apply 自动 `.bak` |
 | `cvs_qa` | 双闸质检（视频+音频） | 只读 |
+| `cvs_image` | 出图集（封面/海报/卡片/故事图，艺术静帧） | 写 out/ |
 | `cvs_ship` | 交付打包 zip（--check 先过双闸） | 只读校验 |
 | `cvs_demo` | 导演演示集一键出片 | 写 out/ |
 | `cvs_health` | 一键全身体检 | 只读 |

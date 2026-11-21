@@ -1,6 +1,6 @@
 ---
 name: code-video-showcase
-version: 4.4.0   # 与 package.json 同值（test-version-sync 钉死）
+version: 4.5.0   # 与 package.json 同值（test-version-sync 钉死）
 description: |
   用纯代码（HTML/Canvas/SVG/Three.js 逐帧渲染 + Python numpy/scipy 合成配乐 + FFmpeg 合成）制作 30–90 秒卡点风格展示视频的完整技能。
   适用于：复刻/仿制《Opus 5.5 视频风格展示》或 DeepSeek V4.1-Flash 61s 风格样片、多风格切换卡点视频、纯代码视频、程序化视频；要求不使用任何视频/图像/音乐生成模型。
@@ -136,6 +136,8 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
   结构改动记 notes 如实告知（成片结构改动请用 cvs edit）。
   v4.4：新增 MCP stdio 接口（npm run mcp）——任意 agent（Claude Desktop/Cursor/
   Claude Code/ZCode…）一行 command 接入，10 工具覆盖全链路；写盘工具默认 dry-run。
+  v4.5：MCP 接口实测打磨——补 cvs_image 出图工具；修正 build 的 apply/seconds 语义；
+  cvs_build 支持 concurrency 与 outPath。
   
 - **派生导出格式（v3.1）**：`--platform webm|gif|mp3` 从 master/音轨直接转码（不经 shell 的 mp4+AAC 链），交付清单按扩展名入列。覆盖矩阵单一真值 `docs/COVERAGE.md`。
 - **禁止**：让 LLM 直接生成 HTML/CSS/JS，或绕过 spec 直接改像素。模型只填枚举与文案。

@@ -131,7 +131,6 @@ export const TOOLS = [
     description: '编译链：lint → plan → 增量渲染 → concat → QA。默认 dry-run（只验证不落盘）保证 agent 安全；显式 apply 才写盘。渲染较慢（分钟级），大改请调大 timeoutSeconds。',
     inputSchema: { type: 'object', properties: {
       specPath: { type: 'string' },
-      seconds: { type: 'number', description: '覆盖片长（秒）' },
       platform: { type: 'string', enum: ['douyin', 'bilibili', 'xiaohongshu', 'master'] },
       strict: { type: 'boolean' },
       apply: { type: 'boolean', description: 'true 才真渲染落盘（默认 dry-run 验证）' },
@@ -139,15 +138,16 @@ export const TOOLS = [
       refPatch: { type: 'string', description: '参考片反推补丁路径' },
       root: { type: 'string' },
       timeoutSeconds: { type: 'number', description: '预算（秒，10–1800，默认 300）' },
+      concurrency: { type: 'number', description: '段级并行度（本机 GPU 弱时给 1 更稳）' },
     }, required: ['specPath'] },
     run: async (a) => {
       const args = ['build', a.specPath];
-      if (Number.isFinite(Number(a.seconds))) args.push('--seconds', String(a.seconds));
       if (a.platform) args.push('--platform', a.platform);
       if (a.strict) args.push('--strict');
+      if (a.concurrency != null && Number.isFinite(Number(a.concurrency))) args.push('--concurrency', String(a.concurrency));
       if (a.segmentPatch) args.push('--segment-patch', a.segmentPatch);
       if (a.refPatch) args.push('--ref-patch', a.refPatch);
-      args.push(...(a.apply ? ['--apply'] : ['--dry-run']));   // 默认 dry-run
+      args.push(...(a.apply ? [] : ['--dry-run']));   // 默认 dry-run；apply = 不带开关直接编译
       if (a.root) args.push('--root', a.root);
       const r = await runCvs(args, { timeoutSeconds: a.timeoutSeconds });
       return { isError: !r.ok, text: resultText(r.text.slice(-6000), `build(${a.apply ? 'apply' : 'dry-run'}) exit=${r.exitCode}`) };
@@ -203,6 +203,29 @@ export const TOOLS = [
       if (a.platform) args.push('--platform', a.platform);
       const r = await runCvs(args, { timeoutSeconds: 900 });
       return { isError: !r.ok, text: resultText(r.text.slice(-4000), `demo exit=${r.exitCode}`) };
+    },
+  },
+  {
+    name: 'cvs_image',
+    description: '从 spec 出图集（封面/卡片/海报/故事图）——艺术静帧，走同一确定性渲染链。',
+    inputSchema: { type: 'object', properties: {
+      specPath: { type: 'string', description: 'spec 路径（与 page/theme 二选一）' },
+      page: { type: 'string', description: '直接指定页面模板（如 templates/recipe-guofeng.html），配合 theme 使用' },
+      theme: { type: 'string', description: '主题 id（--page 模式下）' },
+      set: { type: 'string', description: '预设组合，默认 cover,card,poster,story；可 cover,poster 等' },
+      at: { type: 'number', description: '采样时刻（秒，默认各预设自带）' },
+      outPath: { type: 'string', description: '输出目录（默认 out/images；不同片之间建议隔离）' },
+    } },
+    run: async (a) => {
+      const args = ['image'];
+      if (a.specPath) args.push('--spec', a.specPath);
+      else if (a.page) { args.push('--page', a.page); if (a.theme) args.push('--theme', a.theme); }
+      else return { isError: true, text: '需要 specPath 或 page(+theme)' };
+      if (a.set) args.push('--set', a.set);
+      if (a.at != null && Number.isFinite(Number(a.at))) args.push('--at', String(a.at));
+      if (a.outPath) args.push('--out', a.outPath);
+      const r = await runCvs(args, { timeoutSeconds: 600 });
+      return { isError: !r.ok, text: resultText(r.text.slice(-4000), `image exit=${r.exitCode}`) };
     },
   },
   {
