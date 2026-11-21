@@ -351,14 +351,14 @@ function isPrivateHost(url) {
   return !!host && PRIVATE_HOST_RE.test(host);
 }
 
-function withSegmentParams(page, port, t, keepQuery = false) {
+export function withSegmentParams(page, port, t, keepQuery = false) {
   const u = new URL(`http://127.0.0.1:${port}/${page.replace(/^\/+/, '')}`);
-  // R3-审计（RT-07 P2-2）：页面自带的其它查询参数一律剥掉，只留渲染器显式 set 的
-  // seg/t0/speed/dur（vars 由 buildPageUrl 再追加）——以前 ?logo=… 能原样进成片 URL。
-  // R16-W：frames 取帧预览例外（keepPageParams）——预览的定义就是「页面原样」，
-  // 剥离 theme/layout 等等于预览与 plan 语义脱节（实测服务端帧丢 theme 后与
-  // live iframe 逐像素对不上）。
-  if (!keepQuery) for (const k of [...u.searchParams.keys()]) u.searchParams.delete(k);
+  // R19 修正（校园墙宣传片实测暴露的内容错位 bug）：RT-07 P2-2 曾把页面自带
+  // query **全剥**，理由是「?logo=… 能原样进成片 URL」——那是过度矫正：logo 类
+  // 危险参数本就有各自的闸门（远程页白名单/SSRF/路径约束），而 plan 合法下发的
+  // theme/mp/accent/title/brand/first/keyword/layout/index… 被一起剥掉后，成片
+  // 全部渲染成页面内建 demo 文案（qa 查不出：它验 plan 有标题，不验像素里有）。
+  // 现在保留原 query，渲染器参数 seg/t0/speed/dur 依旧强制覆盖。
   u.searchParams.set('seg', '1');
   u.searchParams.set('t0', String(t.t0));
   u.searchParams.set('speed', String(t.speed));
@@ -420,6 +420,14 @@ async function openPlaywright(opts) {
         await page.waitForFunction('window.__ready === true || window.__bootError', null, { timeout: opts.timeout });
         const bootError = await page.evaluate(() => window.__bootError || null);
         if (bootError) throw new Error('page boot error: ' + bootError);
+        await page.evaluate(() => document.fonts.ready);
+        // v4.9.1 CJK 子集竞态（test-recipes 实测暴露：kinetic/datarace/inkwash 静帧
+        // 两次不一致，59~数千 px）：unicode-range 子集在**首绘用到字形时**才入队，
+        // boot 里 loadFonts(sample) 只覆盖样例子集。首绘 renderFrame(0) 之后必须再
+        // 等一轮 fonts.ready + status 收敛，否则冷启动 A/B 两跑分别拍到"字体半路
+        // 到场"与"全到场"两种光栅 → 破坏帧=f(t)。
+        await page.evaluate(async () => { window.renderFrame && window.renderFrame(0); await document.fonts.ready; });
+        await page.waitForFunction('document.fonts.status !== "loading"', null, { timeout: 12000 }).catch(() => {});
         await page.evaluate(() => document.fonts.ready);
 
         const cdp = await context.newCDPSession(page);
@@ -510,6 +518,12 @@ async function openCdp(opts) {
         if (bootError) throw new Error('page boot error: ' + bootError);
         const isReady = await cdpEvaluate(b.client, p.sessionId, () => window.__ready === true);
         if (!isReady && errors.length) throw new Error('page boot error: ' + errors[0]);
+        await cdpEvaluate(b.client, p.sessionId, () => document.fonts.ready);
+        // v4.9.1 CJK unicode-range 子集首绘后才入队——boot 的 loadFonts(sample) 只覆盖
+        // 样例子集。首绘后必须再等一轮 fonts.ready + status 收敛，否则冷启动两跑分别
+        // 拍到"字体半路到场/全到场"两种光栅，破坏帧=f(t)（test-recipes 实测暴露）。
+        await cdpEvaluate(b.client, p.sessionId, async () => { window.renderFrame && window.renderFrame(0); await document.fonts.ready; return true; });
+        await cdpWaitFor(b.client, p.sessionId, 'document.fonts.status !== "loading"', { timeout: 12000, label: 'fonts settled', warn: opts.warn }).catch(() => {});
         await cdpEvaluate(b.client, p.sessionId, () => document.fonts.ready);
 
         const ev = (fn, arg) => cdpEvaluate(b.client, p.sessionId, fn, arg);

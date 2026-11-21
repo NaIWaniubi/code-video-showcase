@@ -3,6 +3,19 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.9.1] - 2026-11-21 — 内容错位终结（校园墙宣传片 dogfooding 抓出的 v2.9.0 回归）
+
+- **生产渲染 URL 保留 plan 的合法 query（高危修复）**：RT-07 P2-2 曾把页面自带 query 全剥（防 ?logo= 注入的过度矫正），导致 v2.9.0 起
+  所有多主题/品牌色/自定义文案片实际渲染成页面内建 demo——QA 验 plan 不验像素所以全绿三天未察觉。
+  现在 withSegmentParams 保留原参数、渲染器 seg/t0/speed/dur 强制覆盖；导出供测试；
+  **ENGINE_VERSION 3→4 强制作废全部历史段缓存**（旧 mp4 是剥参产物，字节级不可信）；
+  T6 三条回归钉死（保留合法参 / 渲染器参数覆盖 / plan 页不得伪造 seg·t0）。
+- **CJK 字体子集竞态收敛**：unicode-range 子集首绘后才入队，boot 的 loadFonts(sample) 不覆盖正文字形
+  → 冷启动 A/B 两跑分别拍到「字体半路/全到场」两种光栅（test-recipes 实测 kinetic/datarace/inkwash
+  静帧不纯的根因）。render-segment 两分支 + test-recipes 复核路统一加「首绘→fonts.ready→status 收敛
+  （12s 预算）→重绘」；test-golden/test-recipes 全绿后入库。
+- 实测闭环：校园墙 49s 宣传片 23/23 段带真文案重渲、双版本 qa 0 fail、ship 预检 9 件全过。
+
 ## [v4.9.0] - 2026-11-21 — S4-1 真词级字幕 `cvs caption`（本地 faster-whisper，确定性隔离）
 
 对齐调研结论（G1-Concat 词级戳坐标纪律 / G4-声音链路"非确定性只活在产文件

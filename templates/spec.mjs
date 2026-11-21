@@ -21,7 +21,7 @@ export const SPEC_VERSION = 1;
  * v2.3.5 → 2：页面开始消费 title/sub/brand/capsule 参数，默认画面文案变了，
  * 所有旧缓存段必须失效一次（一次性全量重渲，是有意为之）。
  */
-export const ENGINE_VERSION = 3;
+export const ENGINE_VERSION = 4; // v4.9.1: 生产 URL 保留 plan query（此前全剥→成片渲染成内建 demo 文案）——所有历史段缓存字节级不可信，bump 强制全失效
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 

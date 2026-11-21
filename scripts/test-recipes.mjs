@@ -271,8 +271,13 @@ async function captureCanvasDataUrl(pageUrl) {
     await browser.client.send('Page.navigate', { url: pageUrl }, browser.sessionId);
     await waitFor(browser.client, browser.sessionId,
       'window.__ready === true || !!window.__bootError', { timeout: 120000, label: 'canvas capture ready' });
-    return await evaluate(browser.client, browser.sessionId, () => {
+    // v4.9.1：与 render-segment 同款 CJK 子集收敛——首绘触发子集加载后再等 fonts.ready，
+    // 然后同 t 重绘才取数，保证两跑字节一致（此前 kinetic/datarace/inkwash 间歇 FAIL 即此竞态）。
+    return await evaluate(browser.client, browser.sessionId, async () => {
       window.renderFrame(0.3);
+      await document.fonts.ready;
+      window.renderFrame(0.3);
+      await document.fonts.ready;
       return document.querySelector('canvas').toDataURL('image/png');
     });
   } finally {
@@ -415,6 +420,9 @@ async function cdpChecks() {
           const grab = () => ctx.getImageData(0, 0, c.width, c.height).data;
           for (let i = 0; i < 3; i++) window.renderFrame(i / 30);
           window.renderFrame(0.3);
+          // v4.9.1：A 取样前必须再等一轮 fonts.ready——预热绘制本身会触发子集入队，
+          // 不等就会出现"A 半载字体、B 全载"的假不纯（ink-wash 59px 差即此）。
+          if (document.fonts) { try { await document.fonts.ready; } catch { /* ignore */ } window.renderFrame(0.3); }
           const A = grab();
           window.renderFrame(1.77);
           window.renderFrame(0.3);

@@ -83,6 +83,19 @@ const baseSpec = JSON.parse(fs.readFileSync(path.join(ROOT, 'fixtures/mini-41s/s
   ok('T5 fixture plan still --check clean', res.status === 0, `exit=${res.status}`);
 }
 
+// ── T6: 生产 URL 保留 plan 的合法 query（v2.9.0 RT-07 P2-2 过度矫正回归——
+//        全剥 query 让成片渲染成页面内建 demo 文案，theme/brand/custom copy 静默失效，
+//        qa 只验 plan 不验像素所以全绿。校园墙宣传片实测暴露。）
+{
+  const { withSegmentParams } = await import('../templates/render-segment.mjs');
+  const url = withSegmentParams('templates/big-card.html?theme=amber-noir&mp=dynamic&title=%E5%85%AB%E5%A4%A7&first=%E8%A1%A8%E7%99%BD&layout=2', 9999, { t0: 0, speed: 1, duration: 1 });
+  const u = new URL(url);
+  ok('T6 keeps theme/mp/title/first/layout', u.searchParams.get('theme') === 'amber-noir' && u.searchParams.get('title') === '八大' && u.searchParams.get('layout') === '2', url.slice(0, 120));
+  ok('T6b renderer params still force-set', u.searchParams.get('seg') === '1' && u.searchParams.get('dur') === '1' && u.searchParams.has('t0') && u.searchParams.has('speed'));
+  const t6c = withSegmentParams('templates/segment.html?seg=0&t0=99', 9999, { t0: 0, speed: 1, duration: 1 });
+  ok('T6c plan page cannot override renderer seg/t0', /[?&]seg=1(&|$)/.test(t6c) && t6c.includes('t0=0'), t6c.slice(0, 90));
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 if (fails) { console.error(`[test-trust-fixes] ${fails} FAIL`); process.exit(1); }
 console.log('[test-trust-fixes] all green');
