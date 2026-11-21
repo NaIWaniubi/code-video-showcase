@@ -26,6 +26,7 @@ An Agent Skill for producing 30–90 s "style showcase" films: an 8 s opening, e
 - **预览帧 == 成片帧的位级硬证据（v4.1）**：frames 服务端取帧可连入与 live iframe 同一浏览器进程（同 URL、同光栅化），测试实测 meanDiff=0；根因修复为预览路径保留页面查询参数（theme/layout 等不再被渲染器剥掉）。
 - **编辑历史可重做 + CLI 建议层（v4.2）**：帧工作台撤销/重做全往返（Ctrl+Shift+Z / Ctrl+Y，指针式历史链）；`cvs edit <spec> --suggest` 打印建议切点表（与 `/frames/api/suggestions` 同口径，`--json` 出 suggestions 数组）。
 - **剪辑闭环索引安全（v4.3）**：帧工作台导出的段表补丁此前按段索引落 rounds（静默错轮）——现按 roundId 定位 + id 对齐校验，文案编辑安全编译回成片，结构改动如实提示走 `cvs edit`。
+- **任意 agent 一行接入（v4.4，MCP stdio）**：`npm run mcp` 暴露 10 个工具（new/lint/plan/build/edit/suggest/qa/ship/demo/health），Claude Desktop / Cursor / Claude Code / ZCode 配一行 command 即用；写盘工具默认 dry-run。详见 [mcp/README.md](mcp/README.md)。
 - **导演演示集 + 一键出片（v3.2–v3.5）**：白模线框 / 骨骼动画 / L-system 分形 / 弹道喷泉 / 等高线测绘 / 网络脉冲六个闭式确定引擎；`cvs demo <style>` 出单片、`cvs demo all --only a,b --concurrency/--retries` 批量（manifest 如实报账、上传带进度+取消）。
 - **交付打包与发布门禁**： v3.7：`ship --check` 打包前双闸质检、`cvs health` 一键全身体检、参考反推 top-3 主题可点切换。`cvs ship <spec>` 把 spec+成片+字幕+清单+自生成 README 打成开箱即用 zip（竞赛「作品四件套」同形，缺成片如实退 13）；`cvs qa` 视频+音频双闸一次跑完；doctor 告知 VP9/MP3lame/Opus/subtitles 编码器是否就位；`npm run gate` 发布前四项一键全查。；向导向可拖入参考片一键套用主题/BPM/时长；golden 位级基线含 demo-skeleton。 v3.8：ship --check 质检报告随包入库、build --ref-patch 直接套用反推结论、health 五项全查。
 - **旁白声道**：spec 里给文案行，编译时自动语音合成（piper 优先）+ sidechain 闪避混音 + 词级时间戳，配音不再需要外部 DAW。

@@ -51,6 +51,7 @@ const UNIT_SUITES = [
   'scripts/test-strict-flags.mjs',
   'scripts/test-segment-edit.mjs',
   'scripts/test-spec-edit.mjs',   // R15：agent 向剪辑内核 + edit CLI（EDL/OTIO/dry-run）
+  'scripts/test-mcp-server.mjs',  // R20：MCP stdio 接口层（线协议握手 + 10 工具实调）
   'scripts/test-zip-lib.mjs',
   'scripts/test-version-sync.mjs',
   'scripts/test-demo-spec.mjs',

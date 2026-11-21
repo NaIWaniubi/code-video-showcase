@@ -3,6 +3,29 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.4.0] - 2026-11-21 — MCP stdio 接口：任意 agent 一行接入
+
+### R20-W：mcp/server.mjs（零依赖手写最小协议，与官方 SDK 互通）
+- newline-delimited JSON-RPC 2.0（initialize / tools/list / tools/call）；
+  stdio 起进程 → 调工具 → EOF 退出：不监听端口、无 token/CORS 面、不常驻；
+- 10 个工具 = CLI 全链路语义级封装：
+  cvs_new（内核直调，自然语言→spec）· cvs_suggest（内核直调，瞬时切点）
+  · cvs_lint / cvs_plan / cvs_qa / cvs_ship / cvs_demo / cvs_health（子进程封装）
+  · cvs_build（默认 dry-run，显式 apply 才落盘——agent 安全第一性）
+  · cvs_edit（四件套，默认 dry-run，apply 自动 .bak）；
+- npm run mcp 一键启动；接入文档 mcp/README.md（Claude Desktop / Cursor /
+  Claude Code / ZCode 配置 + agent 使用范式六步）。
+
+### 安全设计
+- build/edit 两个写盘工具默认 dry-run；timeoutSeconds 钳 10–1800 防失控挂死；
+  未知工具 -32602 / 未知方法 -32601 / 解析错误 -32700 标准错误码；
+- 与既有 server/api.mjs（网页 job 队列）互补：一个给浏览器面，一个给 agent 面。
+
+### 验证
+- scripts/test-mcp-server.mjs：真实子进程 + 真线协议（握手、10 工具 schema、
+  suggest/lint/new 实调、错误码、EOF exit 0）；test-all UNIT_SUITES 登记；
+- 单测 31 套件（含新套件）全绿；四方版本号同步 4.4.0。
+
 ## [v4.3.0] - 2026-11-20 — 剪辑闭环索引空间修复：帧工作台导出不再静默错轮
 
 ### R19-W 审查发现：frames 导出的段表与 rounds 索引空间错位
