@@ -1,5 +1,7 @@
 # ROADMAP-OVERTAKE · 全面超越长任务规划
 
+> **进度标记（2026-11-21 深夜）**：S0=✅v4.7.1 · S1 taste+豁免+可读性(部分)=✅v4.8.0 · S2 教义 27/27=WARN 闸已入，`cvs style new`/三档 override/音色打通未完 · S4-1 词级字幕=✅v4.9.0 · **计划外抓到并修复 v2.9.0 内容错位回归=✅v4.9.1，并制度化为 URL 溯源闸=✅v4.9.2** · S1b 页面契约 `__textsAt`/`__ev`、S3 复刻闭环(diff/seam/Motion.md)、S5 subframe 运动模糊/cost-gate、S6 实拍消费、S7 编排+SKILL 拆分+安全审计 未动 · 新增待办：①recipe 页 `?title=` 消耗矩阵（datarace/blueprint 等仍显示内建标题）②score pacing 指标对混合节奏宣传片的再标定③QA 从「验 URL」再进一步「验像素文本」（依赖 __textsAt）。三端（fork/Gitee）已同步至 v4.9.2。
+
 > 2026-11-21 制定。依据：四组外部调研（`E:\myzcode\_research_22\notes\G1–G4.md`，星数均经 GitHub 页内嵌 JSON 直证）+ CVS 内审 13 条缺陷（5 条高危已行级复验，见 `E:\myzcode\_research_22\CVS-BASELINE.md`）。
 > 一句话总纲：**不在对手的主场作战。对手的共性短板是"不可验证"——我们用"可复现证据链"吃掉他们的能力面，把"像不像/好不好看/读不读得完"从祈祷变成闸。**
 
