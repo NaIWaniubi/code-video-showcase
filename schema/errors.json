@@ -1042,6 +1042,18 @@
       "exit": 13,
       "meaning": "cvs score：评分报告写出失败（磁盘/权限/路径）。plan 缺失不再触发本码——相应维度标 skipped 照常出分",
       "action": "换 --out 目录或检查磁盘；其余维度证据看 stderr 各行"
+    },
+    "E_TASTE_READ": {
+      "phase": "qa",
+      "exit": 2,
+      "meaning": "cvs taste：spec.json 或规则目录不可读/非法 JSON",
+      "action": "确认路径存在且为 JSON；规则目录缺省 schema/taste-rules.json（--rules 可指）"
+    },
+    "E_TASTE_FAIL": {
+      "phase": "qa",
+      "exit": 13,
+      "meaning": "cvs taste 审美闸不过：存在 error 级 finding（或 --strict 下有 warning）。逐条判决见 out/qa/taste.json（evidence 带实测值）",
+      "action": "按 findings 修 spec/主题 token；确属误判走 .cvs/waivers.json 豁免（rule+reason+date），**绝不为过闸改规则阈值**"
     }
   }
 }

@@ -1,6 +1,6 @@
 ---
 name: code-video-showcase
-version: 4.7.1   # 与 package.json 同值（test-version-sync 钉死）
+version: 4.8.0   # 与 package.json 同值（test-version-sync 钉死）
 description: |
   用纯代码（HTML/Canvas/SVG/Three.js 逐帧渲染 + Python numpy/scipy 合成配乐 + FFmpeg 合成）制作 30–90 秒卡点风格展示视频的完整技能。
   适用于：复刻/仿制《Opus 5.5 视频风格展示》或 DeepSeek V4.1-Flash 61s 风格样片、多风格切换卡点视频、纯代码视频、程序化视频；要求不使用任何视频/图像/音乐生成模型。
@@ -12,7 +12,7 @@ description: |
 license: MIT
 metadata:
   domain: video-production
-  version: 4.7.1
+  version: 4.8.0
   reference: Opus 5.5 / DeepSeek V4.1-Flash 61s style showcase
 compatibility: Node 22+ (raw CDP needs global WebSocket) / Chrome or Edge (Playwright optional) / FFmpeg (libx264+AAC, libvmaf optional) / Python 3.10+ (numpy, scipy; matplotlib optional) / bash. Windows (Git Bash) and WSL/Linux. No external video/image/music generation models; fonts are open-source, served locally.
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
@@ -143,6 +143,14 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
   以母版为准。
   v4.7：补 OpenFilm 对标强项——cvs film 导出 OpenFilm IR 时间线（overrides 非破坏层 +
   locked/hidden 轨道语义，回 spec 可重编译）；cvs score 五维主观质量评分。
+  v4.7.1：可信度修复——cvs_qa(MCP) 显式 --plan（假绿灭）·段缓存指纹含渲染浏览器·
+  film --overrides 真正落片·E_PAGE_BARE 硬闸·score 缺 plan 不炸且标题读真文本·
+  gate 纳入 determinism 与 golden。
+  v4.8：**cvs taste 审美裁判机**——`schema/taste-rules.json`（数据）× `scripts/taste.mjs`
+  EVALS（数值断言实现）14 条规则；error 硬闸 / warning 扣分（100−Σw）/ advisory 永不拦；
+  对比度口径单一真值消费模板层 auditApca；`.cvs/waivers.json` 豁免生命周期（error 不可
+  豁免、过期豁免点名）；上线首猎修掉 4 项主题对比度缺陷（crimson accent 19.4→#d63f3f，
+  ENGINE_VERSION 2→3，golden 已刷新）。`cvs build --strict` 语境下 taste 是 ship 前置闸。
   
 - **派生导出格式（v3.1）**：`--platform webm|gif|mp3` 从 master/音轨直接转码（不经 shell 的 mp4+AAC 链），交付清单按扩展名入列。覆盖矩阵单一真值 `docs/COVERAGE.md`。
 - **禁止**：让 LLM 直接生成 HTML/CSS/JS，或绕过 spec 直接改像素。模型只填枚举与文案。

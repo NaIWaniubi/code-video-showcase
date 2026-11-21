@@ -19,6 +19,9 @@ import { buildPlanFromSpec } from './plan.mjs';
 import { THEMES, THEME_LIST, accentOverride } from './themes.js';
 import { auditApca } from './color.js';
 import { brandFromSpec, checkBrand } from '../scripts/brand.mjs';
+import { STYLE_PAGES } from './style-pages.mjs';
+import fs from 'node:fs';
+import url from 'node:url';
 
 /** 主题 id 或别名是否存在。 */
 export function themeExists(ref) {
@@ -74,6 +77,30 @@ export function deepValidate(raw, { root = process.cwd() } = {}) {
   if (brand) {
     for (const issue of checkBrand(spec, brand, { root })) issues.push(issue);
   }
+
+  // S2 画风教义存在性（WARN 起步，S2 收尾升 error）：rounds 用的页面若命中
+  // STYLE_PAGES 的专属配方页，而 content/style-doctrine.json 缺该画风档 → 提醒。
+  // 教义是「画风=可被 lint/QA 消费的数据」的地基（ROADMAP S2），自定义页不管。
+  try {
+    const knownPages = new Set(Object.values(STYLE_PAGES).map((p) => String(p).split('?')[0]));
+    const pageToStyle = new Map();
+    for (const [sid, p] of Object.entries(STYLE_PAGES)) {
+      const k = String(p).split('?')[0];
+      if (!pageToStyle.has(k)) pageToStyle.set(k, sid);
+    }
+    const dp = new URL('../content/style-doctrine.json', import.meta.url);
+    let ids = new Set();
+    try { ids = new Set(Object.keys(JSON.parse(fs.readFileSync(dp, 'utf8')).styles || {})); } catch { /* 无档文件时本检查整体跳过 */ }
+    if (ids.size) {
+      (spec.rounds || []).forEach((r, i) => {
+        const p = String(r.style?.page || '').split('?')[0];
+        const sid = pageToStyle.get(p);
+        if (knownPages.has(p) && sid && !ids.has(sid) && sid !== 'vertical') {
+          issues.push({ code: 'W_DOCTRINE_MISSING', path: `rounds[${i}].style`, message: `画风 "${sid}" 在 content/style-doctrine.json 无 11 维教义档（S2：画风须升维为可被闸消费的数据）`, level: 'warn' });
+        }
+      });
+    }
+  } catch { /* style-pages 导入异常不影响其余校验 */ }
 
   // 去重（validateSpec + plan 的页面检查可能重叠）
   const seen = new Set();

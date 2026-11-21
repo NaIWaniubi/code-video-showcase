@@ -1,0 +1,248 @@
+{
+  "$comment": "S2 画风教义（11 维结构化，全条目本项目自写）。字段命名向 machine-readable 风格元数据看齐；mutable 三档= safe(可改:配色/字距/节奏/音色/签名动作) · character(改之变性格:材质渲染/色彩逻辑/相机语法) · core(不可改:本质定义)。E_DOCTRINE_MISSING(warn) 要求 rounds 用到的每个画风在此有档。",
+  "version": 1,
+  "mutableTiers": ["safe", "character", "core"],
+  "styles": {
+    "cyber-pixel": {
+      "essence": "低分辨率像素网格 + CRT 扫描线的霓虹夜城", "notStyles": "不是矢量赛博朋克，不用平滑渐变",
+      "material": "整数像素块、dither 抖动、scanline 叠加", "colourLogic": "深紫黑底 + 品红/青高光，palette 限 16 色感",
+      "typeRules": "点阵/等宽字体；标题不斜体", "motionQuality": "步进感（animate on twos），位移吸附像素格",
+      "cameraGrammar": "正交平面镜头，横移为主，忌透视推拉", "soundPalette": "chiptune 方波、琶音、噪声军鼓",
+      "nativeMoves": ["像素溶解转场", "血条/伤害数字", "屏幕抖动以像素计"], "pitfalls": "亚像素位移破坏颗粒感；grain 加在页面上（应在编码层）",
+      "engine": "canvas 2D 整数网格", "variationSpace": ["日夜色温", "城景密度"],
+      "uses": ["游戏", "复古科技", "音乐可视化"], "mutable": { "safe": ["colourLogic", "soundPalette"], "character": ["material", "motionQuality"], "core": ["essence", "cameraGrammar"] }
+    },
+    "cyber-glitch": {
+      "essence": "信号被撕裂的瞬间：数据错位的冷峻故障", "notStyles": "不是霓虹装饰，不是随机噪点堆砌",
+      "material": "RGB 通道错位、切片位移、块状撕裂", "colourLogic": "近黑底 + 单一高饱和通道色，错位期允许双色散",
+      "typeRules": "等宽/无衬线，故障瞬间字面被切片", "motionQuality": "静止与爆发交替，glitch 有起止帧不留尾",
+      "cameraGrammar": "固定机位 + 画面内容自身崩解", "soundPalette": "bitcrush 撞击、白噪门控、低频嗡鸣",
+      "nativeMoves": ["切片错位入场", "字符乱码再收敛", "RGB 分离后对齐"], "pitfalls": "glitch 滥用成噪声；无收束的故障=视觉疲劳",
+      "engine": "canvas 2D 条带重排", "variationSpace": ["故障密度", "收敛速度"],
+      "uses": ["黑客/安全", "先锋音乐", "反乌托邦叙事"], "mutable": { "safe": ["colourLogic", "soundPalette"], "character": ["glitch密度→motionQuality"], "core": ["essence"] }
+    },
+    "pixel-8bit": {
+      "essence": "8-bit 游戏时代的欢快像素质感", "notStyles": "不是 CRT 忧郁（cyber-pixel），无扫描线是默认",
+      "material": "16-64 色板、硬边像素、抖动渐变", "colourLogic": "高明度互补色对撞，天空蓝绿底常见",
+      "typeRules": "像素字体全大写常见", "motionQuality": "帧率降到 8-12fps 的定格感", "cameraGrammar": "卷轴横移/跳关式硬切",
+      "soundPalette": "方波旋律 + 噪声鼓", "nativeMoves": ["弹跳入场", "吃金币音效点", "像素化溶解"],
+      "pitfalls": "与 cyber-pixel 混淆：氛围是欢乐不是赛博", "engine": "canvas 2D sprite",
+      "variationSpace": ["色板代数", "关卡主题"], "uses": ["游戏", "童趣产品", "活动页"], "mutable": { "safe": ["colourLogic"], "character": ["material"], "core": ["essence"] }
+    },
+    "ink-wash": {
+      "essence": "水墨在生宣上的呼吸：留白即主体", "notStyles": "不是国风纹样拼贴（guofeng），不做满版",
+      "material": "湿笔晕染、飞白、纸纹", "colourLogic": "墨分五色 + 一点朱砂，纸面暖白",
+      "typeRules": "宋/楷竖排气质，标题大留白", "motionQuality": "极慢晕开，笔断意连，忌弹跳缓动",
+      "cameraGrammar": "手卷式横移，焦点随笔势", "soundPalette": "古琴/箫单音长息、大量静默",
+      "nativeMoves": ["一笔成形", "墨滴洇染转场", "留白收束"], "pitfalls": "用 CSS blur 假晕染；背景加满噪点破坏呼吸",
+      "engine": "canvas 湿扩散模拟", "variationSpace": ["疏密", "季节（春夏秋冬色系）"],
+      "uses": ["文化", "茶酒", "纪录片片头"], "mutable": { "safe": ["variationSpace"], "character": ["material", "colourLogic"], "core": ["essence", "motionQuality"] }
+    },
+    "guofeng": {
+      "essence": "纹样、匾额与朱金：装饰性的东方礼制", "notStyles": "不是水墨文人趣（ink-wash）",
+      "material": "云纹/回纹边框、烫金压凹", "colourLogic": "朱砂/石青/藤黄 + 明金描边",
+      "typeRules": "宋体标题、印章落款点缀", "motionQuality": "庄重匀速，开合有序，忌弹性",
+      "cameraGrammar": "对称构图、中轴推门", "soundPalette": "编钟/鼓点正拍，管乐铺底",
+      "nativeMoves": ["门扉对开", "印章盖落", "卷轴展开"], "pitfalls": "emoji 古风化；配色脏（金色溢出）",
+      "engine": "svg 纹样 + canvas 粒子金", "variationSpace": ["朝代气质", "节庆/礼制"],
+      "uses": ["国货品牌", "节庆", "文化节目"], "mutable": { "safe": ["colourLogic"], "character": ["material"], "core": ["essence"] }
+    },
+    "great-wall": {
+      "essence": "大山大河的横卷史诗：尺度即叙事", "notStyles": "不是单点纹样（guofeng），镜头在远",
+      "material": "层峦剪影、雾带视差、城墙线稿", "colourLogic": "青绿山水或赭石夕照，天光渐变克制",
+      "typeRules": "大字号匾额式标题压山巅", "motionQuality": "长镜头缓推，视差层速差表达纵深",
+      "cameraGrammar": "航拍式平移 + 缓慢推进，人物渺小", "soundPalette": "弦乐长音 + 大鼓心跳",
+      "nativeMoves": ["雾开见城", "层峦视差卷轴", "尺度对比（飞鸟/城）"], "pitfalls": "视差层过多成廉价 PPT；缺主角锚点",
+      "engine": "canvas 视差多层", "variationSpace": ["时段", "季节"],
+      "uses": ["文旅", "史诗叙事", "地产片头"], "mutable": { "safe": ["colourLogic"], "character": ["cameraGrammar"], "core": ["essence", "material"] }
+    },
+    "whiteboard": {
+      "essence": "一支手的思考过程：画出来的解释", "notStyles": "不是成品插画，要保留绘制过程",
+      "material": "手绘线稿、马克笔着色、纸张底", "colourLogic": "白底 + 3 支笔色（黑蓝红经典）",
+      "typeRules": "手写字感，箭头批注大量使用", "motionQuality": "描边生长（stroke-dashoffset 式），停顿像思考",
+      "cameraGrammar": "画面局部推拉跟随笔尖", "soundPalette": "马克笔沙沙 + 轻快拨弦",
+      "nativeMoves": ["图形生长", "连线标注", "擦除重来梗"], "pitfalls": "全秒画完失去过程感；字过多",
+      "engine": "svg path 动画", "variationSpace": ["学科符号系"],
+      "uses": ["科普", "教育", "方法论讲解"], "mutable": { "safe": ["colourLogic"], "character": ["motionQuality"], "core": ["essence"] }
+    },
+    "three-d": {
+      "essence": "真实光照的立体物件：转体即展示", "notStyles": "不是伪 3D 视差（great-wall 式层）",
+      "material": "PBR 质感：金属/玻璃/哑光三档", "colourLogic": "影棚布光：主光+轮廓光，背景单色渐变",
+      "typeRules": "无衬线细字远离主体", "motionQuality": "匀速转体 + 关键面停顿打光",
+      "cameraGrammar": "轨道机位，浅景深聚焦卖点", "soundPalette": "低频铺底 + 材质音效（咔/嗡）",
+      "nativeMoves": ["爆炸分解图", "材质切换", "剖面揭示"], "pitfalls": "过曝高光丢失细节；转太快晕",
+      "engine": "three.js WebGL2", "variationSpace": ["布光方案", "分解层级"],
+      "uses": ["硬件产品", "工业", "科技发布"], "mutable": { "safe": ["colourLogic"], "character": ["material", "cameraGrammar"], "core": ["essence"] }
+    },
+    "data-viz": {
+      "essence": "数字自己会跳舞：图表即角色", "notStyles": "不是贴图动画，数据要真进几何",
+      "material": "柱/线/面的生长动画，坐标轴克制", "colourLogic": "分类色板≤6 色，强调序列独占高亮",
+      "typeRules": "数字用等宽对齐，单位常驻", "motionQuality": "缓动收尾落定，数据到位必停一拍读秒",
+      "cameraGrammar": "版面分区调度，无透视炫技", "soundPalette": "tick 音阶按数据升调",
+      "nativeMoves": ["条形赛跑", "折线描画", "大数字滚动"], "pitfalls": "图表堆砌无结论；3D 饼图",
+      "engine": "canvas 2D + tokens 字号刻度", "variationSpace": ["指标叙事顺序"],
+      "uses": ["财报", "行业报告", "增长故事"], "mutable": { "safe": ["colourLogic"], "character": ["motionQuality"], "core": ["essence"] }
+    },
+    "screencast": {
+      "essence": "真实界面 + 电影化运镜：所见即可用", "notStyles": "不是重新画假 UI，截图必须真",
+      "material": "窗口截图、光标轨迹、点击涟漪", "colourLogic": "界面自身色 + 品牌描边强调",
+      "typeRules": "步骤标签大字卡，行间留呼吸", "motionQuality": "平移跟光标，缩放聚焦功能点，节奏跟操作因果",
+      "cameraGrammar": "2.5D 推入屏幕纵深（可选）", "soundPalette": "键盘点击拟音 + 轻节拍",
+      "nativeMoves": ["光标先行内容随后", "局部放大镜", "快捷键字幕"], "pitfalls": "无因果的运镜；分辨率混用",
+      "engine": "canvas 图像变换", "variationSpace": ["聚焦策略"],
+      "uses": ["软件宣传", "功能发布", "教程"], "mutable": { "safe": ["soundPalette"], "character": ["cameraGrammar"], "core": ["essence", "material"] }
+    },
+    "flat": {
+      "essence": "无光影的色块修辞：几何说清一切", "notStyles": "不加渐变与投影（skeuomorphic）",
+      "material": "圆角色块、极简图标、矢量几何", "colourLogic": "高明度互补/类比色板，纯色无纹理",
+      "typeRules": "粗无衬线，字重对比构建层级", "motionQuality": "弹性适中，位移+缩放组合干脆",
+      "cameraGrammar": "平面版式蒙太奇，场景靠色块转场", "soundPalette": "马林巴/pop 拨弦",
+      "nativeMoves": ["形状变形 morph", "图标弹入队列", "色块擦除转场"], "pitfalls": "元素堆太满；圆角风格不统一",
+      "engine": "svg/canvas 矢量", "variationSpace": ["色板家族", "圆角半径刻度"],
+      "uses": ["SaaS", "互联网产品", "解释器"], "mutable": { "safe": ["colourLogic"], "character": ["motionQuality"], "core": ["essence"] }
+    },
+    "minimal": {
+      "essence": "几乎什么都不放：一件物 + 大寂静", "notStyles": "不是性冷淡堆砌（元素仍需全部在场理由）",
+      "material": "无装饰，微噪点可接受", "colourLogic": "双色制，中性底 chroma≥0.005（禁纯灰）",
+      "typeRules": "字号即层级，行长克制", "motionQuality": "极慢极稳，动如未动",
+      "cameraGrammar": "固定 + 微移", "soundPalette": "钢琴单音/环境声留白",
+      "nativeMoves": ["一点放大", "细线生长", "呼吸间距"], "pitfalls": "空≠简：无锚点的空是寡淡",
+      "engine": "dom 级克制排版", "variationSpace": ["留白比例"],
+      "uses": ["高端品牌", "建筑", "艺术"], "mutable": { "safe": ["variationSpace"], "character": ["motionQuality"], "core": ["essence"] }
+    },
+    "vertical": {
+      "essence": "竖屏原生：拇指时间轴的快语速", "notStyles": "不是横版裁切",
+      "material": "通用段页安全区上下留", "colourLogic": "跟随所选主题，饱和度略提抗小屏",
+      "typeRules": "9:16 重排行规约，大字号下限更高", "motionQuality": "上推动势多，单段更短",
+      "cameraGrammar": "纵向构图重心偏上 1/3", "soundPalette": "跟随 audio.mood，起音更快",
+      "nativeMoves": ["纵向滚动卡片", "拇指热区按钮"], "pitfalls": "文字越出 action-safe 90%",
+      "engine": "templates/segment.html 竖版重排", "variationSpace": ["平台预设"],
+      "uses": ["抖音/短视频", "口播字幕"], "mutable": { "safe": ["colourLogic"], "character": [], "core": ["essence"] }
+    },
+    "kinetic": {
+      "essence": "文字是演员：排版打拍子", "notStyles": "不是插画配字幕",
+      "material": "纯字体 + 色块底，偶尔描边", "colourLogic": "2-3 色强对比，逐拍可闪底",
+      "typeRules": "字重/字号/斜正变化承担全部表达", "motionQuality": "词级出场跟拍点，句末停顿",
+      "cameraGrammar": "版面即舞台，推拉文字块", "soundPalette": "人声采样 + 军鼓，节奏驱动",
+      "nativeMoves": ["逐词砸入", "文字遮罩揭示", "同义替换连击"], "pitfalls": "整句一次出现失去卡点；可读时长不足（见 taste copy 规则）",
+      "engine": "dom 级 + canvas 字标", "variationSpace": ["语速档"],
+      "uses": ["宣言", "标语片", "活动 hype"], "mutable": { "safe": ["colourLogic"], "character": ["motionQuality"], "core": ["essence"] }
+    },
+    "swiss": {
+      "essence": "网格统治：非对称秩序与 Helvetica 良知", "notStyles": "不是极简（minimal 更少元素），瑞士式信息密度",
+      "material": "严格基线网格、规则栏线", "colourLogic": "白/红/黑或蓝，专色平涂",
+      "typeRules": "无衬线单族到底，左对齐硬回行", "motionQuality": "栏位级位移，克制缓出",
+      "cameraGrammar": "版面滚动/翻页，无透视", "soundPalette": "机械节拍、钢琴扣",
+      "nativeMoves": ["栏线生长", "编号计数", "网格重组"], "pitfalls": "破网格而不自知（token 刻度钉住）",
+      "engine": "grid tokens", "variationSpace": ["栏数 6/12"],
+      "uses": ["展览", "机构", "设计行业"], "mutable": { "safe": ["colourLogic"], "character": ["grid密度→motionQuality"], "core": ["essence"] }
+    },
+    "editorial": {
+      "essence": "杂志跨页：衬线标题的叙事腔调", "notStyles": "不是报纸（swiss 更硬）",
+      "material": "图文混排、首字下沉、引文放大", "colourLogic": "纸感底 + 双色系，图片主导饱和",
+      "typeRules": "衬线大标 + 无衬线正文对唱", "motionQuality": "翻页式分区显现",
+      "cameraGrammar": "版式漫游，段落间推近", "soundPalette": "弦乐拨奏 + 纸张声",
+      "nativeMoves": ["引文抽出放大", "图片拼贴入场"], "pitfalls": "衬线斜体滥用（taste 38a）",
+      "engine": "dom 级排版", "variationSpace": ["刊例风格"],
+      "uses": ["品牌故事", "人物志", "文化"], "mutable": { "safe": ["colourLogic"], "character": ["typeRules"], "core": ["essence"] }
+    },
+    "brutalist": {
+      "essence": "未经装饰的诚实：边框、默认体、反 UX 惯例", "notStyles": "不是丑，是故意的粗野",
+      "material": "1px 硬边框、无圆角、原生控件感", "colourLogic": "黑底白/黄，或反相；允许刺眼对比",
+      "typeRules": "等宽/系统字体大字号，全大写", "motionQuality": "硬切，无缓动或线性位移",
+      "cameraGrammar": "平面直给", "soundPalette": "工业噪声门控、失真相位",
+      "nativeMoves": ["元素重叠压字", "滚动条美学", "表单裸奔"], "pitfalls": "为野而野不可读（正文对比仍需 error 闸）",
+      "engine": "dom 级", "variationSpace": ["粗野程度刻度"],
+      "uses": ["独立设计", "音乐", "青年文化"], "mutable": { "safe": ["colourLogic"], "character": ["motionQuality"], "core": ["essence"] }
+    },
+    "vaporwave": {
+      "essence": "假日算机的乡愁：网格地平线与落日", "notStyles": "不是赛博（未来向），这是怀旧向",
+      "material": "透视网格、铬合金字、雕像贴图", "colourLogic": "品红/青/紫渐变落日，固定高光",
+      "typeRules": "铬渐变标题 + 全角片假名点缀", "motionQuality": "匀速巡航镜头，闪烁有规律",
+      "cameraGrammar": "贴地前行机位（招牌）", "soundPalette": "慢放采样、pad 长音",
+      "nativeMoves": ["落日升起", "网格无限延伸", "logo 铬光扫"], "pitfalls": "grain 进页面（交 ffmpeg）；色偏糊",
+      "engine": "canvas 3D 投影", "variationSpace": ["年代感"],
+      "uses": ["复古音乐", "潮流品牌", "概念"], "mutable": { "safe": ["soundPalette"], "character": ["colourLogic"], "core": ["essence", "cameraGrammar"] }
+    },
+    "blueprint": {
+      "essence": "蓝图上的推演：线稿、标注与尺寸线", "notStyles": "不是白底 sketch（whiteboard 有手）",
+      "material": "细线栅格、尺寸线、技术标注", "colourLogic": "石青底白线或白底蓝线",
+      "typeRules": "等宽小注 + 大写标号", "motionQuality": "按工序展开装配感",
+      "cameraGrammar": "正交三视图切换", "soundPalette": "圆规/直尺拟音 + 电子脉冲",
+      "nativeMoves": ["尺寸线拉出", "视图旋转到等角", "标注逐一点亮"], "pitfalls": "线宽无层级（缺粗/细/点三线制）",
+      "engine": "svg 线稿", "variationSpace": ["行业图纸系"],
+      "uses": ["工程", "建筑", "制造"], "mutable": { "safe": ["colourLogic"], "character": ["cameraGrammar"], "core": ["essence"] }
+    },
+    "risograph": {
+      "essence": "双色套印的错位浪漫：Riso 荧光油墨", "notStyles": "不是 CMYK 全彩印刷",
+      "material": "叠印混色（multiply）、颗粒套不准", "colourLogic": "双色限定（ fluores 粉+蓝经典），叠色第三色",
+      "typeRules": "粗几何字，油墨压字", "motionQuality": "套色逐帧错位闪现",
+      "cameraGrammar": "平面海报动效化", "soundPalette": "印刷机节奏 lo-fi",
+      "nativeMoves": ["双色分离入场", "套准抖动", "叠色高亮"], "pitfalls": "三色以上失身份；错位在页面画 grain（应在编码层）",
+      "engine": "canvas multiply 混合", "variationSpace": ["油墨对"],
+      "uses": ["独立出版", "音乐节", "文创"], "mutable": { "safe": ["colourLogic（油墨对在枚举内）"], "character": ["material"], "core": ["essence", "双色制"] }
+    },
+    "generative": {
+      "essence": "规则涌现之美：种子固定即可复现的混沌", "notStyles": "不是随机噪声，参数即作者",
+      "material": "流场/粒子/L-system 闭式函数", "colourLogic": "单色渐层或双色调映射",
+      "typeRules": "极简参数读数可露出", "motionQuality": "由 (t,seed) 纯函数驱动，禁无种子 random",
+      "cameraGrammar": "缓慢环绕/推近形态", "soundPalette": "颗粒合成、随形变音高",
+      "nativeMoves": ["生长循环", "对称破缺", "参数显影"], "pitfalls": "同秒不同帧（必须纯函数，determinism 闸守）",
+      "engine": "canvas seed 化数学", "variationSpace": ["算法族", "seed"],
+      "uses": ["艺术", "NFT 风", "抽象概念"], "mutable": { "safe": ["seed", "colourLogic"], "character": ["算法族"], "core": ["essence", "确定性"] }
+    },
+    "wireframe": {
+      "essence": "白模骨架：未上色的建筑透视练习", "notStyles": "不是蓝图（无标注工序），是体量",
+      "material": "白灰面 + 黑线框，AO 阴影", "colourLogic": "中性灰阶 chroma≥0.005",
+      "typeRules": "小注释体量", "motionQuality": "体量缓转/拆解", "cameraGrammar": "一点透视长镜头推入",
+      "soundPalette": "空灵 pad + 结构敲击", "nativeMoves": ["面片飞入组装", "剖切透视"],
+      "pitfalls": "加贴图失身份", "engine": "three.js 白模", "variationSpace": ["建筑类型"],
+      "uses": ["建筑", "空间叙事", "产品原型"], "mutable": { "safe": ["cameraGrammar"], "character": ["material"], "core": ["essence", "无贴图"] }
+    },
+    "skeleton": {
+      "essence": "骨骼绑定演示：关节如何驱动角色", "notStyles": "不是成品动画角色",
+      "material": "关节点 + 骨线 + 剪影层", "colourLogic": "底暗线亮，关节高亮色",
+      "typeRules": "解剖学标注小字", "motionQuality": "循环动作库（走跑跳），慢放插值可见",
+      "cameraGrammar": "正交侧视 + 关键帧定格", "soundPalette": "机械关节 + 计拍音",
+      "nativeMoves": ["IK 拖拽", "关键帧时间轴露出"], "pitfalls": "动效过于成品化掩盖骨架主题",
+      "engine": "canvas 骨骼", "variationSpace": ["物种骨架"],
+      "uses": ["动画教学", "游戏开发", "机器人"], "mutable": { "safe": ["colourLogic"], "character": ["动作库"], "core": ["essence"] }
+    },
+    "fractal": {
+      "essence": "分形缩放：自相似的深渊推镜", "notStyles": "不是普通粒子",
+      "material": "Mandelbrot/Julia/L-system 闭式场", "colourLogic": "迭代深度映射色带",
+      "typeRules": "缩放倍率读数", "motionQuality": "指数推镜匀速（在对数域）",
+      "cameraGrammar": "唯一运镜=推入", "soundPalette": "上升 Shepard 音",
+      "nativeMoves": ["无限推入", "分支生长", "配色切换"], "pitfalls": "浮点精度抖（定点/双精度采样）；帧预算爆表",
+      "engine": "canvas 迭代函数", "variationSpace": ["公式族", "色带"],
+      "uses": ["数学美", "意识流", "片头"], "mutable": { "safe": ["色带"], "character": ["公式族"], "core": ["essence", "推镜"] }
+    },
+    "firework": {
+      "essence": "弹道与绽放：粒子有物理出身", "notStyles": "不是均匀粒子喷泉",
+      "material": "升空弹→爆炸→重力余烬，拖尾", "colourLogic": "夜黑底 + 高亮焰色，余烬渐暗",
+      "typeRules": "无字或一语点题", "motionQuality": "加速度真实（重力常数统一）",
+      "cameraGrammar": "仰角固定，规模变化", "soundPalette": "升空哨 + 爆响 + 余音",
+      "nativeMoves": ["齐射编排跟拍点", "心形/字模焰型"], "pitfalls": "无重力感=贴纸；帧预算爆",
+      "engine": "canvas 粒子池", "variationSpace": ["焰型", "齐射队形"],
+      "uses": ["庆典", "发布会高潮", "节日"], "mutable": { "safe": ["焰型"], "character": ["物理参数"], "core": ["essence", "重力"] }
+    },
+    "terrain": {
+      "essence": "等高线测绘：把数学画成地貌", "notStyles": "不是卫星实拍",
+      "material": "噪声高程场 + 等高线描 + 层染", "colourLogic": "海拔分带配色（深谷到雪线）",
+      "typeRules": "坐标刻度小注", "motionQuality": "缓慢环绕/推近，等高线生长",
+      "cameraGrammar": "鸟瞰正交或斜切", "soundPalette": "风声 + 低频地形嗡鸣",
+      "nativeMoves": ["抬升成山", "等高线爬升", "剖面切开"], "pitfalls": "噪声参数抖一帧变地貌（seed 固定）",
+      "engine": "canvas 高度场", "variationSpace": ["噪声种子", "生物群系"],
+      "uses": ["地理", "户外", "数据地貌"], "mutable": { "safe": ["生物群系", "色带"], "character": ["噪声族"], "core": ["essence"] }
+    },
+    "network": {
+      "essence": "节点脉冲：连接本身是主角", "notStyles": "不是装饰性星尘粒子",
+      "material": "节点+边+沿边脉冲，力导向布局", "colourLogic": "深底亮线，单点高亮传播",
+      "typeRules": "节点标签克制露出", "motionQuality": "布局缓沉（阻尼），脉冲跟拍点",
+      "cameraGrammar": "推近局部簇再拉全局", "soundPalette": "网络包点击 + 共鸣扩展",
+      "nativeMoves": ["涟漪传播", "簇聚展开", "断链重连"], "pitfalls": "无信息的乱连=俗套星空（taste cliché 关联）",
+      "engine": "canvas 力导向（确定性种子）", "variationSpace": ["拓扑", "传播律"],
+      "uses": ["通信", "AI 叙事", "社群"], "mutable": { "safe": ["colourLogic"], "character": ["拓扑"], "core": ["essence", "确定性"] }
+    }
+  }
+}

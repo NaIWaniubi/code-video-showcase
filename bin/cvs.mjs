@@ -100,6 +100,8 @@ const commands = {
   edit:   (a) => node('scripts/edit.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
   film:    (a) => node('scripts/film.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
   score:   (a) => node('scripts/score.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
+  // S1：cvs taste — 审美裁判机（规则表驱动、纯确定性、error 硬闸 / warning 扣分 / advisory 只列示）。
+  taste:   (a) => node('scripts/taste.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
   api:      (a) => node('server/api.mjs', a),
   wizard:   (a) => surface('wizard', SURFACES.wizard, a),
   canvas:   (a) => surface('canvas', SURFACES.canvas, a),
@@ -152,6 +154,7 @@ usage: cvs <command> [args]
   film <spec> [--out dir] [--overrides f]
                                         export an OpenFilm-IR timeline (film.html + pages/)
   score <video> [--plan f] [--qa-audio f]   subjective quality score (5 parts, A-D grade)
+  taste <spec> [--strict] [--waivers f]  deterministic aesthetic gate (rules table, error/warning/advisory)
   health                 full checkup: doctor + error registry + combos + golden
   test [--browser]                       run all suites
   doctor                                 environment check (renderer capability probe)

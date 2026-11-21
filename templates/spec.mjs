@@ -21,7 +21,7 @@ export const SPEC_VERSION = 1;
  * v2.3.5 → 2：页面开始消费 title/sub/brand/capsule 参数，默认画面文案变了，
  * 所有旧缓存段必须失效一次（一次性全量重渲，是有意为之）。
  */
-export const ENGINE_VERSION = 2;
+export const ENGINE_VERSION = 3;
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 

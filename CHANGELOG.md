@@ -3,6 +3,49 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.8.0] - 2026-11-21 — S1+S2 审美裁判机 `cvs taste` + 27 画风 11 维教义档
+
+依据 22 项目调研（notes/G3：impeccable 62 规则工程形态 × hallmark 58 门可判定子集
+× taste-skill GATE/waivers 纪律；notes/G1：Lemo-Opuscar style.json 字段结构——
+**只借结构零抄文本，其文档为 CC-BY-NC**），把"好不好看"从祈祷变成可回归的闸：
+
+- **`cvs taste <spec> [--strict] [--waivers f] [--json]`**：14 条规则（12 条本期实装为
+  spec 级数值断言 + 2 条帧级占位），目录 `schema/taste-rules.json` 是数据、
+  `scripts/taste.mjs` EVALS 按 id 实现——**写不出数值断言的审美维度不进闸**；
+- **三层判决**：error（占位词/主题不存在/正文 APCA<60）永远拦 exit 13 ·
+  warning 计入 100−Σweight 且 --strict 拦 · advisory 永不拦只列示。对比度阈值
+  **单一真值消费模板层 `auditApca`**，taste 不复写口径（防两本账）；
+- **豁免生命周期**（impeccable/taste-skill 同款纪律）：`.cvs/waivers.json`
+  逐条 `{rule, reason, date}`；error 不可豁免；`--report-unused-waivers` 把
+  过期豁免点名。**绝不为过闸调阈值**（误判处置=复现样例入 fixtures）；
+- **首猎战果（上线当天抓到真缺陷）**：17 套主题 × auditApca 全表扫描，4 项不达标
+  并当场修复——coral-noir/amber-noir/crimson-theater 的 muted 对底 39~40 Lc
+  （需 45）→ 保色相最小提亮；crimson-theater accent `#b11226` 对底仅 **19.4 Lc**
+  （需 30，等于不可读）→ 解三元约束（accent/bg≥30 · accentInk WCAG≥4.5 ·
+  accentInk/accent APCA≥60）后改 `#d63f3f`。theme:audit 的 APCA 提醒 18→13。
+  **这是像素变更：`ENGINE_VERSION` 2→3（DECISIONS 规矩），golden 已 --update
+  刷新（4 specs · 12 stills，重渲双跑位级一致）**；
+- 接入面：`bin/cvs.mjs taste` 子命令；MCP 新增第 12 个工具 `cvs_taste`（README
+  计数 11→12 同步）；新错误码 E_TASTE_READ/E_TASTE_FAIL 入册（registry 164 · 100%）；
+  `docs/ERRORS.md` 改由 `errors --write` 全量再生成（修掉内审 F11 的 156 vs 159 漂移）；
+- 回归 `scripts/test-taste.mjs`（进 test:all，36 套件）：判决正/反例、豁免
+  生命周期、同 spec 两次运行**同分同判决**、17 主题 body 对比度全过。
+
+**S2 画风升维（同版本）**
+- `content/style-doctrine.json`：**27 个画风 × 11 维结构化教义**（essence/not-styles/
+  material/colour-logic/type-rules/motion/camera/sound-palette/native-moves/
+  pitfalls/engine/variation-space + uses + mutable 三档），全条目自写；字段命名向
+  机器可读风格元数据看齐；
+- `templates/spec-check.mjs` deepValidate 接入 **W_DOCTRINE_MISSING**（rounds 命中
+  专属配方页而教义缺档即提醒；自定义页不管；S2 收尾升 error）；spec.mjs 保持
+  **不 import fs 的浏览器可运行性**（设计律第 3 条），检查放 Node 侧专用层；
+- 教义存在性是后续 `cvs style new`（产物=recipe 页+doctrine 条目）与 sound-palette
+  打通 synth_audio 的地基（ROADMAP S2-3/S2-5，后续切片）。
+
+已知边界：theme:audit 的 8 项矩阵 FAIL（点缀色对底为设计性低对比）与 13 项残余
+APCA 提醒不在本版强改——它们进 ROADMAP S7 的"装饰 token 语义分级"切片，由主题
+作者裁决 scope 而非闸一刀切（这正是 genre-aware 豁免存在的理由）。
+
 ## [v4.7.1] - 2026-11-21 — 可信度修复（S0）：假绿不复发
 
 外部调研（22 项目，见 docs/ROADMAP-OVERTAKE.md）伴随的本仓深度内审坐实 5 条

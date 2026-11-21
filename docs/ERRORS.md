@@ -17,7 +17,7 @@
 
 脚本可以用退出码做粗分流，用 `--json` / `error.json` 的 `code` 做精确重试。
 
-## 已注册错误码（156）
+## 已注册错误码（164）
 
 | 错误码 | 阶段 | 退出码 | 含义 | 唯一动作 |
 |---|---|---|---|---|
@@ -113,8 +113,11 @@
 | `E_QA_AUDIO` | qa | 13 | 音频质检失败 | 看 out/qa/qa-audio.json 的 cue alignment |
 | `E_QA_VIDEO` | qa | 13 | 视频质检失败 | 看 out/qa/qa-video.json 的 FAIL 项 |
 | `E_ROLLBACK_HASH` | qa | 13 | 回滚后 master 哈希与记录不一致 | 检查磁盘写入；不要手工改 versions/ |
+| `E_SCORE` | qa | 13 | cvs score：评分报告写出失败（磁盘/权限/路径）。plan 缺失不再触发本码——相应维度标 skipped 照常出分 | 换 --out 目录或检查磁盘；其余维度证据看 stderr 各行 |
 | `E_SNAPSHOT_TAMPERED` | qa | 13 | 快照文件与记录的 sha256 不符，拒绝回滚 | cvs verify <v> 定位文件；从备份恢复 |
 | `E_SUBTITLES_MISSING` | qa | 13 | 要烧字幕但 master.srt 不存在 | 去掉 --no-deliver，或去掉 --burn-subtitles |
+| `E_TASTE_FAIL` | qa | 13 | cvs taste 审美闸不过：存在 error 级 finding（或 --strict 下有 warning）。逐条判决见 out/qa/taste.json（evidence 带实测值） | 按 findings 修 spec/主题 token；确属误判走 .cvs/waivers.json 豁免（rule+reason+date），**绝不为过闸改规则阈值** |
+| `E_TASTE_READ` | qa | 2 | cvs taste：spec.json 或规则目录不可读/非法 JSON | 确认路径存在且为 JSON；规则目录缺省 schema/taste-rules.json（--rules 可指） |
 | `E_VERSION_UNKNOWN` | qa | 13 | 指定的版本快照不存在 | cvs history 查看可用版本 |
 | `E_AUDIO_NOT_FOUND` | env | 14 | --audio 文件不存在 | 检查路径 |
 | `E_AUDIO_REQUIRED` | env | 14 | 没有音轨且未显式豁免 | 装 Python numpy/scipy 自动合成，或传 --audio，或 --no-audio |
@@ -145,6 +148,7 @@
 | `E_ASSET_PATH` | asset | 10 | E_ASSET_PATH：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_ASSET_REMOTE` | asset | 10 | E_ASSET_REMOTE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_ASSETS_TYPE` | asset | 10 | E_ASSETS_TYPE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
+| `E_BACKUP` | edit | 13 | --apply 写回前备份原 spec 失败（磁盘只读/权限等）——已中止写回，原文件未动 | 修复磁盘/权限后重试；dry-run 验证不涉及备份 |
 | `E_BAD_REQUEST` | preview | 0 | 帧 API 请求参数缺失/非法 | 补齐 id/n 查询参数 |
 | `E_BRAND` | brand | 10 | E_BRAND：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_BRAND_ACCENT_APCA` | brand | 10 | E_BRAND_ACCENT_APCA：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
@@ -152,11 +156,14 @@
 | `E_COPY_LEN` | ui | 2 | E_COPY_LEN：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_DUP_ID` | ui | 2 | E_DUP_ID：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_DUP_ROW` | ui | 2 | E_DUP_ROW：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
+| `E_EDIT` | edit | 13 | edit 结构异常（reflow 无法闭合 D 公式等） | 检查 structure 字段与 flash/count 是否自洽；dry-run 会先过 lint 再落盘 |
+| `E_EDIT_USAGE` | edit | 2 | edit 参数类错误（轮 id 不存在/时刻越界/目标时长过短/move 写法） | 改参数重试：--split-at 秒须落在轮区间；--drop/--move 用 rounds[].id；--trim ≥0.6s |
 | `E_EMPTY_EDL` | ingest | 15 | E_EMPTY_EDL：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_EMPTY_UPLOAD` | preview | 0 | 上传的参考片为空 | 换一个有实际内容的文件 |
 | `E_FFMPEG` | ingest | 15 | E_FFMPEG：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_FFPROBE` | ingest | 15 | E_FFPROBE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_FFPROBE_JSON` | ingest | 15 | E_FFPROBE_JSON：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
+| `E_FILM` | film | 10 | cvs film：spec 读取/解析失败或 OpenFilm IR 导出异常（含 --overrides 文件坏 JSON） | 确认 <spec.json> 可读且过 lint；overrides 文件须是 [{clipId, overrides}] 或其 {overrides:[…]} 包装 |
 | `E_FORBIDDEN_WORD` | brand | 10 | E_FORBIDDEN_WORD：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_FRAME` | preview | 0 | 帧请求非法（越界/非整数） | 帧号取 0..frames-1 的整数 |
 | `E_INGEST` | ingest | 15 | E_INGEST：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
@@ -165,6 +172,7 @@
 | `E_NO_FFMPEG` | ingest | 15 | E_NO_FFMPEG：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_NO_FFPROBE` | ingest | 15 | E_NO_FFPROBE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_NO_FILE_PART` | preview | 0 | multipart 里没有带 filename 的文件分段 | 用 fetch FormData 附加 File |
+| `E_PAGE_BARE` | plan | 10 | 页面（或其递归依赖）import 了 bare 模块说明符（node_modules/CDN 包名）。它不进 segmentHash：库一升级缓存就命中旧画面且 build 报成功——正是 plan.mjs 注释点名要防的假绿。CVS 是零依赖产品，第三方渲染库必须自实现或走页面内联脚本 | 把该 import 换成仓内相对路径（./、templates/、shared/、assets/、content/）或内联实现；确需外部库时写进 docs/DECISIONS.md 并经 --allow-remote-pages 之外的显式评审 |
 | `E_PATH` | preview | 0 | 预览路径非法（穿越/隐藏目录） | 路径必须落在仓库根内 |
 | `E_PAYLOAD_TOO_LARGE` | preview | 413 | 反代请求体超过 1MB 上限（源头掐断，不向上游灌数据） | 缩小提交体：拆小 spec 或分次评论 |
 | `E_READ_ERROR` | preview | 0 | 读取上传数据出错（连接中断或超限已断） | 重试；大文件建议先裁剪 |
@@ -180,8 +188,8 @@
 
 ## 覆盖情况
 
-- 代码中出现的 `E_*`：156
-- 已注册且被使用：156
+- 代码中出现的 `E_*`：164
+- 已注册且被使用：164
 - 未注册：0
 
 - 已注册但当前未使用：0

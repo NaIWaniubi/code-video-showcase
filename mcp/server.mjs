@@ -32,7 +32,7 @@ import { suggestedCuts } from '../scripts/lib/spec-edit.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, '..');
-export const SERVER_INFO = { name: 'code-video-showcase', version: '4.7.1' };
+export const SERVER_INFO = { name: 'code-video-showcase', version: '4.8.0' };
 
 // ── 内核工具（无子进程）───────────────────────────────────────────────────
 
@@ -228,6 +228,20 @@ export const TOOLS = [
       if (a.outPath) args.push('--out', a.outPath);
       const r = await runCvs(args, { timeoutSeconds: 600 });
       return { isError: !r.ok, text: resultText(r.text.slice(-4000), `image exit=${r.exitCode}`) };
+    },
+  },
+  {
+    name: 'cvs_taste',
+    description: '确定性审美闸（S1）：规则表驱动，error 硬闸 / warning 扣分 / advisory 只列示；同 spec 同分数可回归。误判走 waivers，绝不为过闸改阈值。',
+    inputSchema: { type: 'object', properties: {
+      specPath: { type: 'string' },
+      strict: { type: 'boolean', description: 'warning 也拦（exit 13）' },
+      waiversPath: { type: 'string', description: '豁免文件（默认 <root>/.cvs/waivers.json）' },
+    }, required: ['specPath'] },
+    run: async (a) => {
+      const args = ['taste', a.specPath, ...(a.strict ? ['--strict'] : []), ...(a.waiversPath ? ['--waivers', a.waiversPath] : []), '--json'];
+      const r = await runCvs(args, { timeoutSeconds: 120 });
+      return { isError: !r.ok, text: resultText(r.text.slice(-6000), `taste exit=${r.exitCode}`) };
     },
   },
   {
