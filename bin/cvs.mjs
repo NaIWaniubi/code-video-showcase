@@ -98,6 +98,8 @@ const commands = {
   ship:   (a) => node('scripts/ship.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
   // R15-W5：cvs edit — agent 向结构剪辑（split/drop/move/trim，D 公式闭合，默认 dry-run）。
   edit:   (a) => node('scripts/edit.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
+  film:    (a) => node('scripts/film.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
+  score:   (a) => node('scripts/score.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
   api:      (a) => node('server/api.mjs', a),
   wizard:   (a) => surface('wizard', SURFACES.wizard, a),
   canvas:   (a) => surface('canvas', SURFACES.canvas, a),
@@ -147,6 +149,9 @@ usage: cvs <command> [args]
   ship <spec> [--check]   package delivery bundle (spec+film+subs+manifest+README)
   edit <spec> [--split-at=sec] [--drop=id] [--move=id:pos] [--trim=sec] [--edl f] [--otio f]
                                         agent-grade structural edits (D-closed, default dry-run)
+  film <spec> [--out dir] [--overrides f]
+                                        export an OpenFilm-IR timeline (film.html + pages/)
+  score <video> [--plan f] [--qa-audio f]   subjective quality score (5 parts, A-D grade)
   health                 full checkup: doctor + error registry + combos + golden
   test [--browser]                       run all suites
   doctor                                 environment check (renderer capability probe)

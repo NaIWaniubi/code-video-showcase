@@ -53,6 +53,8 @@ const UNIT_SUITES = [
   'scripts/test-spec-edit.mjs',   // R15：agent 向剪辑内核 + edit CLI（EDL/OTIO/dry-run）
   'scripts/test-mcp-server.mjs',  // R20：MCP stdio 接口层（线协议握手 + 10 工具实调）
   'scripts/test-ref-compare.mjs',  // R22：复刻度量的纯函数回归
+  'scripts/test-film-export.mjs',   // R24：spec→OpenFilm IR 导出与 overrides
+  'scripts/test-score-core.mjs',    // R24：主观质量评分纯函数
   'scripts/test-zip-lib.mjs',
   'scripts/test-version-sync.mjs',
   'scripts/test-demo-spec.mjs',

@@ -28,6 +28,8 @@ An Agent Skill for producing 30–90 s "style showcase" films: an 8 s opening, e
 - **剪辑闭环索引安全（v4.3）**：帧工作台导出的段表补丁此前按段索引落 rounds（静默错轮）——现按 roundId 定位 + id 对齐校验，文案编辑安全编译回成片，结构改动如实提示走 `cvs edit`。
 - **任意 agent 一行接入（v4.4，MCP stdio）**：`npm run mcp` 暴露 11 个工具（new/lint/plan/build/edit/suggest/qa/image/ship/demo/health），Claude Desktop / Cursor / Claude Code / ZCode 配一行 command 即用；写盘工具默认 dry-run。详见 [mcp/README.md](mcp/README.md)。
 - **复刻度量（v4.6，对标 openfilm/skill-replicate）**：`cvs ref video 参考片.mp4 --compare 复刻片.mp4` 输出切点对齐（带帧偏移）、节奏相似度、帧级色彩与色板距离、总体判定——agent 拿到的不是「像不像」的直觉而是可复核的分数；实测同源母版对派生件 verdict=match。
+- **OpenFilm IR 互通（v4.7）**：`cvs film <spec>` 导出 OpenFilm SPEC 的 film.html 时间线（sections/tracks + #t 同口径），附 overrides 非破坏编辑层与 locked/hidden 轨道语义，手改可汇总回 spec patch 再编译——与 OpenFilm 生态双向互通；
+- **主观质量评分（v4.7，evals 思想）**：`cvs score <video>` 出五维证据清单（运动/色彩/节奏/同步/叙事）与 A–D 等级，把「好不好」变成可复核分数。
 - **生成质量修复（v4.6）**：题材专属画风优先（长城不再被水墨抢匹配）+ ≥10s 双轮结构；QA 音轨闸以母版为准（转码瞬态不再误红）。
 - **导演演示集 + 一键出片（v3.2–v3.5）**：白模线框 / 骨骼动画 / L-system 分形 / 弹道喷泉 / 等高线测绘 / 网络脉冲六个闭式确定引擎；`cvs demo <style>` 出单片、`cvs demo all --only a,b --concurrency/--retries` 批量（manifest 如实报账、上传带进度+取消）。
 - **交付打包与发布门禁**： v3.7：`ship --check` 打包前双闸质检、`cvs health` 一键全身体检、参考反推 top-3 主题可点切换。`cvs ship <spec>` 把 spec+成片+字幕+清单+自生成 README 打成开箱即用 zip（竞赛「作品四件套」同形，缺成片如实退 13）；`cvs qa` 视频+音频双闸一次跑完；doctor 告知 VP9/MP3lame/Opus/subtitles 编码器是否就位；`npm run gate` 发布前四项一键全查。；向导向可拖入参考片一键套用主题/BPM/时长；golden 位级基线含 demo-skeleton。 v3.8：ship --check 质检报告随包入库、build --ref-patch 直接套用反推结论、health 五项全查。

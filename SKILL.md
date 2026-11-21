@@ -1,6 +1,6 @@
 ---
 name: code-video-showcase
-version: 4.6.0   # 与 package.json 同值（test-version-sync 钉死）
+version: 4.7.0   # 与 package.json 同值（test-version-sync 钉死）
 description: |
   用纯代码（HTML/Canvas/SVG/Three.js 逐帧渲染 + Python numpy/scipy 合成配乐 + FFmpeg 合成）制作 30–90 秒卡点风格展示视频的完整技能。
   适用于：复刻/仿制《Opus 5.5 视频风格展示》或 DeepSeek V4.1-Flash 61s 风格样片、多风格切换卡点视频、纯代码视频、程序化视频；要求不使用任何视频/图像/音乐生成模型。
@@ -141,6 +141,8 @@ node bin/cvs.mjs build project.spec.json --root . --platform douyin --strict
   v4.6：对标 OpenFilm 生态补「复刻度量」（ref video --compare：切点对齐/节奏/
   色彩/色板四维评分）；nl2spec 题材专属画风优先 + ≥10s 双轮结构；QA 音轨闸
   以母版为准。
+  v4.7：补 OpenFilm 对标强项——cvs film 导出 OpenFilm IR 时间线（overrides 非破坏层 +
+  locked/hidden 轨道语义，回 spec 可重编译）；cvs score 五维主观质量评分。
   
 - **派生导出格式（v3.1）**：`--platform webm|gif|mp3` 从 master/音轨直接转码（不经 shell 的 mp4+AAC 链），交付清单按扩展名入列。覆盖矩阵单一真值 `docs/COVERAGE.md`。
 - **禁止**：让 LLM 直接生成 HTML/CSS/JS，或绕过 spec 直接改像素。模型只填枚举与文案。

@@ -3,6 +3,30 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.7.0] - 2026-11-21 — 对标 OpenFilm 补强项：film.html IR + overrides + 主观评分
+
+### R24-W1 cvs film：spec → OpenFilm IR 时间线
+- 对标 openfilm/openfilm SPEC（0.1 draft）：`cvs film <spec> --out <dir>` 把 CVS
+  段表展开成 OpenFilm 的 film.html——sections=轨道（kind 语义）、iframe=帧、
+  `#t=in,out` 与 withSegmentParams 同口径（t=t0+u·speed）；附 pages/*.html 直开 scrub；
+- 轨道语义与 OpenFilm 对齐：opening/card/ending 为 locked（人的，agent 不许动），
+  风格轨默认 hidden；附 style.css 双态视觉（虚线=人的、网点=agent）；
+- **超越点**：overrides 非破坏层（同 OpenFilm 语义）+ `overridesToSpecPatch`
+  把前端手改汇总回 spec patch（style.copy/card.first），可再进编译链重出片——
+  OpenFilm 只有前端编辑，没有「改意图 → 重编译」的闭环。
+
+### R24-W2 cvs score：成片主观质量评分（evals 思想）
+- OpenFilm 用 evals 记录真实请求在有/无 skill 下的实测对比；对应物：`cvs score
+  <video> --plan --qa-audio` 五维证据清单：运动密度（帧间灰度位移）· 色彩活力
+  （主色板彩度/明度跨度）· 节奏感（切点间隔变异系数）· 音画同步（cue 对齐率，
+  直接吃 qa-audio JSON）· 标题叙事；加权总分 + A–D 等级；
+- 实测长城 master：motion 0.191 / chroma 0.268 / pacing 0（cv=1.33，卡点密但
+  方差大）/ sync 0.842 / title 1 → total 0.389 · D——主观观感差的证据链如实呈现。
+
+### 验证
+- 单测 34 套件 518 通过（含 test-film-export 3 项、test-score-core 5 项纯函数回归）；
+  version-sync 四方一致 4.7.0。
+
 ## [v4.6.0] - 2026-11-21 — 借鉴 OpenFilm 生态：复刻度量 + 质量短板修复
 
 ### R22-W：参考片度量（对标 openfilm/skill-replicate 的「时间的度量」思想）

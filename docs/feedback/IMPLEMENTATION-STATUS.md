@@ -1,6 +1,6 @@
 # 优化方案落地状态（v1.0 → v2.5.2）
 
-> ## v3.x 时代能力清单（v4.6.0，2026-11-21 · v2.8.1 → v4.6.0 共 20 个大版本）
+> ## v3.x 时代能力清单（v4.7.0，2026-11-21 · v2.8.1 → v4.7.0 共 21 个大版本）
 >
 > 本节为 v3.x + v4.0 全波次（第三轮十视角审计 + 断层领先三件套 + 产品面补齐 +
 > agent 向剪辑）的落地总账。逐版明细以 CHANGELOG 为准；以下为能力级索引：
@@ -29,6 +29,9 @@
 >   frames 工作台建议层（GET /frames/api/suggestions → ruler 虚线切点可点套用）。
 >   同版修复 v3.1.0 起 `undoEdit` 未定义导致工作台加载即崩的潜伏缺陷；
 >   reflow 重写两位小数精确闭合（短片骨架不再被整数秒地板撑散架）。
+> - **OpenFilm IR 互通 + 主观评分（v4.7.0）**：`cvs film` 导出 OpenFilm SPEC
+  时间线（overrides 非破坏层 + locked/hidden 轨道，回 spec 可重编译）；
+  `cvs score` 五维主观分（A–D 等级，evals 思想）。
 > - **复刻度量 + 生成质量修复（v4.6.0）**：对标 openfilm/skill-replicate——
   `ref video --compare` 四维评分（切点/节奏/帧色/色板）；nl2spec 题材专属
   画风优先 + ≥10s 双轮；QA 音闸只把母版（转码瞬态不再误红）。
@@ -45,7 +48,7 @@
 >   剥掉页面自带查询参数（theme/layout 等）——此前「预览帧 ≠ 成片帧」的根因；
 >   同进程实测 meanDiff=0，frames 套件位级三连转硬钉子。
 >
-> **当前门禁口径（v4.6.0 实测）**：test:all **32 套件（含 MCP 与复刻度量套件）** ·
+> **当前门禁口径（v4.7.0 实测）**：test:all **34 套件（含 MCP、复刻度量、film IR、score 套件）** ·
 > frames 浏览器套件 **79/79**（位级三连 meanDiff=0 + 编辑往返钉子含 redo；--no-browser 57/57）·
 > reflow-pages 浏览器套件 **55/55**（D7 像素摘要口径，内容形态真保护，双连跑全绿）·
 > health 5/5 · golden 位级基线含 demo-skeleton · errors 159 码覆盖 100% ·
