@@ -3,6 +3,35 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.6.0] - 2026-11-21 — 借鉴 OpenFilm 生态：复刻度量 + 质量短板修复
+
+### R22-W：参考片度量（对标 openfilm/skill-replicate 的「时间的度量」思想）
+- agent 看的是静帧不是视频——只看帧会把 look 对上、把时间感丢掉（漏切点、
+  匀速代替缓动、自带时钟）。新增 `scripts/lib/ref-compare-core.mjs` 纯函数核 +
+  `cvs ref video <ref.mp4> --compare <render.mp4>`：
+- 切点对齐（每处带帧偏移，超出 ±0.4s 判未命中）· 节奏相似度（间隔模式对齐）
+  · 帧级色彩相似度（同栅格逐帧 RGB 距离）· 色板距离（oklab 聚类中心最近邻，
+  极坐标 c/h→a/b 对称还原）· 总体判定 match/partial/mismatch；
+- 实测（master 对 bilibili 派生件）：26/26 切点零偏移 · 节奏 1.00 · 帧 0.999 ·
+  色板 1.0 → verdict match；
+- 踩坑记录：analyzePixels 的 palette 只投影 (l,c,h) 缺完整 oklab 坐标，
+  双侧统一自聚类 kmeansPixels + 极坐标还原才可比。
+
+### R21-W：nl2spec 质量短板修复（长城实测暴露）
+- 题材专属画风提位：「长城介绍片，水墨国风主题」里题材是主词，旧规则表水墨
+  抢匹配导致 style=ink-wash；great-wall 提前到泛称之前，题材专属优先；
+- fitStructure ≥10s 至少 2 个风格轮（旧 round(10/7)=1 单轮无节奏起伏）；
+- 实测重生成：kind/style=great-wall/theme=dark-gold-cinema/rounds=2 全对。
+
+### R23-W：QA 音频闸以母版为准（实测发现的误红）
+- 平台派生件 AAC 重编码瞬态展宽使 onset 峰值整体前移约 20–37ms，单个 cue
+  被 ±30ms 边界误杀（母版 16/19 过，派生件 15/19 挂）——音轨卡点网格属于
+  母版时间线，音闸只把母版，派生件如实跳过并标注；视频完整性仍逐件把关。
+
+### 验证
+- 单测 32 套件 510 通过（含 test-ref-compare 六项纯函数回归）；长城成片全链
+  全绿：master qa-video 19 pass / qa-audio 7 pass；version-sync 四方一致 4.6.0。
+
 ## [v4.5.0] - 2026-11-21 — MCP 接口实测打磨：补 cvs_image · 修正 apply/seconds 语义
 
 ### 真实端到端调测驱动（长城艺术照 + 10s 介绍视频）

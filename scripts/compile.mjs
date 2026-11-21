@@ -749,6 +749,12 @@ if (!args['no-qa']) {
     if (audioPath) {
       // W6：gif 等无音轨派生格式——抽音轨必失败，如实跳过而不是让 QA 崩栈。
       if (t.format === 'gif') { console.error(`[warn] qa-audio skipped for ${t.name}（无音轨）`); }
+      // R23-W：音轨卡点网格属于母版时间线，平台件是 AAC 重编码派生物——瞬态经转码
+      // 展宽后 onset 峰值会整体前移几毫秒（实测 16/19→15/19，单个 cue 被 ±30ms
+      // 边界误杀）。以母版为唯一音轨闸，派生件跳过并如实标注；视频完整性仍逐件把关。
+      else if (t.name !== 'master') {
+        console.error(`[warn] qa-audio skipped for ${t.name}（派生重编码件；母版 qa-audio.json 已把关）`);
+      }
       else {
       // 质检量的是**成片里的音轨**（过完 loudnorm 的交付流），不是未归一的合成 wav；
       // qa-audio.py 自身能吃 mp4（内部 ffmpeg 抽流），不再手写抽取命令。

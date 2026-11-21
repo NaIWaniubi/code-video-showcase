@@ -18,13 +18,17 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseStrict, rejectUnknown } from './lib/strict-flags.mjs';
-import { analyzePixels } from './ref-core.mjs';
+import { analyzePixels, kmeansPixels } from './ref-core.mjs';
 import { inferStructure, buildReport } from './lib/ref-video-core.mjs';
+import {
+  matchCuts, rhythmSimilarity, frameColorSimilarity,
+  paletteDistanceBetween, overallVerdict,
+} from './lib/ref-compare-core.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PROG = 'node scripts/ref-video.mjs';
 const KNOWN = new Set(['video', 'threshold', 'sample-fps', 'out', 'apply', 'json',
-  'max-seconds', 'emit-spec', 'help']);
+  'max-seconds', 'emit-spec', 'compare', 'help']);
 const argv = process.argv.slice(2);
 const { args, unknown } = parseStrict(argv, KNOWN);
 if (unknown.length) rejectUnknown(PROG, unknown, KNOWN);
@@ -40,6 +44,7 @@ if (args.help || !videoArg) {
   --out <dir>            report output dir (default analysis/<basename>)
   --apply <spec.json>    merge the structure/theme patch into an existing spec
   --emit-spec <out.json]  expand the structure into a NEW compilable spec
+  --compare <render.mp4> measure a remake against the reference (R22-W)
   --json                 one-line JSON on stdout, human text to stderr`);
   process.exit(args.help ? 0 : 2);
 }
@@ -234,6 +239,86 @@ if (args['emit-spec']) {
 }
 void emittedSpec;
 
+// ── R22-W：复刻度量（与 openfilm/skill-replicate 同思想）──────────────────
+// agent 看的是静帧不是视频——只看帧会把 look 对上、把时间感丢掉。此块给 agent
+// 一个「时间的度量」：切点对齐（带帧偏移）、节奏相似度、色板距离、帧级色彩相似度。
+let compareResult = null;
+if (args.compare) {
+  const renderPath = path.resolve(String(args.compare));
+  if (!fs.existsSync(renderPath)) {
+    console.error(`[error] [E_REF_VIDEO_UNREADABLE] 复刻片不存在：${args.compare}`);
+    process.exit(15);
+  }
+  const rp = spawnSync(FFPROBE, [
+    '-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height',
+    '-of', 'json', renderPath,
+  ], { encoding: 'utf8', timeout: 60000 });
+  if (rp.status !== 0 || !rp.stdout) {
+    console.error(`[error] [E_REF_VIDEO_UNREADABLE] ffprobe failed on ${args.compare}: ${String(rp.stderr || '').slice(0, 150)}`);
+    process.exit(15);
+  }
+  let renderDur = 0;
+  try { renderDur = Number(JSON.parse(rp.stdout).format?.duration || 0); } catch { renderDur = 0; }
+  // 复刻片的切点（同阈值口径）
+  const rsraw = spawnSync(FFMPEG, [
+    '-hide_banner', '-nostats', '-i', renderPath,
+    '-an', '-vf', `select='gt(scene,${threshold})',showinfo`, '-f', 'null', '-',
+  ], { encoding: 'utf8', timeout: 120000, maxBuffer: 32 * 1024 * 1024 });
+  const renderCuts = [];
+  for (const m of String(rsraw.stdout || '').matchAll(/pts_time:(\d+(?:\.\d+)?)/g)) renderCuts.push(Number(m[1]));
+  for (const m of String(rsraw.stderr || '').matchAll(/pts_time:(\d+(?:\.\d+)?)/g)) renderCuts.push(Number(m[1]));
+  // 复刻片像素流（同栅格：fps=2 → 96×96 rgb24）
+  const rpix = spawnSync(FFMPEG, [
+    '-hide_banner', '-nostats', '-i', renderPath,
+    ...(Number.isFinite(effectiveDur) && effectiveDur < renderDur ? ['-t', String(Math.min(effectiveDur, renderDur))] : []),
+    '-vf', `fps=${Math.max(1, sampleFps)},scale=96:96:flags=area`, '-f', 'rawvideo',
+    '-pix_fmt', 'rgb24', 'pipe:1',
+  ], { encoding: 'buffer', timeout: 180000, maxBuffer: 128 * 1024 * 1024 });
+  // 色板两侧统一自聚类（kmeans 直接出 oklab 中心，l/a/b 全字段；analyzePixels 的
+  // palette 只投影 l/c/h，拿不到完整坐标）——对称口径才有可比性。
+  const bufToClusters = (buf) => {
+    const fb = 96 * 96 * 3;
+    const npix = Math.floor((buf?.length || 0) / fb);
+    if (!npix) return [];
+    const pixObj = [];
+    for (let f = 0; f < npix; f++) {
+      for (let i = 0; i < fb; i += 3) {
+        const o = f * fb + i;
+        pixObj.push({ r: buf[o] / 255, g: buf[o + 1] / 255, b: buf[o + 2] / 255 });
+      }
+    }
+    return kmeansPixels(pixObj.length >= fb ? pixObj : [], 6);
+  };
+  let renderClusters = [];
+  try { renderClusters = bufToClusters(rpix.stdout); } catch (e) { console.error(`[warn] compare: palette of render skipped (${String(e.message || e).slice(0, 100)})`); }
+  let refClustersForCompare = [];
+  try { refClustersForCompare = bufToClusters(srPixels.stdout); } catch { /* 如实：参考像素缺失则色板一侧为 null */ }
+
+  const cutMatch = matchCuts(cuts, renderCuts);
+  const rhythm = rhythmSimilarity(cuts, renderCuts);
+  const frameSim = frameColorSimilarity(srPixels.stdout || Buffer.alloc(0), rpix.stdout || Buffer.alloc(0));
+  const palSim = paletteDistanceBetween(refClustersForCompare, renderClusters);
+  compareResult = {
+    engine: 'ref-compare/1',
+    reference: path.basename(videoArg),
+    render: path.basename(renderPath),
+    durationDeltaSec: +(probe.duration - renderDur).toFixed(3),
+    cutMatch,
+    rhythm,
+    frameSim,
+    palSim,
+    verdict: null,
+  };
+  compareResult.verdict = overallVerdict(compareResult);
+  console.error('[compare]');
+  console.error(`  duration   Δ ${compareResult.durationDeltaSec >= 0 ? '+' : ''}${compareResult.durationDeltaSec}s`);
+  console.error(`  cuts       ${cutMatch.matched}/${cuts.length} matched · ${cutMatch.unmatched.length} missed · ${cutMatch.extraRender} extra · offsets [${cutMatch.offsetsSec.map((x) => x.toFixed(3)).join(', ')}]`);
+  console.error(`  rhythm     score ${rhythm.score} (${rhythm.note})`);
+  console.error(`  frames     similarity ${frameSim.similarity} (${frameSim.note})`);
+  console.error(`  palette    distance ${palSim.distance ?? '—'} · similarity ${palSim.similarity ?? '—'}`);
+  console.error(`  verdict    ${compareResult.verdict}`);
+}
+
 // ── 6. 输出 ────────────────────────────────────────────────────────────────
 const outDir = args.out ? path.resolve(String(args.out)) : path.resolve(process.cwd(), 'analysis', path.basename(videoArg).replace(/\.[^.]+$/, ''));
 // 证据图（contact sheet）：每秒一帧的拼版，人眼复核用（tile 8 列）。
@@ -256,7 +341,7 @@ fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'ref-report.json'), JSON.stringify(report, null, 2) + '\n', 'utf8');
 
 if (args.json) {
-  process.stdout.write(JSON.stringify(report) + '\n');
+  process.stdout.write(JSON.stringify({ ...report, ...(compareResult ? { compare: compareResult } : {}) }) + '\n');
 } else {
   console.log(`■ 反推 ${path.basename(videoArg)}  ·  engine=ref-video/1`);
   console.log(`  时长 ${probe.duration.toFixed(1)}s @ ${probe.fps}fps · ${probe.width}×${probe.height}${probe.hasAudio ? ' · 含音轨' : ''}`);

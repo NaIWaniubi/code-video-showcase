@@ -437,9 +437,11 @@ const STYLE_RULES = [
   ['swiss', ['瑞士', '国际主义', '网格', 'swiss', 'international style', 'helvetica', '栅格', '排版']],
   ['kinetic', ['动态字体', '动态字', 'kinetic', 'kinetic typography', '文字动画', '大字动画', '字体动画']],
   ['whiteboard', ['白板', '手绘', '手写', '涂鸦', 'whiteboard', 'hand-drawn', 'hand drawn', 'doodle']],
+  // v4.6：专属题材画风优先于泛称风格——「长城介绍片，水墨国风主题」里题材是主词，
+  // 水墨是氛围修饰。单独提位避免被水墨抢匹配。
+  ['great-wall', ['长城', '关隘', '边塞', '山海关', '嘉峪关', '万里长城', 'great wall', 'great-wall', 'fortress', 'rampart']],
   ['ink-wash', ['水墨', '墨色', '山水', '宣纸', 'ink wash', 'ink-wash', 'sumi']],
   ['guofeng', ['国风', '古风', '东方', '中国风', 'guofeng', 'oriental', 'chinese style']],
-  ['great-wall', ['长城', '关隘', '边塞', '山海关', '嘉峪关', '万里长城', 'great wall', 'great-wall', 'fortress', 'rampart']],
   ['three-d', ['3d', '3 d', '三维', '立体', 'three.js', 'threejs', 'c4d', '粘土', 'clay', 'cinema4d']],
   ['data-viz', ['数据可视化', '数据', '图表', '条形', '竞速', '可视化', 'data viz', 'dataviz', 'data-viz', 'chart', 'infographic']],
   ['screencast', ['录屏', '代码', '编程', 'screencast', 'screen recording', 'programming', 'coding', 'developer']],
@@ -567,8 +569,10 @@ function sizeFor(aspect) {
 export function fitStructure(duration, roundCount) {
   const D = Number(duration);
   // 轮数按 ~7s 一轮，且不超过「每轮至少 3s」的可行上限；显式 roundCount 也会被夹住。
+  // v4.6：≥10s 的片至少 2 个风格轮——10s 单轮（无节奏起伏）是质量实测最差的结构；
+  // 短片（<10s）保持单轮紧凑。
   const maxRounds = Math.max(1, Math.min(24, Math.floor(D / 3)));
-  const n = clamp(roundCount || Math.round(D / 7), 1, maxRounds);
+  const n = clamp(roundCount || Math.max(D >= 10 ? 2 : 1, Math.round(D / 7)), 1, maxRounds);
 
   // 4–9s 的短片去掉闪白、缩小 moreCard，避免固定开销吃掉整条片子。
   const flash = { count: D >= 10 ? 8 : 0, each: 0.25 };
