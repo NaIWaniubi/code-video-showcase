@@ -32,7 +32,7 @@ import { suggestedCuts } from '../scripts/lib/spec-edit.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, '..');
-export const SERVER_INFO = { name: 'code-video-showcase', version: '4.9.1' };
+export const SERVER_INFO = { name: 'code-video-showcase', version: '4.9.2' };
 
 // ── 内核工具（无子进程）───────────────────────────────────────────────────
 

@@ -96,6 +96,31 @@ const baseSpec = JSON.parse(fs.readFileSync(path.join(ROOT, 'fixtures/mini-41s/s
   ok('T6c plan page cannot override renderer seg/t0', /[?&]seg=1(&|$)/.test(t6c) && t6c.includes('t0=0'), t6c.slice(0, 90));
 }
 
+// ── T7: URL 溯源闸双向（v4.9.2）——剥参 manifest 必须 FAIL，全参必须无此 FAIL ──
+{
+  const dir = path.join(tmp, 'prov');
+  fs.mkdirSync(dir, { recursive: true });
+  const mp4 = path.join(dir, 'm.mp4');
+  const mk = spawnSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
+    '-i', 'testsrc=size=64x64:rate=30:duration=0.3', '-pix_fmt', 'yuv420p', '-frames:v', '9', mp4], { timeout: 90000 });
+  if (mk.status !== 0 || !fs.existsSync(mp4)) ok('T7 fixture mp4', false, 'ffmpeg 造不了小样');
+  else {
+    const planDoc = { meta: { root: ROOT, fps: 30, width: 64, height: 64 }, stats: { frames: 9, duration: 0.3 },
+      segments: [{ id: 's1', page: 'templates/segment.html?theme=amber-noir&title=%E6%A0%B7', frames: 9, duration: 0.3, start: 0, t0: 0, speed: 1 }] };
+    fs.writeFileSync(path.join(dir, 'plan.json'), JSON.stringify(planDoc));
+    const qaRun = (url) => {
+      fs.writeFileSync(path.join(dir, 'render-manifest.json'), JSON.stringify({ version: 1, segments: { s1: { status: 'done', frames: 9, renderUrl: url } } }));
+      const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts/qa-video.mjs'), mp4, '--plan', path.join(dir, 'plan.json'), '--no-contact'],
+        { encoding: 'utf8', timeout: 280000 });
+      return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+    };
+    const bad = qaRun('http://127.0.0.1:1/templates/segment.html?seg=1&t0=0&speed=1&dur=0.3');
+    ok('T7 FAIL on stripped params', bad.code !== 0 && bad.out.includes('url provenance') && bad.out.includes('theme=amber-noir lost'), `exit=${bad.code}`);
+    const good = qaRun('http://127.0.0.1:1/templates/segment.html?theme=amber-noir&title=%E6%A0%B7&seg=1&t0=0&speed=1&dur=0.3');
+    ok('T7b no provenance FAIL when params kept', !good.out.includes('lost in rendered URL'), `exit=${good.code}`);
+  }
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 if (fails) { console.error(`[test-trust-fixes] ${fails} FAIL`); process.exit(1); }
 console.log('[test-trust-fixes] all green');

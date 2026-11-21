@@ -370,6 +370,44 @@ if (plan) {
   add('plan coverage', 'WARN', 'no plan.json supplied — pages/placeholder/frames/cuts/title checks skipped; this is NOT a delivery-grade QA');
 }
 
+// ── URL 溯源闸（v4.9.2，内容错位病根的制度化防线） ──────────────────────────
+// v2.9.0 教训：渲染器把 plan 下发的 theme/title/first 等 query 剥光，成片渲染成
+// 页面内建 demo 文案，而 QA 只验「plan 里有标题」不验「渲染 URL 里还带着它」——
+// 全绿三天。现在 manifest.renderUrl（farm 从渲染器 [page] 行捕获）必须携带 plan
+// 段 URL 的全部非渲染器专属参数；丢失即 FAIL。
+if (plan) {
+  try {
+    const mfPath = path.join(path.dirname(path.resolve(String(args.plan))), 'render-manifest.json');
+    if (!fs.existsSync(mfPath)) {
+      add('url provenance', 'WARN', 'render-manifest.json not found next to plan — provenance not verified');
+    } else {
+      const mf = JSON.parse(fs.readFileSync(mfPath, 'utf8'));
+      const RESERVED = new Set(['seg', 't0', 'speed', 'dur', 'vars']);
+      let checked = 0, noUrl = 0, fails = 0;
+      for (const s of plan.segments || []) {
+        const m = (mf.segments || {})[s.id];
+        if (!m || m.status === 'cached') continue;
+        if (!m.renderUrl) { noUrl++; continue; }
+        checked++;
+        const want = new URL(`http://x/${String(s.page).replace(/^\/+/, '')}`).searchParams;
+        const got = new URL(String(m.renderUrl)).searchParams;
+        for (const [k, v] of want) {
+          if (RESERVED.has(k)) continue;
+          if (got.get(k) !== v) {
+            fails++;
+            add('url provenance', 'FAIL', `${s.id}: plan ${k}=${v} lost in rendered URL (${got.get(k) ?? 'ABSENT'}) — 内容错位类缺陷`);
+            break;
+          }
+        }
+      }
+      if (!fails) {
+        const msg = `${checked} 段的实际渲染 URL 携带 plan 全部文案/主题参数${noUrl ? `（${noUrl} 段无 renderUrl——早于 v4.9.2 的 manifest，重渲后自动补全）` : ''}`;
+        add('url provenance', checked || noUrl ? 'PASS' : 'ADVISORY', checked || noUrl ? msg : 'manifest 段全为 cached——本轮无新渲染可溯源（非缺陷，但本闸暂为空转）');
+      }
+    }
+  } catch (e) { add('url provenance', 'FAIL', `manifest unreadable: ${String(e.message).slice(0, 120)}`); }
+}
+
 // ── summary ────────────────────────────────────────────────────────────────
 // 三档：FAIL 交付物是错的；WARN 交付物不合格（--strict 下判失败）；
 //       ADVISORY 诊断/装饰（VMAF 没装、封面拼图生成失败）——任何情况下都不拦交付。

@@ -232,8 +232,14 @@ function runOneLegacy(s) {
       const child = spawn(process.execPath, a, { cwd: root, windowsHide: true, env: process.env });
       let tail = '';
       let settled = false;
+      // v4.9.2 URL 溯源：捕获渲染器实际打开的 [page] URL（滚动 tail 会挤掉头部，
+      // 所以从每个增量单独解析），写入 manifest 供 qa 对照 plan——防止「参数在
+      // 渲染前被剥掉」这类内容错位再骗过全绿（v2.9.0 回归 3 天才被 dogfooding 抓到）。
+      let pageUrl = '';
       const onData = (d) => {
         const text = d.toString();
+        const pm = text.match(/\[page\] (\S+)/);
+        if (pm) pageUrl = pm[1];
         tail = (tail + text).slice(-4000);
         if (!quiet) {
           for (const line of text.split(/\r?\n/).filter(Boolean)) console.log(`[${s.id}] ${line}`);
@@ -254,6 +260,7 @@ function runOneLegacy(s) {
             status: framesOk ? 'done' : 'frame-mismatch',
             frames: got, expected: s.frames, seconds: Number(sec), attempts: attempt, out: s.out,
             ...(s.hash ? { hash: s.hash } : {}),
+            ...(pageUrl ? { renderUrl: pageUrl } : {}),
           };
           if (!framesOk) {
             console.error(`[${s.id}] frame mismatch: got ${got}, expected ${s.frames}`);

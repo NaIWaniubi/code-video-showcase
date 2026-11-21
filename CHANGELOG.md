@@ -3,6 +3,16 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.9.2] - 2026-11-21 — URL 溯源闸：内容错位从此过不了 QA
+
+- render-farm 从渲染器 `[page]` 增量日志捕获**实际打开的 URL** 写入
+  `render-manifest.json:segments[].renderUrl`；`cvs qa` 新增 **url provenance** 闸：
+  plan 段 URL 的全部非渲染器专属参数（theme/mp/accent/title/first/brand/layout…）
+  必须原样出现在实际渲染 URL 里，丢失即 FAIL——把 v2.9.0 那类「剥参后全绿三天」
+  的教训制度化成机器闸；全 cached 的 manifest 记 ADVISORY（如实申报本闸空转）。
+- 回归 T7 双向：篡改 manifest 剥 theme → qa exit≠0 且点名丢失参数；补全 → 无该 FAIL。
+  真机验证：对 campus-wall 母带注入剥参 manifest 精确报 `theme=coral-noir lost`。
+
 ## [v4.9.1] - 2026-11-21 — 内容错位终结（校园墙宣传片 dogfooding 抓出的 v2.9.0 回归）
 
 - **生产渲染 URL 保留 plan 的合法 query（高危修复）**：RT-07 P2-2 曾把页面自带 query 全剥（防 ?logo= 注入的过度矫正），导致 v2.9.0 起
