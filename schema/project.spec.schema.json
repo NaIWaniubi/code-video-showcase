@@ -182,9 +182,53 @@
         },
         "vo": {
           "type": [
-            "string",
+            "array",
             "null"
-          ]
+          ],
+          "description": "旁白声道行（R4-W3）。给了就进编译：合成语音+sidechain 闪避混音。words 可选，由 `cvs caption`（faster-whisper 词级时间戳）产出或人工填。",
+          "items": {
+            "type": "object",
+            "required": [
+              "text",
+              "start"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "start": {
+                "type": "number",
+                "minimum": 0
+              },
+              "duration": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "words": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "w",
+                    "t0",
+                    "t1"
+                  ],
+                  "properties": {
+                    "w": {
+                      "type": "string"
+                    },
+                    "t0": {
+                      "type": "number"
+                    },
+                    "t1": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -225,7 +269,8 @@
             "count": {
               "type": "integer",
               "minimum": 0,
-              "maximum": 16
+              "maximum": 256,
+              "description": "快闪段数；上限 MAX_FLASH_COUNT=256（templates/spec.mjs 单一真值）"
             },
             "each": {
               "type": "number",
@@ -261,7 +306,8 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-zA-Z0-9_-]+$"
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$",
+            "description": "段 id：会变成段文件名与 ffmpeg concat 清单行，必须挡路径逃逸/换行注入（SAFE_ID_RE 同口径）"
           },
           "name": {
             "type": "string"

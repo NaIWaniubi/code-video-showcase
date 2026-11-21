@@ -102,6 +102,8 @@ const commands = {
   score:   (a) => node('scripts/score.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
   // S1：cvs taste — 审美裁判机（规则表驱动、纯确定性、error 硬闸 / warning 扣分 / advisory 只列示）。
   taste:   (a) => node('scripts/taste.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
+  // S4-1：cvs caption — 本地词级字幕（faster-whisper 适配器 + sha256 缓存 + spec 注入）。
+  caption: (a) => node('scripts/caption.mjs', a.length ? a : ['--help']),
   api:      (a) => node('server/api.mjs', a),
   wizard:   (a) => surface('wizard', SURFACES.wizard, a),
   canvas:   (a) => surface('canvas', SURFACES.canvas, a),

@@ -57,7 +57,7 @@ async function rpc(send, id, method, params) {
     // 3) tools/list —— 10 个工具全带 inputSchema
     r = await rpc(send, 2, 'tools/list');
     const names = r.result.tools.map((t) => t.name);
-    for (const n of ['cvs_new','cvs_lint','cvs_plan','cvs_build','cvs_edit','cvs_suggest','cvs_qa','cvs_ship','cvs_demo','cvs_health']) {
+    for (const n of ['cvs_new','cvs_lint','cvs_plan','cvs_build','cvs_edit','cvs_suggest','cvs_qa','cvs_ship','cvs_demo','cvs_health','cvs_taste','cvs_caption','cvs_image']) {
       assert.ok(names.includes(n), `缺工具 ${n}`);
     }
     assert.ok(r.result.tools.every((t) => t.inputSchema && t.inputSchema.properties), '每个工具都要有 inputSchema');

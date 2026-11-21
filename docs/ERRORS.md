@@ -17,7 +17,7 @@
 
 脚本可以用退出码做粗分流，用 `--json` / `error.json` 的 `code` 做精确重试。
 
-## 已注册错误码（164）
+## 已注册错误码（170）
 
 | 错误码 | 阶段 | 退出码 | 含义 | 唯一动作 |
 |---|---|---|---|---|
@@ -100,11 +100,17 @@
 | `E_UNSUPPORTED` | spec | 10 | E_UNSUPPORTED：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_VALIDATOR` | spec | 10 | E_VALIDATOR：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_VERSION` | spec | 10 | specVersion 不受支持 | 使用 specVersion=1，或先迁移 timeline v1 |
+| `E_VO_CONFLICT` | spec | 10 | cvs caption --into：spec.audio.vo 已有内容，拒绝静默覆盖 | 确认替换旁白行请加 --replace-vo（旧行会随 .bak 保留） |
 | `E_VO_ENTRY` | spec | 10 | audio.vo[i] 条目不合法（缺 text / start 为负 / duration 非正） | 按报错 path 修对应字段；duration 省略则按字数估速 |
 | `E_VO_TYPE` | spec | 10 | spec.audio.vo 不是 {text,start,duration} 条目数组 | 改成数组；每条含非空 text（start/duration 可缺省） |
+| `E_VO_WORDS` | spec | 10 | audio.vo[].words 形状不合法：每个词须 {w:string, t0<=t1 finite} | 用 cvs caption 产词级时间戳，或按秒（三位小数）手工对齐 |
+| `E_ASR_ENV` | render | 14 | 词级 ASR 环境缺失：python 无 faster-whisper 或模型不可得（在线首拉失败/离线无 HF_HOME 缓存） | pip install faster-whisper；离线机预置 huggingface 缓存（Systran/faster-whisper-large-v3）后用 --model 指本地目录 |
+| `E_ASR_RUN` | render | 13 | 词级 ASR 运行失败（设备/解码/超时） | 看 stderr python 侧原因；CPU 慢可 --device cpu 显式避免探测超时 |
 | `E_RENDER` | render | 11 | 段渲染失败 | 看 failedSegments + render-manifest.json，修该段后重跑 |
 | `E_CONCAT` | concat | 12 | 拼接/转码失败 | 看 segments.txt 与 ffmpeg 输出 |
+| `E_ASR_PARSE` | qa | 2 | captions JSON 不可读/缺 segments[]（--apply 注入侧同样触发） | caption JSON 必须由 cvs caption 产出；手改保持 {segments:[{start,end,text,words[]}]} 结构 |
 | `E_BURN_SUBTITLES` | qa | 13 | 字幕烧录失败 | 检查 ffmpeg 是否带 libass/subtitles 滤镜 |
+| `E_CAPTION_MEDIA` | qa | 2 | cvs caption：输入媒体文件不存在 | 传音频/视频路径（mp3/wav/m4a/mp4 均可，whisper 自己抽轨） |
 | `E_COVER` | qa | 13 | 封面渲染失败 | 看 image 日志；用 --no-cover 或修 card 页 |
 | `E_DELIVER` | qa | 13 | delivery.json 生成失败 | 检查 outDir 写权限与 master.mp4 |
 | `E_ENV_MISMATCH` | qa | 13 | 渲染环境（Chrome/字体）与 committed golden 不一致 | 用 --selfcheck 在本机重建基线，或换同一镜像 |
@@ -188,8 +194,8 @@
 
 ## 覆盖情况
 
-- 代码中出现的 `E_*`：164
-- 已注册且被使用：164
+- 代码中出现的 `E_*`：170
+- 已注册且被使用：170
 - 未注册：0
 
 - 已注册但当前未使用：0

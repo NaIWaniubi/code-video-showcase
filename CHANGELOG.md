@@ -3,6 +3,32 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.9.0] - 2026-11-21 — S4-1 真词级字幕 `cvs caption`（本地 faster-whisper，确定性隔离）
+
+对齐调研结论（G1-Concat 词级戳坐标纪律 / G4-声音链路"非确定性只活在产文件
+那一刻"）：CVS 此前字幕只从 plan 文案合成（srt 来自 spec，不来自真实语音），
+且本机内审确认 `whisper/transcribe` 全仓零接线——现在补上，且不破不变量。
+
+- **`cvs caption <audio|video>`**：本地 faster-whisper（GPU→CPU int8 自动回退，
+  word_timestamps + vad_filter），产 caption JSON + SRT + VTT；**缓存键 =
+  sha256(media|model|device|language)**，同输入复用、`--force` 才重跑——
+  ASR 的非确定性被隔离在一次性产文件层，文件进 spec 后随 segmentHash 固化；
+- **`cvs caption --apply <cap.json> --into <spec>`**：段映射进 `audio.vo`
+  （含 `words:[{w,t0,t1}]`）+ `captionSource` 溯源（engine/model/mediaSha256）；
+  已有 vo 时拒绝静默覆盖（E_VO_CONFLICT，`--replace-vo` 才覆盖，自动 .bak）；
+- **spec 校验扩口**：`E_VO_WORDS`（词形状非法）+ `W_VO_WORDS_DRIFT`（词跨度与
+  行时长偏差 >0.6s —— 字幕读不完/拖尾预警）；
+- **schema↔运行时对账（内审 F8 清偿）**：`audio.vo` 从错误的 `string` 修为
+  真实形状（对象数组+可选 words）；`flash.count` 上限 16→256 对齐
+  MAX_FLASH_COUNT；`rounds[].id` 正则对齐 SAFE_ID_RE（首字符必须字母数字、
+  ≤64）——外部工具/IDE 按 schema 生成的 spec 不再被 lint 冤杀；
+- doctor 新增 `faster-whisper` + large-v3 缓存探测（W_NO_ASR，可选能力缺失
+  只降级字幕链不动主链）；MCP 增至 **13 工具**（+`cvs_taste`/`cvs_caption`）；
+  错误码注册表 170 · 覆盖 100%；
+- 边界声明：Concat(VoiceStudio) 等外部 ASR/TTS 后端**永远走子进程协议隔离**
+  （AGPL 边界 + 零依赖卖点），`cvs caption` 的 python 适配器是自写胶水非移植；
+  测试契约层跑（`test-caption.mjs` 11 断言全绿），真模型验收单列不进 CI。
+
 ## [v4.8.0] - 2026-11-21 — S1+S2 审美裁判机 `cvs taste` + 27 画风 11 维教义档
 
 依据 22 项目调研（notes/G3：impeccable 62 规则工程形态 × hallmark 58 门可判定子集

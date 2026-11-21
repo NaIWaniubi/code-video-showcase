@@ -1054,6 +1054,42 @@
       "exit": 13,
       "meaning": "cvs taste 审美闸不过：存在 error 级 finding（或 --strict 下有 warning）。逐条判决见 out/qa/taste.json（evidence 带实测值）",
       "action": "按 findings 修 spec/主题 token；确属误判走 .cvs/waivers.json 豁免（rule+reason+date），**绝不为过闸改规则阈值**"
+    },
+    "E_CAPTION_MEDIA": {
+      "phase": "qa",
+      "exit": 2,
+      "meaning": "cvs caption：输入媒体文件不存在",
+      "action": "传音频/视频路径（mp3/wav/m4a/mp4 均可，whisper 自己抽轨）"
+    },
+    "E_ASR_ENV": {
+      "phase": "render",
+      "exit": 14,
+      "meaning": "词级 ASR 环境缺失：python 无 faster-whisper 或模型不可得（在线首拉失败/离线无 HF_HOME 缓存）",
+      "action": "pip install faster-whisper；离线机预置 huggingface 缓存（Systran/faster-whisper-large-v3）后用 --model 指本地目录"
+    },
+    "E_ASR_RUN": {
+      "phase": "render",
+      "exit": 13,
+      "meaning": "词级 ASR 运行失败（设备/解码/超时）",
+      "action": "看 stderr python 侧原因；CPU 慢可 --device cpu 显式避免探测超时"
+    },
+    "E_ASR_PARSE": {
+      "phase": "qa",
+      "exit": 2,
+      "meaning": "captions JSON 不可读/缺 segments[]（--apply 注入侧同样触发）",
+      "action": "caption JSON 必须由 cvs caption 产出；手改保持 {segments:[{start,end,text,words[]}]} 结构"
+    },
+    "E_VO_WORDS": {
+      "phase": "spec",
+      "exit": 10,
+      "meaning": "audio.vo[].words 形状不合法：每个词须 {w:string, t0<=t1 finite}",
+      "action": "用 cvs caption 产词级时间戳，或按秒（三位小数）手工对齐"
+    },
+    "E_VO_CONFLICT": {
+      "phase": "spec",
+      "exit": 10,
+      "meaning": "cvs caption --into：spec.audio.vo 已有内容，拒绝静默覆盖",
+      "action": "确认替换旁白行请加 --replace-vo（旧行会随 .bak 保留）"
     }
   }
 }

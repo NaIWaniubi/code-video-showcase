@@ -32,7 +32,7 @@ import { suggestedCuts } from '../scripts/lib/spec-edit.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, '..');
-export const SERVER_INFO = { name: 'code-video-showcase', version: '4.8.0' };
+export const SERVER_INFO = { name: 'code-video-showcase', version: '4.9.0' };
 
 // ── 内核工具（无子进程）───────────────────────────────────────────────────
 
@@ -242,6 +242,31 @@ export const TOOLS = [
       const args = ['taste', a.specPath, ...(a.strict ? ['--strict'] : []), ...(a.waiversPath ? ['--waivers', a.waiversPath] : []), '--json'];
       const r = await runCvs(args, { timeoutSeconds: 120 });
       return { isError: !r.ok, text: resultText(r.text.slice(-6000), `taste exit=${r.exitCode}`) };
+    },
+  },
+  {
+    name: 'cvs_caption',
+    description: '本地词级字幕（faster-whisper）：同输入缓存复用；--into 把段映射进 spec.audio.vo（含 words[]），非确定性只活在产文件那一刻。',
+    inputSchema: { type: 'object', properties: {
+      media: { type: 'string', description: '音频/视频路径（识别模式）' },
+      applyJson: { type: 'string', description: '已产 caption JSON（注入模式，配 into）' },
+      into: { type: 'string', description: '注入目标 spec.json' },
+      replaceVo: { type: 'boolean', description: 'spec 已有 vo 时确认覆盖' },
+      model: { type: 'string', description: 'whisper 模型（默认 large-v3；离线指本地目录）' },
+      language: { type: 'string', description: 'zh/en/auto（默认 auto）' },
+    } },
+    run: async (a) => {
+      const args = [];
+      if (a.applyJson) {
+        if (!a.into) return { isError: true, text: '注入模式需要 into <spec.json>' };
+        args.push('--apply', a.applyJson, '--into', a.into, ...(a.replaceVo ? ['--replace-vo'] : []));
+      } else if (a.media) {
+        args.push(a.media);
+        if (a.model) args.push('--model', a.model);
+        if (a.language) args.push('--language', a.language);
+      } else return { isError: true, text: '需要 media（识别）或 applyJson+into（注入）' };
+      const r = await runCvs(['caption', ...args], { timeoutSeconds: 1800 });
+      return { isError: !r.ok, text: resultText(r.text.slice(-4000), `caption exit=${r.exitCode}`) };
     },
   },
   {

@@ -1,7 +1,7 @@
 # CVS MCP 接口（任意 agent 一行接入）
 
 `npm run mcp`（= `node mcp/server.mjs`）启动一个 **MCP stdio 服务**：把 `cvs`
-全链路的语义级能力暴露为 12 个工具（含 taste 审美闸），任意支持 MCP 的 agent（Claude Desktop、
+全链路的语义级能力暴露为 13 个工具（taste 审美闸 + caption 词级字幕），任意支持 MCP 的 agent（Claude Desktop、
 Cursor、Claude Code、ZCode…）零端口、零 token、零常驻地直调。
 
 ## 接入配置（一行 command，无需网络）

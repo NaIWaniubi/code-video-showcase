@@ -125,6 +125,16 @@ if (py.ok) {
   add('python', 'matplotlib', plt.ok, plt.ok ? `v${plt.out}` : 'optional (spectrogram PNG)', false, {
     code: 'W_NO_MATPLOTLIB', fix: `"${PYTHON}" -m pip install matplotlib`,
   });
+  // S4-1：词级 ASR 能力（cvs caption）。可选后端——缺失只降级字幕链，不动主编译链。
+  const fw = run(PYTHON, ['-c', 'import faster_whisper;print(faster_whisper.__version__)']);
+  let fwModel = '';
+  if (fw.ok) {
+    const hub = run(PYTHON, ['-c', 'import os,huggingface_hub as h;print(os.path.isdir(os.path.join(h.scan_cache_dir(),"Systran","faster-whisper-large-v3")) or os.path.isdir(os.path.join(h.HF_HOME,"hub","models--Systran--faster-whisper-large-v3")))']);
+    fwModel = /True/.test(hub.out) ? ' · large-v3 已缓存（离线可跑）' : ' · 模型未缓存（首次运行需联网下载 ~3GB）';
+  }
+  add('python', 'faster-whisper', fw.ok, fw.ok ? `v${fw.out}${fwModel}` : 'optional (cvs caption 词级字幕)', false, {
+    code: 'W_NO_ASR', fix: `"${PYTHON}" -m pip install faster-whisper（可选；主链路不需要）`,
+  });
 }
 
 // ── project assets ─────────────────────────────────────────────────────────

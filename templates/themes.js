@@ -30,6 +30,8 @@
 
 export const THEME_SCHEMA_VERSION = 3; // v3 adds four skins + four material kinds
 
+import { apcaAbs } from './color.js'; // v4.9.0：accentInk 兜底与 auditApca 同尺（此前 WCAG 候选挑色 vs APCA 闸判色 = 两把尺互斥死结，校园墙宣传片实测暴露）
+
 /* ────────────────────────────────────────────────────────────────────────────
  * 主题数据
  * ──────────────────────────────────────────────────────────────────────────── */
@@ -1047,7 +1049,13 @@ export function accentOverride(themeRef, input) {
     '#ffffff',
     '#0e0e0d',
   ].filter(valid);
-  const accentInk = candidates.find((h) => contrastRatio(h, accent) >= 4.5) || candidates[0] || '#ffffff';
+  // v4.9.0 修复（校园墙宣传片实战暴露）：显式 accentInk 曾被 WCAG 4.5 候选挑选
+  // **无条件覆盖**——用户明写的墨色被静默替换；且兜底用 WCAG 尺、spec-check/build
+  // 的闸用 APCA 尺，两把尺互斥（#FF4D2E 深墨 WCAG 过、APCA 44.6<45 拦死，显式白字
+  // 又被吞）。现在：显式值直接生效；自动兜底先按与闸同口径的 APCA≥45，再落 WCAG。
+  const accentInk = valid(req.accentInk) ? req.accentInk
+    : candidates.find((h) => Math.abs(apcaAbs(h, accent)) >= 45)
+    || candidates.find((h) => contrastRatio(h, accent) >= 4.5) || candidates[0] || '#ffffff';
   const accentSoft = valid(req.accentSoft) ? req.accentSoft : mix(accent, base.colors.paper, 0.45);
 
   let material = base.material || null;

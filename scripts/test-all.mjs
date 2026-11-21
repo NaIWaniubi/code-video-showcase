@@ -57,6 +57,7 @@ const UNIT_SUITES = [
   'scripts/test-score-core.mjs',    // R24：主观质量评分纯函数
   'scripts/test-zip-lib.mjs',
   'scripts/test-trust-fixes.mjs',   // S0：F1/F2/F3/F5 假绿修复的命名回归（bare闸/指纹/film overrides/MCP --plan）
+  'scripts/test-caption.mjs',         // S4-1：词级字幕契约层（注入/备份/冲突闸/漂移告警，不跑重模型）
   'scripts/test-taste.mjs',         // S1：审美裁判机——判决/豁免生命周期/确定性同分/17 主题 body 对比度
   'scripts/test-version-sync.mjs',
   'scripts/test-demo-spec.mjs',

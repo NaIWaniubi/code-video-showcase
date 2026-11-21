@@ -539,6 +539,19 @@ export function validateSpec(spec) {
         const st = Number(v.start), du = Number(v.duration);
         if (!Number.isFinite(st) || st < 0) err('E_VO_ENTRY', `audio.vo[${i}].start`, `start must be finite >= 0, got ${v.start}`);
         if (v.duration != null && !(Number.isFinite(du) && du > 0)) err('E_VO_ENTRY', `audio.vo[${i}].duration`, `duration must be finite > 0, got ${v.duration}`);
+        // S4-1 词级时间戳（cvs caption 产物或人工）：给了就钉形状，QA 词对齐闸消费。
+        if (v.words != null) {
+          if (!Array.isArray(v.words)) err('E_VO_WORDS', `audio.vo[${i}].words`, 'must be an array of {w,t0,t1}');
+          else v.words.forEach((wd, j) => {
+            if (!wd || typeof wd.w !== 'string' || !Number.isFinite(Number(wd.t0)) || !Number.isFinite(Number(wd.t1)) || Number(wd.t1) < Number(wd.t0)) {
+              err('E_VO_WORDS', `audio.vo[${i}].words[${j}]`, 'each word needs {w:string, t0<=t1 finite}');
+            }
+          });
+          if (Array.isArray(v.words) && v.words.length && du != null) {
+            const span = Number(v.words[v.words.length - 1].t1) - Number(v.words[0].t0);
+            if (Math.abs(span - du) > 0.6) warn('W_VO_WORDS_DRIFT', `audio.vo[${i}].words`, `词跨度 ${span.toFixed(2)}s 与行时长 ${du}s 偏差 >0.6s——字幕可能读不完或拖尾`);
+          }
+        }
         if (st > 600) warn('W_VO_LONG', `audio.vo[${i}].start`, `start=${st}s 超出常规片长（${specDuration(spec)}s）——确认是刻意的`);
       }
     }
