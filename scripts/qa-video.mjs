@@ -356,6 +356,7 @@ if (!args['no-contact']) {
 // ── 检查齐全性（R3-审计 RT-06 P1-2） ────────────────────────────────────────
 // flash / silence / loudness 等检测在 probe 失败时会整项缺席，报告照样全绿。
 // 交付级（带 plan）质检把「必备项没跑成」与「跑过了没问题」严格分开。
+// S0-1：plan 缺席同样不许沉默——记 WARN（--strict 下拦），把降级摆在报告里。
 if (plan) {
   const seen = new Set(report.checks.map((c) => c.name));
   const required = ['pages exist', 'codec', 'pix_fmt', 'size', 'fps', 'frames', 'duration'];
@@ -365,6 +366,8 @@ if (plan) {
       add(`check "${name}"`, 'FAIL', `expected check did not run — treat as probe failure, not "all green"`);
     }
   }
+} else {
+  add('plan coverage', 'WARN', 'no plan.json supplied — pages/placeholder/frames/cuts/title checks skipped; this is NOT a delivery-grade QA');
 }
 
 // ── summary ────────────────────────────────────────────────────────────────

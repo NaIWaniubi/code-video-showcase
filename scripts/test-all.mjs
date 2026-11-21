@@ -56,6 +56,7 @@ const UNIT_SUITES = [
   'scripts/test-film-export.mjs',   // R24：spec→OpenFilm IR 导出与 overrides
   'scripts/test-score-core.mjs',    // R24：主观质量评分纯函数
   'scripts/test-zip-lib.mjs',
+  'scripts/test-trust-fixes.mjs',   // S0：F1/F2/F3/F5 假绿修复的命名回归（bare闸/指纹/film overrides/MCP --plan）
   'scripts/test-version-sync.mjs',
   'scripts/test-demo-spec.mjs',
   'scripts/test-ui.mjs',
@@ -75,6 +76,9 @@ const BROWSER_SUITES = [
   'scripts/test-brand-visual.mjs',
   'scripts/test-type-tokens.mjs',
   'scripts/test-renderer-recovery.mjs',
+  // 静帧位级回归（内审 F10）：此前 test-golden 不在任何聚合入口——「34 套件全绿」
+  // 时位级基线根本没跑。golden 是预览帧==成片帧承诺的最终证据，必须入门禁。
+  'scripts/test-golden.mjs',
   // 逐帧预览工作台：核心断言是「live 画布 == 服务端 PNG」逐像素一致，必须有 Chrome。
   'scripts/test-frames.mjs',
 ];

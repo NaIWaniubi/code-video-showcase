@@ -281,6 +281,12 @@
       "meaning": "页面不是 .html/.htm 文件，渲染器无法打开",
       "action": "page 必须指向 HTML 文档；模板/依赖文件不要填进 page"
     },
+    "E_PAGE_BARE": {
+      "phase": "plan",
+      "exit": 10,
+      "meaning": "页面（或其递归依赖）import 了 bare 模块说明符（node_modules/CDN 包名）。它不进 segmentHash：库一升级缓存就命中旧画面且 build 报成功——正是 plan.mjs 注释点名要防的假绿。CVS 是零依赖产品，第三方渲染库必须自实现或走页面内联脚本",
+      "action": "把该 import 换成仓内相对路径（./、templates/、shared/、assets/、content/）或内联实现；确需外部库时写进 docs/DECISIONS.md 并经 --allow-remote-pages 之外的显式评审"
+    },
     "E_BRAND_MISSING": {
       "phase": "spec",
       "exit": 10,
@@ -1024,6 +1030,18 @@
       "exit": 13,
       "meaning": "参考片结构拟合失败，无法 --emit-spec 展开成可编译新片",
       "action": "换一个更长的参考片（≥6s）或人工校 structure 后重试"
+    },
+    "E_FILM": {
+      "phase": "film",
+      "exit": 10,
+      "meaning": "cvs film：spec 读取/解析失败或 OpenFilm IR 导出异常（含 --overrides 文件坏 JSON）",
+      "action": "确认 <spec.json> 可读且过 lint；overrides 文件须是 [{clipId, overrides}] 或其 {overrides:[…]} 包装"
+    },
+    "E_SCORE": {
+      "phase": "qa",
+      "exit": 13,
+      "meaning": "cvs score：评分报告写出失败（磁盘/权限/路径）。plan 缺失不再触发本码——相应维度标 skipped 照常出分",
+      "action": "换 --out 目录或检查磁盘；其余维度证据看 stderr 各行"
     }
   }
 }

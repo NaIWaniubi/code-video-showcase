@@ -77,41 +77,62 @@ try {
 } catch (e) { chromaNote = `skipped: ${String(e.message || e).slice(0, 80)}`; }
 
 // ── evidence assembly ──
-const planCues = [];
-try {
-  const pdoc = JSON.parse(fs.readFileSync(path.resolve(String(args.plan || '')), 'utf8'));
-  const segs = pdoc.segments || [];
-  const flashCount = segs.filter((s) => s.kind === 'flash').length;
-  const pacing = pacingScore(cuts, durSec, flashCount);
-  // 标题文本维度：有轮记录且带 copy 即视为有文本叙事
-  const titleOk = segs.some((s) => s && (s.id === '00-opening' || s.id === '99-ending'));
-  const titleV = titleOk ? 1 : 0.3;
-  let syncVal = null, syncNote = 'no --qa-audio';
-  if (args['qa-audio']) {
-    try {
-      const qj = JSON.parse(fs.readFileSync(path.resolve(String(args['qa-audio'])), 'utf8'));
-      const sc = cueSyncScore(qj);
-      syncVal = sc.value; syncNote = sc.note;
-    } catch { syncNote = 'unreadable'; }
+// S0-7（内审 F5/F6）：①缺 --plan 不再整体 exit 13——自动推断（视频同目录 →
+//   out/plan.json），找不到则如实把叙事/节奏维标 skipped，机器四维照常出分；
+// ②标题维不再凭段 id「00-opening/99-ending」恒给 1.0——读 spec.copy 真文本，
+//   占位词（Lorem/TBD/示例）按 0.3 计，note 里给依据。
+const PLACEHOLDER = /lorem|tbd|todo|示例|placeholder|待填/i;
+let planFile = args.plan ? path.resolve(String(args.plan)) : null;
+if (!planFile) {
+  for (const cand of [path.join(path.dirname(path.resolve(videoArg)), 'plan.json'), path.resolve('out', 'plan.json')]) {
+    if (fs.existsSync(cand)) { planFile = cand; break; }
   }
+}
+let pacing = { value: null, note: 'no plan — pacing skipped' };
+let titleV = null, titleNote = 'no plan — narrative dimension skipped';
+let syncVal = null, syncNote = 'no --qa-audio';
+if (planFile) {
+  try {
+    const pdoc = JSON.parse(fs.readFileSync(planFile, 'utf8'));
+    const segs = pdoc.segments || [];
+    const flashCount = segs.filter((s) => s.kind === 'flash').length;
+    pacing = pacingScore(cuts, durSec, flashCount);
+    const copy = pdoc.spec?.copy || {};
+    const rawTitle = String(copy.title || '').trim();
+    if (rawTitle && !PLACEHOLDER.test(rawTitle)) { titleV = 1; titleNote = `real title "${rawTitle.slice(0, 40)}"`; }
+    else if (rawTitle) { titleV = 0.3; titleNote = 'title is a placeholder string'; }
+    else { titleV = 0.3; titleNote = 'spec.copy.title empty'; }
+  } catch (e) { pacing = { value: null, note: `plan unreadable: ${String(e.message || e).slice(0, 80)}` }; }
+} else {
+  console.error('[score] [W_NO_PLAN] 未找到 plan.json —— 节奏/叙事两维标 skipped，不计入总分归一（非全绿假象）');
+}
+if (args['qa-audio']) {
+  try {
+    const qj = JSON.parse(fs.readFileSync(path.resolve(String(args['qa-audio'])), 'utf8'));
+    const sc = cueSyncScore(qj);
+    syncVal = sc.value; syncNote = sc.note;
+  } catch { syncNote = 'unreadable'; }
+}
+try {
   const total = overallScore({
     motion: { value: motion.value }, chroma: { value: chromaVal },
     pacing: { value: pacing.value }, sync: { value: syncVal }, title: { value: titleV },
   });
   const report = {
     engine: 'score/1', video: path.basename(videoArg), durationSec: +durSec.toFixed(3),
+    plan: planFile ? path.basename(planFile) : null,
     parts: { motion: { value: motion.value, note: motion.note }, chroma: { value: chromaVal, note: chromaNote },
-             pacing: { value: pacing.value, note: pacing.note }, sync: { value: syncVal, note: syncNote },
-             title: { value: titleV } },
+             pacing, sync: { value: syncVal, note: syncNote },
+             title: { value: titleV, note: titleNote } },
     total, grade: total.grade,
   };
   console.error('[score]');
   console.error(`  duration  ${report.durationSec}s · ${cuts.length} scene cuts`);
   console.error(`  motion    ${motion.value ?? '—'} (${motion.note})`);
   console.error(`  chroma    ${chromaVal ?? '—'} (${chromaNote})`);
-  console.error(`  pacing    ${pacing.value} (${pacing.note})`);
+  console.error(`  pacing    ${pacing.value ?? '—'} (${pacing.note})`);
   console.error(`  sync      ${syncVal ?? '—'} (${syncNote})`);
-  console.error(`  title     ${titleV}`);
+  console.error(`  title     ${titleV ?? '—'} (${titleNote})`);
   console.error(`  TOTAL     ${total.total} · grade ${total.grade}`);
   const outDir = args.out ? path.resolve(String(args.out)) : path.resolve(process.cwd(), 'out', 'qa');
   fs.mkdirSync(outDir, { recursive: true });

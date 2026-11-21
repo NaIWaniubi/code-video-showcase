@@ -39,14 +39,25 @@ if (!fs.existsSync(videoFile)) {
   process.exit(13);
 }
 
+// S0-1（内审 F1/F12）：help 承诺「--plan 默认 ./out/plan.json」但代码从不兑现，
+// 缺省调用静默降级——帧数/切点/占位页/内容级检查全部没跑还报全绿（MCP 面放大）。
+// 现在自动推断：显式 --plan ＞ 视频同目录 plan.json（与 build 产物同区）＞ ./out/plan.json；
+// 三处都没有 → 显式 W_NO_PLAN，降级不再是沉默的。
+let planFile = args.plan ? path.resolve(process.cwd(), String(args.plan)) : null;
+if (!planFile) {
+  for (const cand of [path.join(path.dirname(videoFile), 'plan.json'), path.resolve('out', 'plan.json')]) {
+    if (fs.existsSync(cand)) { planFile = cand; break; }
+  }
+}
+if (!planFile) console.error('[qa] [W_NO_PLAN] 未找到 plan.json —— 内容级检查（帧数/切点/占位页/标题）全部跳过；本次不是交付级质检');
 
 const extraV = [];
-if (args['plan']) extraV.push('--plan', String(args.plan));
+if (planFile) extraV.push('--plan', planFile);
 // 音频源缺省 = 视频本身（qa-audio 内部抽音轨，量的是交付流而非合成 wav）。
 const audioArg = args.audio ? path.resolve(process.cwd(), String(args.audio)) : videoFile;
 
 const extraA = [];
-if (args['plan']) extraA.push('--plan', String(args.plan));
+if (planFile) extraA.push('--plan', planFile);
 
 const py = process.env.PYTHON || 'python';
 

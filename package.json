@@ -1,6 +1,6 @@
 {
   "name": "code-video-showcase",
-  "version": "4.7.0",
+  "version": "4.7.1",
   "description": "Pure-code, beat-synced showcase video skill: deterministic HTML/Canvas frames, synthesized score, FFmpeg assembly.",
   "type": "module",
   "license": "MIT",
@@ -86,7 +86,7 @@
     "scaffold": "node scripts/new-project.mjs",
     "plan:legacy": "node templates/timeline.mjs --spec templates/timeline.example.json --out out/plan.json --concat out/segments.txt --print",
     "demo": "node scripts/demo.mjs",
-    "gate": "node scripts/errors.mjs --check && node scripts/build-combos.mjs --check && node bin/cvs.mjs lint fixtures/mini-41s/spec.json --root . && node templates/plan.mjs --spec fixtures/mini-41s/spec.json --root . --check",
+    "gate": "node scripts/errors.mjs --check && node scripts/build-combos.mjs --check && node bin/cvs.mjs lint fixtures/mini-41s/spec.json --root . && node templates/plan.mjs --spec fixtures/mini-41s/spec.json --root . --check && node scripts/determinism-check.mjs",
     "ship": "node scripts/ship.mjs",
     "health": "node scripts/health.mjs",
     "mcp": "node mcp/server.mjs"

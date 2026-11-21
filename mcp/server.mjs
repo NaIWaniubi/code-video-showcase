@@ -32,7 +32,7 @@ import { suggestedCuts } from '../scripts/lib/spec-edit.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, '..');
-export const SERVER_INFO = { name: 'code-video-showcase', version: '4.4.0' };
+export const SERVER_INFO = { name: 'code-video-showcase', version: '4.7.1' };
 
 // ── 内核工具（无子进程）───────────────────────────────────────────────────
 
@@ -179,7 +179,9 @@ export const TOOLS = [
     description: '成片双闸质检（视频 + 音频一次跑完；任一 FAIL 即整体 FAIL）。',
     inputSchema: { type: 'object', properties: { videoPath: { type: 'string' }, planPath: { type: 'string' }, strict: { type: 'boolean' } }, required: ['videoPath'] },
     run: async (a) => {
-      const args = ['qa', a.videoPath, ...(a.planPath ? [a.planPath] : []), ...(a.strict ? ['--strict'] : [])];
+      // S0-1（内审 F1）：planPath 此前当**位置参数**传——qa.mjs 只认 --plan，
+      // 帧数/切点/占位页检查静默不跑还返回全绿。现在显式旗标传递。
+      const args = ['qa', a.videoPath, ...(a.planPath ? ['--plan', a.planPath] : []), ...(a.strict ? ['--strict'] : [])];
       const r = await runCvs(args, { timeoutSeconds: 900 });
       return { isError: !r.ok, text: resultText(r.text.slice(-6000), `qa exit=${r.exitCode}`) };
     },

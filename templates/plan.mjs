@@ -16,19 +16,25 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { buildPlan as buildLegacyPlan, concatList, formatPlan } from './timeline.mjs';
 import { normalizeSpec, validateSpec, specToTimeline, specDuration, SPEC_VERSION, ENGINE_VERSION } from './spec.mjs';
+import { browserCandidates } from './cdp.mjs';
 
 export const PLAN_VERSION = 2;
 
 const isAbsoluteUrl = (s) => /^https?:\/\//i.test(String(s || ''));
 
 /** 从 HTML/JS/CSS 文本里抽本地依赖（import / @import / link / script src /
- *  CSS url() / <img src>）。 */
+ *  CSS url() / <img src>）。
+ *  S0-4：区分两类引用——importish（模块说明符，可能是 node_modules 的 bare
+ *  specifier）与 resourceish（url/src/href 资源路径）。bare import 不进哈希
+ *  是同类「假绿」里最难查的一种：`npm update` 改了库字节，段缓存命中出旧画面
+ *  且 build 报成功。零依赖是 CVS 的卖点，所以这里升级成 E_PAGE_BARE 硬闸。 */
 function localRefs(text) {
-  const refs = new Set();
-  const patterns = [
+  const importish = [
     /\bfrom\s+['"]([^'"]+)['"]/g,
     /\bimport\s+['"]([^'"]+)['"]/g,
     /@import\s+(?:url\()?['"]?([^'")\s]+)['"]?\)?/g,
+  ];
+  const resourceish = [
     /<link[^>]+href=["']([^"']+)["']/gi,
     /<script[^>]+src=["']([^"']+)["']/gi,
     // R3-审计（RT-04 #2）：CSS `url()` 与 `<img src>` 以前不在引用面——页面里
@@ -37,8 +43,8 @@ function localRefs(text) {
     /url\(\s*['"]?([^'")\s]+)['"]?\)/g,
     /<img[^>]+src=["']([^"']+)["']/gi,
   ];
-  for (const re of patterns) for (const m of text.matchAll(re)) refs.add(m[1]);
-  return [...refs];
+  const grab = (pats) => { const s = new Set(); for (const re of pats) for (const m of text.matchAll(re)) s.add(m[1]); return [...s]; };
+  return { imports: grab(importish), resources: grab(resourceish) };
 }
 
 /**
@@ -50,25 +56,28 @@ function localRefs(text) {
  *
  * @param {string} root 项目根
  * @param {string} pagePath 页面路径（可带 ?query）
+ * @param {Set<string>} [seen] 递归去重集（内部用）
+ * @param {number} [depth] 递归深度（内部用）
+ * @param {string[]} [bare] 传入数组时收集 bare 模块说明符（S0-4 硬闸探测面）
  * @returns {string} 16 位 sha256；远程页面或缺失文件返回带前缀的标记
  */
-export function pageContentHash(root, pagePath, seen = new Set(), depth = 0) {
-  const bare = String(pagePath || '').split('?')[0].split('#')[0];
-  if (!bare) return 'none';
-  if (isAbsoluteUrl(bare)) return `remote:${bare}`;
-  const abs = path.resolve(root, bare);
+export function pageContentHash(root, pagePath, seen = new Set(), depth = 0, bare = null) {
+  const barePath = String(pagePath || '').split('?')[0].split('#')[0];
+  if (!barePath) return 'none';
+  if (isAbsoluteUrl(barePath)) return `remote:${barePath}`;
+  const abs = path.resolve(root, barePath);
   if (seen.has(abs)) return 'cycle';
   seen.add(abs);
-  if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return `missing:${bare}`;
+  if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return `missing:${barePath}`;
 
   const text = fs.readFileSync(abs, 'utf8');
   const own = crypto.createHash('sha256').update(text).digest('hex');
   if (depth >= 4) return own.slice(0, 16);
 
   const deps = [];
-  // 字体字形在 woff2 里，fonts.css 只是索引；localRefs 不抽 url()（1187 个二进制
-  // 子集递归读太慢）。用 fonts.lock.json 指纹代替：换字体/重生成子集 → lock 变 →
-  // 段缓存失效。修「字体换了但缓存命中出旧字形」的假绿。
+  // 字体字形在 woff2 里，fonts.css 只是索引。localRefs 现在会抽 url()，若让
+  // fonts.css 走通用递归，1187 个 woff2 子集全部进哈希（实测每页 +5s、16 页
+  // 全链 >2min）。命中即早退：own + lock 指纹足以代表字体集合变更。
   const normRel = path.relative(root, abs).split(path.sep).join('/');
   if (normRel === 'shared/fonts.css') {
     // R3 回归自检：fonts.css 是**索引**不是依赖图——localRefs 的 url() 会把它
@@ -80,31 +89,57 @@ export function pageContentHash(root, pagePath, seen = new Set(), depth = 0) {
       return crypto.createHash('sha256').update(`${own}|shared/fonts.lock.json:${lh}`).digest('hex').slice(0, 16);
     }
   }
-  for (const ref of localRefs(text)) {
+  const { imports, resources } = localRefs(text);
+  // S0-4 硬闸的探测面：bare 模块说明符（node_modules/CDN 包名）。data:/http/
+  // 相对/仓内前缀之外的一律视为 bare，交给 assertPages 报 E_PAGE_BARE。
+  const ROOT_PREFIXES = ['templates/', 'shared/', 'assets/', 'content/'];
+  if (Array.isArray(bare)) {
+    for (const ref of imports) {
+      if (!ref || isAbsoluteUrl(ref) || ref.startsWith('data:') || ref.startsWith('.') || ref.startsWith('/')) continue;
+      if (ROOT_PREFIXES.some((p) => ref.startsWith(p))) continue;
+      bare.push(`${normRel} → ${ref}`);
+    }
+  }
+  for (const ref of [...imports, ...resources]) {
     if (!ref || isAbsoluteUrl(ref) || ref.startsWith('data:')) continue;
-    if (!(ref.startsWith('.') || ref.startsWith('/') || ref.startsWith('templates/') || ref.startsWith('shared/'))) continue;
+    // S0-4：assets//content/ 根相对引用以前被静默跳过（换素材字节 hash 不变 =
+    // RT-04 #2 同族假绿）。现在进递归哈希。
+    if (!(ref.startsWith('.') || ref.startsWith('/') || ROOT_PREFIXES.some((p) => ref.startsWith(p)))) continue;
     let rel;
     if (ref.startsWith('/')) rel = ref.slice(1);
-    else if (ref.startsWith('templates/') || ref.startsWith('shared/')) rel = ref;
+    else if (ROOT_PREFIXES.some((p) => ref.startsWith(p))) rel = ref;
     else rel = path.relative(root, path.resolve(path.dirname(abs), ref));
-    const h = pageContentHash(root, rel, seen, depth + 1);
+    const h = pageContentHash(root, rel, seen, depth + 1, bare);
     if (h && !h.startsWith('cycle')) deps.push(`${rel.replace(/\\/g, '/')}:${h}`);
   }
   deps.sort();
   return crypto.createHash('sha256').update(`${own}|${deps.join('|')}`).digest('hex').slice(0, 16);
 }
 
-/** 工具链指纹：Node 主版本 + ffmpeg 一行版本。升级编码器后旧段缓存自然失效，
- *  不再把上一个 ffmpeg 的字节当「同内容」交付（R3-审计 RT-04 #4）。 */
+/** 工具链指纹：Node 主版本 + ffmpeg 一行版本 + 渲染浏览器版本。升级编码器后旧段缓存自然失效，
+ *  不再把上一个 ffmpeg 的字节当「同内容」交付（R3-审计 RT-04 #4）。
+ *  S0-2（内审 F2）：Chrome 一直是像素变量——golden.mjs 把它当位级可比前提
+ *  （E_ENV_MISMATCH），但段缓存指纹不含它：浏览器自更新后 warm build 会把新旧
+ *  光栅化像素混拼进同一部片子且报缓存命中。现在与 golden 同口径（browserCandidates
+ *  探测链同源），浏览器版本进 payload。 */
 let buildFpCache = null;
-function toolchainFingerprint() {
+export function toolchainFingerprint() {
   if (buildFpCache !== null) return buildFpCache;
   let ffmpeg = 'no-ffmpeg';
   try {
     const r = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] });
     ffmpeg = String((r && r.stdout) || '').split('\n')[0].replace(/^ffmpeg version\s*/i, '').trim().slice(0, 40);
   } catch { /* keep default */ }
-  buildFpCache = `node${process.versions.node}|ffmpeg${ffmpeg}`;
+  let browser = 'no-browser';
+  try {
+    const exe = browserCandidates()[0];
+    if (exe) {
+      const r = spawnSync(exe, ['--version'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] });
+      const line = (String((r && r.stdout) || '').trim().split('\n')[0] || path.basename(exe)).slice(0, 60);
+      browser = `${path.basename(exe)}@${line}`;
+    }
+  } catch { /* keep default */ }
+  buildFpCache = `node${process.versions.node}|ffmpeg${ffmpeg}|${browser}`;
   return buildFpCache;
 }
 
@@ -204,6 +239,21 @@ function assertPages(spec, root) {
       missing.push({ code: 'E_ASSET_MISSING', path: `assets[${i}].path`, message: `asset not found: ${p}`, level: 'error' });
     }
   }
+  // S0-4（内审 F5）：页面依赖图里的 bare 模块说明符（node_modules/CDN 包名）
+  // 不进段哈希——库一升级就缓存命中出旧画面且 build 报成功。零依赖是卖点，
+  // 升级为 plan 期硬闸（同文件去重，一次遍历顺带覆盖整条递归链）。
+  const scanned = new Set();
+  for (const [, page] of pages) {
+    if (!page || isAbsoluteUrl(page)) continue;
+    const p = String(page).split('?')[0];
+    if (scanned.has(p) || !fs.existsSync(path.resolve(root, p))) continue;
+    scanned.add(p);
+    const bare = [];
+    pageContentHash(root, p, new Set(), 0, bare);
+    for (const b of bare) {
+      missing.push({ code: 'E_PAGE_BARE', path: `page ${p}`, message: `bare module import escapes segmentHash (zero-dep invariant violated): ${b}`, level: 'error' });
+    }
+  }
   return missing;
 }
 
@@ -234,6 +284,9 @@ export function buildPlanFromSpec(input, opts = {}) {
 
   plan.version = PLAN_VERSION;
   plan.generatedBy = 'templates/plan.mjs';
+  // S0-2：把工具链指纹写进 plan 文档本体——segmentHash payload 里一直有它，
+  // 但外不可见；golden/跨机对账与「这台机器与产片机指纹是否一致」现在一眼可读。
+  plan.meta.toolchain = toolchainFingerprint();
   plan.spec = {
     version: SPEC_VERSION,
     engine: ENGINE_VERSION,

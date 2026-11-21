@@ -3,6 +3,39 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.7.1] - 2026-11-21 — 可信度修复（S0）：假绿不复发
+
+外部调研（22 项目，见 docs/ROADMAP-OVERTAKE.md）伴随的本仓深度内审坐实 5 条
+高危「假绿」类缺陷，本版本全部修复并加命名回归（`scripts/test-trust-fixes.mjs`）：
+
+- **F1/F12 交付级 QA 静默降级**：`mcp/server.mjs` 的 `cvs_qa` 此前把 planPath 当
+  **位置参数**传给 `qa.mjs`，而 qa.mjs 只认 `--plan`——帧数/切点/占位页/标题等
+  内容级检查整项不跑还返回全绿（v2.5.2 立的「没跑成≠跑过没问题」契约从 MCP 面
+  复活）。现在显式 `--plan`；`cvs qa` 落实现已承诺的缺省（视频同目录 plan.json →
+  out/plan.json），三处都没有时打印 `[W_NO_PLAN]`，qa-video 报告同步记 WARN
+  （--strict 拦）——降级不再可能沉默；
+- **F2 段缓存指纹不含浏览器**：`toolchainFingerprint` 以前只有 node+ffmpeg，而
+  golden.mjs 早把 Chrome 版本当位级可比前提。Chrome 自更新后 warm build 会把
+  新旧光栅化像素混拼进同一部片子还报缓存命中。现在与 golden 同口径（同一
+  `browserCandidates` 探测链），指纹并写进 `plan.meta.toolchain`（跨机对账一眼
+  可读）。**升级后首建全量重渲一次属预期**；
+- **F3 `cvs film --overrides` 名存实亡**：ovMap 被解析却从未传进
+  `writeFilmProject`，film.html 里没有 overrides 属性。现在真正下传；
+- **F5 bare import 硬闸 `E_PAGE_BARE`**：依赖图以前只递归 `./`、`/`、`templates/`、
+  `shared/`，`import x from 'some-npm-package'` 静默不进 segmentHash。零依赖是
+  卖点，此类依赖现于 plan 期判死（exit 10）；顺带把根相对 `assets/`、`content/`
+  引用纳入递归哈希（RT-04 #2 同族洞）；
+- **score 修（F6/F7）**：缺 `--plan` 不再整体 exit 13——自动推断 + 相应维度如实
+  标 skipped；标题维不再凭段 id 恒 1.0，读 `spec.copy.title` 真文本、占位词按
+  0.3 计（note 给依据）；
+- **门禁补漏（F10）**：`test-golden` 注册进 test-all 浏览器组；`npm run gate`
+  纳入 `determinism-check`；
+- **版本同步（F11 部分）**：`mcp SERVER_INFO.version` 4.4.0→4.7.1；SKILL
+  metadata.version 2.8.1→4.7.1。
+
+测试：`npm run test:all` 35 套件 518 断言全绿；`npm run gate` 通过（t=0.5 双跑
+位级一致）；errors 注册表 162 码 100% 覆盖（新增 E_PAGE_BARE/E_FILM/E_SCORE）。
+
 ## [v4.7.0] - 2026-11-21 — 对标 OpenFilm 补强项：film.html IR + overrides + 主观评分
 
 ### R24-W1 cvs film：spec → OpenFilm IR 时间线

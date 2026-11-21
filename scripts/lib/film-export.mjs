@@ -128,8 +128,10 @@ export function overridesToSpecPatch(spec, overridesByClip) {
   return { stylePatch, cardPatch };
 }
 
-/** CLI：把 spec 展成 OpenFilm IR 目录（film.html + 每段页面壳）。 */
-export function writeFilmProject(spec, { outDir }) {
+/** CLI：把 spec 展成 OpenFilm IR 目录（film.html + 每段页面壳）。
+ *  S0-3：overridesByClip 真正下传 buildFilmHtml（此前 film.mjs 解析了却不传，
+ *  导出的 film.html 里没有 overrides 属性）。 */
+export function writeFilmProject(spec, { outDir, overridesByClip = null }) {
   fs.mkdirSync(outDir, { recursive: true });
   const dir = path.dirname(outDir);
   const pagesDir = path.join(outDir, 'pages');
@@ -151,7 +153,7 @@ export function writeFilmProject(spec, { outDir }) {
     fs.writeFileSync(path.join(pagesDir, `${stem}.html`), html);
     wrotePages++;
   }
-  const film = buildFilmHtml(spec);
+  const film = buildFilmHtml(spec, { overridesByClip });
   fs.writeFileSync(path.join(outDir, 'film.html'), film);
   return { filmPath: path.join(outDir, 'film.html'), pages: wrotePages };
 }

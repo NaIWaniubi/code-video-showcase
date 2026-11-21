@@ -43,11 +43,14 @@ try {
     const list = Array.isArray(pd) ? pd : (pd.overrides || []);
     ovMap = new Map(list.map((o) => [String(o.clipId ?? o.at), o.overrides || {}]));
   }
-  const res = writeFilmProject(raw, { outDir });
+  // S0-3（内审 F3）：ovMap 此前只用来打汇总行，从未进导出器——film.html 里
+  // 根本没有 overrides 属性，「非破坏编辑层」名存实亡。现在真正传给
+  // writeFilmProject→buildFilmHtml，先产片再汇总。
+  const res = writeFilmProject(raw, { outDir, overridesByClip: ovMap });
   console.error(`[film]   ${res.filmPath}（${res.pages} 个页面壳 · 尺寸 ${raw.format?.width || 1920}×${raw.format?.height || 1080}）`);
   if (ovMap) {
     const patch = overridesToSpecPatch(raw, ovMap);
-    console.error(`[film]   overrides 汇总：${patch.stylePatch.length + patch.cardPatch.length} 条增量 → 可回 spec patch 再编译`);
+    console.error(`[film]   overrides 已写入 film.html 属性：${patch.stylePatch.length + patch.cardPatch.length} 条增量 → 可回 spec patch 再编译`);
   }
   process.stdout.write(JSON.stringify({ ok: true, film: res.filmPath, pages: res.pages }) + '\n');
 } catch (e) {
