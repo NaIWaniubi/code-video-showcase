@@ -45,7 +45,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { launch as launchCdp, connect, evaluate as cdpEvaluate, waitFor as cdpWaitFor } from './cdp.mjs';
 
@@ -116,6 +116,10 @@ export function optionsFromArgs(args) {
     // sha256 逐字节相同。画布不是 2D/尺寸不符时自动回退 png（仍确定，只是慢）。
     format: str('format', 'raw'),
     capture: str('capture', 'auto'),
+    // S5a 运动模糊（v4.10.0）：tmix 权重串（如 '1 2 1'）= 子帧采样倍率 N=词数。
+    // 空 = 关。开启时以 fps*N 渲染子帧，编码后 tmix+fps 回原帧率——页面是纯
+    // f(t)，子帧 t 天然合法；输出帧数/帧率与关时逐帧同构，下游（probe/concat/qa）零改动。
+    motionBlur: str('motion-blur', '') || str('motionBlur', ''),
     headed: !!args.headed,
     // R16-W→v4.9.1 遗留：--keep-page-params 现为**兼容 no-op**（v4.9.1 起生产链
     // 本来就保留 plan 全部 query，剥离行为已删——见 withSegmentParams 注释）。
@@ -169,6 +173,7 @@ export function normalizeOptions(raw = {}) {
     // ffmpeg PNG 解码两次开销。jpeg/png 仅在 raw 不可用（非 2D 画布/尺寸不符/
     // CDP 回退/静帧）时使用。
     format: (() => { const f = String(str(raw.format, 'png')).toLowerCase(); return f === 'jpeg' ? 'jpeg' : f === 'raw' ? 'raw' : 'png'; })(),
+    motionBlur: String(raw.motionBlur ?? raw['motion-blur'] ?? '').trim(),
     quality: num(raw.quality, 92),
     capture: str(raw.capture, 'auto'),
     headed: !!raw.headed,
@@ -799,12 +804,23 @@ async function renderVideo(ctx, opts, rawPageOpts = {}) {
       opts.format = 'png';
       page.log('[capture] raw unavailable; falling back to png (still deterministic)');
     }
-    const frames = Math.round(opts.duration * opts.fps);
-    const ff = launchFfmpeg(opts.out, opts);
+    // S5a 运动模糊：以 fps*N 渲染 N 倍子帧（页面纯 f(t)，子帧合法），编码后
+    // tmix=frames=N:weights=w + fps 回原帧率——每输出帧 = 一小段快门窗口内的
+    // 加权和。全程单线程 bitexact，确定性不破（tmix 为逐像素算术）。
+    const blurW = String(opts.motionBlur || '').trim();
+    const samples = blurW ? blurW.split(/\s+/).filter(Boolean).length : 1;
+    if (blurW && samples < 2) throw new Error(`[E_BLUR] motion-blur weights "${blurW}" 需要 ≥2 个权重`);
+    const renderFps = opts.fps * samples;
+    const framesOut = Math.round(opts.duration * opts.fps);
+    const frames = Math.round(opts.duration * renderFps);
+    const finalOut = opts.out;
+    const encOut = blurW ? finalOut + '.preblur.mp4' : finalOut;
+    if (blurW) fs.rmSync(encOut, { force: true });
+    const ff = launchFfmpeg(encOut, { ...opts, fps: renderFps });
     const started = performance.now();
     try {
       for (let i = 0; i < frames; i++) {
-        const t = i / opts.fps;
+        const t = i / renderFps;
         let buf;
         try { buf = await grab(page, t, page.mode, opts); }
         catch (e) {
@@ -832,12 +848,26 @@ async function renderVideo(ctx, opts, rawPageOpts = {}) {
       // kill 之后 done 必然 reject（exit null），必须消费掉，否则成为未处理拒绝。
       ff.kill();
       try { await ff.done; } catch { /* expected after kill */ }
+      fs.rmSync(encOut, { force: true });
       throw e;
     }
-    const size = fs.statSync(opts.out).size;
-    page.log(`[done] ${opts.out}  ${frames} frames @${opts.fps}fps  ${(size / 1024 / 1024).toFixed(2)} MB  capture=${page.mode}`);
+    if (blurW) {
+      const r = spawnSync(opts.ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-i', encOut,
+        '-vf', `tmix=frames=${samples}:weights='${blurW}',fps=${opts.fps}`,
+        '-c:v', 'libx264', '-preset', opts.preset, '-crf', String(opts.crf),
+        '-threads', '1', '-x264-params', 'threads=1:lookahead_threads=1:rc-lookahead=10',
+        '-fflags', '+bitexact', '-flags', '+bitexact',
+        '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
+        '-video_track_timescale', '90000', '-movflags', '+faststart', finalOut], { windowsHide: true });
+      fs.rmSync(encOut, { force: true });
+      if (r.status !== 0) throw new Error(`[E_BLUR] tmix post-pass failed (exit ${r.status}): ${String(r.stderr || '').slice(-300)}`);
+      page.log(`[blur] tmix frames=${samples} weights='${blurW}' → ${opts.fps}fps`);
+    }
+    const size = fs.statSync(finalOut).size;
+    const outFrames = blurW ? framesOut : frames;
+    page.log(`[done] ${finalOut}  ${outFrames} frames @${opts.fps}fps  ${(size / 1024 / 1024).toFixed(2)} MB  capture=${page.mode}${blurW ? '  blur=' + samples + 'x' : ''}`);
     if (page.errors.length) opts.warn('[page errors] ' + page.errors.slice(0, 5).join(' | '));
-    return { out: opts.out, frames, seconds: (performance.now() - started) / 1000, capture: page.mode, pageUrl: page.url, errors: page.errors.slice(0, 5) };
+    return { out: finalOut, frames: outFrames, seconds: (performance.now() - started) / 1000, capture: page.mode, pageUrl: page.url, errors: page.errors.slice(0, 5) };
   } finally {
     await page.close().catch(() => {});
   }

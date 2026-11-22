@@ -1090,6 +1090,18 @@
       "exit": 10,
       "meaning": "cvs caption --into：spec.audio.vo 已有内容，拒绝静默覆盖",
       "action": "确认替换旁白行请加 --replace-vo（旧行会随 .bak 保留）"
+    },
+    "E_MOTION_BLUR": {
+      "phase": "spec",
+      "exit": 10,
+      "meaning": "render.motionBlur 非法值：只认 weak|normal|strong|false（权重表单一真值 templates/plan.mjs BLUR_WEIGHTS）",
+      "action": "写 weak|normal|strong，或删除该字段保持关"
+    },
+    "E_BLUR": {
+      "phase": "render",
+      "exit": 11,
+      "meaning": "cvs build --motion-blur：tmix 后置 pass 失败（ffmpeg 非零 / 权重串非法 / 权重数不足 2）",
+      "action": "确认 ffmpeg 带 tmix（7.x 自带）；spec 里只填三档名"
     }
   }
 }

@@ -42,6 +42,14 @@ jobs:
           mkdir -p out
           node scripts/test-all.mjs --browser --json | tee out/test-browser.json
 
+      # v4.10.0 立案探针：整段视频冷重跑像素幂等（canvas 光栅跨进程稳定性调查）。
+      # continue-on-error：先可见化不拦门——定位结论出来那天翻成硬闸（ROADMAP S8）。
+      - name: Video-level cold re-run determinism (INVESTIGATING)
+        continue-on-error: true
+        env:
+          CHROME_EXE: google-chrome
+        run: node scripts/determinism-check.mjs --video --duration 1 --runs 3
+
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4

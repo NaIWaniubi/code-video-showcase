@@ -3,6 +3,20 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.10.0] - 2026-11-23 — S5a 真子帧运动模糊（--motion-blur weak|normal|strong）
+
+- **`cvs build --motion-blur [档]` / `spec.render.motionBlur`**：以 fps×N 渲染子帧（页面是纯 f(t)，子帧 t 天然合法），
+  编码后 `tmix=frames=N:weights` + `fps` 回原帧率——每输出帧 = 一段快门窗口的加权和。weak=2 抽头、
+  normal=3（1 2 1）、strong=5（1 2 3 2 1）。渲染成本 ×N；tmix 后置 pass 实测同输入双跑逐字节一致（diag S3）。
+- 契约不变量：输出帧率/帧数与关闭态同构 → farm probe、concat、qa、平台副本零改动；`blur` 进 segmentHash
+  （切档必全量重渲，跨档缓存不可能互串）；**关闭时 renderArgs 不带 flag、产物逐字节与既往一致**（M4/R3 钉死）。
+- compile `--motion-blur` 在建 plan 前注入（同 transition 纪律）；spec 三档白名单 E_MOTION_BLUR；E_BLUR 病故码；
+  schema 同步；test-motion-blur（M1-M4 纯逻辑入 test:all；R1-R3 为 --render 真机模式，手动/夜间跑）。
+- **诚实边界（本版本发现、立案未修）**：整段视频**冷重跑的像素级幂等**在试验参数（640×360+cyber-neon）下
+  三连跑互异、幅度随帧号增长，而单帧静帧三点采样双跑稳定——疑 SwiftShader 光栅 worker 调度类不确定，
+  与 warmUp 注释记录的「帧 112+ 状态突变」同族但更宽。单遍产物不受影响（所见即所交；缓存复用走输入哈希，
+  语义本就是「不重渲」而非「重渲必同字节」）。已排入 ROADMAP「冷重跑像素幂等定位」专项，并把
+  `determinism-check --video` 加进 test-browser-nightly 作常态探针——它会在某晚把这颗雷钉在明面上。
 ## [v4.9.3] - 2026-11-23 — 证伪清洗：独立复核揪出 11 条，本版本全部修复并钉 T8-T12
 
 独立批评代理对 v4.7.1→v4.9.2 做「声称↔代码↔测试」三角证伪，产出 11 条 finding（1 high/7 medium/3 low）。

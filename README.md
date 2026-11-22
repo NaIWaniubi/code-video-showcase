@@ -31,6 +31,7 @@ An Agent Skill for producing 30–90 s "style showcase" films: an 8 s opening, e
 - **OpenFilm IR 互通（v4.7）**：`cvs film <spec>` 导出 OpenFilm SPEC 的 film.html 时间线（sections/tracks + #t 同口径），附 overrides 非破坏编辑层与 locked/hidden 轨道语义，手改可汇总回 spec patch 再编译——与 OpenFilm 生态双向互通；
 - **主观质量评分（v4.7，evals 思想）**：`cvs score <video>` 出五维证据清单（运动/色彩/节奏/同步/叙事）与 A–D 等级，把「好不好」变成可复核分数。
 - **审美裁判机（v4.8）**：`cvs taste <spec>` 规则表驱动（`schema/taste-rules.json` × 数值断言实现）——error 硬闸 / warning 扣分 / advisory 永不拦；对比度口径与模板层 `auditApca` 单一真值；`.cvs/waivers.json` 豁免生命周期（error 不可豁免、过期豁免点名，**绝不为过闸调阈值**）；同 spec 必得同分（进回归）。上线当天首猎：17 主题表扫出 4 项真缺陷并修复（crimson-theater accent 对底仅 19.4 Lc → 三元约束解 #d63f3f；3 处 muted 提亮达标），APCA 提醒 18→13。蓝本=22 项目调研（impeccable 62 规则工程形态 × hallmark 58 门 × taste-skill GATE/waivers），竞品全是"给人看的规则文档"，这里是**带位级证据的可执行闸**。
+- **真子帧运动模糊（v4.10）**：`cvs build --motion-blur weak|normal|strong` 以 fps×N 渲子帧再 tmix 加权回原帧率——真快门运动模糊，不是 CSS 糊。页面纯 f(t) 契约不变、输出帧数帧率同构，下游零改动；blur 进段哈希，关档逐字节兼容既往。
 - **真词级字幕（v4.9）**：`cvs caption <media>` 本地 faster-whisper（GPU→CPU 自动回退）产词级时间戳 JSON/SRT/VTT，**同输入缓存复用**——ASR 非确定性被隔离在"一次性产文件"层，文件进 spec 后随 segmentHash 固化，构建依然可复现；`--apply --into` 注入 `audio.vo.words[]` + captionSource 溯源，已有 vo 拒静默覆盖（E_VO_CONFLICT + .bak）；schema↔运行时对账完成（vo 真形状 / flash 256 / SAFE_ID 64），外部工具按 schema 生成的 spec 不再被 lint 冤杀。
 - **生成质量修复（v4.6）**：题材专属画风优先（长城不再被水墨抢匹配）+ ≥10s 双轮结构；QA 音轨闸以母版为准（转码瞬态不再误红）。
 - **导演演示集 + 一键出片（v3.2–v3.5）**：白模线框 / 骨骼动画 / L-system 分形 / 弹道喷泉 / 等高线测绘 / 网络脉冲六个闭式确定引擎；`cvs demo <style>` 出单片、`cvs demo all --only a,b --concurrency/--retries` 批量（manifest 如实报账、上传带进度+取消）。

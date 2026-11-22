@@ -51,7 +51,7 @@ const KNOWN_FLAGS = new Set(['spec', 'root', 'outdir', 'master', 'audio', 'no-au
   'segment-patch',
   'ref-patch',
   'concurrency', 'no-cache', 'no-resume', 'no-qa', 'no-strict', 'deliver', 'no-deliver',
-  'strict', 'burn-subtitles', 'cover', 'transition', 'transition-duration', 'dry-run', 'print',
+  'strict', 'burn-subtitles', 'cover', 'transition', 'transition-duration', 'motion-blur', 'dry-run', 'print',
   'json', 'help']);
 
 function parseArgs(argv) {
@@ -93,6 +93,7 @@ if (args.help || !args.spec) {
   --transition <name>   xfade between segments (fade/dissolve/wipeleft/slideleft/circleopen/zoomin/...;
                         'none' = hard cut). Shortens total by (N-1)*duration; plan/subtitles follow.
   --transition-duration <s>  transition length in seconds, (0,2], default 0.4
+  --motion-blur [level]  S5a 子帧运动模糊 weak|normal|strong（默认 normal）：fps×N 渲子帧后 tmix 加权回原帧率；渲染成本 ×N，关闭时逐字节与既往一致
   --no-deliver          skip delivery.json + master.srt/.vtt
   --dry-run             validate + plan, do not render
   --print               print the segment table`);
@@ -309,6 +310,11 @@ if (args.transition !== undefined) {
 if (args['transition-duration'] !== undefined) {
   raw.render = raw.render || {};
   raw.render.transitionDuration = Number(args['transition-duration']);
+}
+// S5a 运动模糊开关（v4.10.0）：同 transition，必须在建 plan 前注入（它进段哈希）。
+if (args['motion-blur'] !== undefined) {
+  raw.render = raw.render || {};
+  raw.render.motionBlur = args['motion-blur'] === true ? 'normal' : String(args['motion-blur']);
 }
 
 // ── 1. 深度校验（与 spec-lint 同一套） ──────────────────────────────────────

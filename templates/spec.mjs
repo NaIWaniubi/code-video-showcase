@@ -569,6 +569,11 @@ export function validateSpec(spec) {
     const td = Number(spec.render.transitionDuration);
     if (!Number.isFinite(td) || td <= 0 || td > 2) err('E_TRANSITION_DURATION', 'render.transitionDuration', 'transitionDuration must be in (0, 2] seconds');
   }
+  // S5a 运动模糊（v4.10.0）：三档白名单枚举（权重表在 plan.mjs BLUR_WEIGHTS 单一真值）。
+  if (spec.render?.motionBlur != null && spec.render.motionBlur !== false
+    && !['weak', 'normal', 'strong'].includes(spec.render.motionBlur)) {
+    err('E_MOTION_BLUR', 'render.motionBlur', `motionBlur must be weak|normal|strong|false, got ${JSON.stringify(spec.render.motionBlur)}`);
+  }
   // outDir 是 spec 里唯一能决定「写到哪」的字段，必须钉在项目根内。
   // page 有闸门、id 有闸门，唯独它以前没有：`../../escape` 能把 plan/master 写到仓库外。
   if (spec.render?.outDir !== undefined) {

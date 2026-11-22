@@ -17,7 +17,7 @@
 
 脚本可以用退出码做粗分流，用 `--json` / `error.json` 的 `code` 做精确重试。
 
-## 已注册错误码（170）
+## 已注册错误码（172）
 
 | 错误码 | 阶段 | 退出码 | 含义 | 唯一动作 |
 |---|---|---|---|---|
@@ -51,6 +51,7 @@
 | `E_JSON_PARSE` | spec | 10 | spec JSON 语法错误 | 修正 JSON |
 | `E_MOOD` | spec | 10 | mood 非法 | electronic|restrained|epic|upbeat|guofeng |
 | `E_MOTION` | spec | 10 | motion 档位非法 | calm|standard|dynamic|maximal |
+| `E_MOTION_BLUR` | spec | 10 | render.motionBlur 非法值：只认 weak|normal|strong|false（权重表单一真值 templates/plan.mjs BLUR_WEIGHTS） | 写 weak|normal|strong，或删除该字段保持关 |
 | `E_NO_AAC` | spec | 10 | E_NO_AAC：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_NO_BASH` | spec | 10 | E_NO_BASH：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_NO_CHROME` | spec | 10 | E_NO_CHROME：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
@@ -106,6 +107,7 @@
 | `E_VO_WORDS` | spec | 10 | audio.vo[].words 形状不合法：每个词须 {w:string, t0<=t1 finite} | 用 cvs caption 产词级时间戳，或按秒（三位小数）手工对齐 |
 | `E_ASR_ENV` | render | 14 | 词级 ASR 环境缺失：python 无 faster-whisper 或模型不可得（在线首拉失败/离线无 HF_HOME 缓存） | pip install faster-whisper；离线机预置 huggingface 缓存（Systran/faster-whisper-large-v3）后用 --model 指本地目录 |
 | `E_ASR_RUN` | render | 13 | 词级 ASR 运行失败（设备/解码/超时） | 看 stderr python 侧原因；CPU 慢可 --device cpu 显式避免探测超时 |
+| `E_BLUR` | render | 11 | cvs build --motion-blur：tmix 后置 pass 失败（ffmpeg 非零 / 权重串非法 / 权重数不足 2） | 确认 ffmpeg 带 tmix（7.x 自带）；spec 里只填三档名 |
 | `E_RENDER` | render | 11 | 段渲染失败 | 看 failedSegments + render-manifest.json，修该段后重跑 |
 | `E_CONCAT` | concat | 12 | 拼接/转码失败 | 看 segments.txt 与 ffmpeg 输出 |
 | `E_ASR_PARSE` | qa | 2 | captions JSON 不可读/缺 segments[]（--apply 注入侧同样触发） | caption JSON 必须由 cvs caption 产出；手改保持 {segments:[{start,end,text,words[]}]} 结构 |
@@ -194,8 +196,8 @@
 
 ## 覆盖情况
 
-- 代码中出现的 `E_*`：170
-- 已注册且被使用：170
+- 代码中出现的 `E_*`：172
+- 已注册且被使用：172
 - 未注册：0
 
 - 已注册但当前未使用：0

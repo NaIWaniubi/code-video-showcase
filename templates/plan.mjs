@@ -20,6 +20,9 @@ import { browserCandidates } from './cdp.mjs';
 
 export const PLAN_VERSION = 2;
 
+// S5a 运动模糊档位 → tmix 权重（词数=子帧采样倍率 N）。
+export const BLUR_WEIGHTS = { weak: '1 1', normal: '1 2 1', strong: '1 2 3 2 1' };
+
 const isAbsoluteUrl = (s) => /^https?:\/\//i.test(String(s || ''));
 
 /** 从 HTML/JS/CSS 文本里抽本地依赖（import / @import / link / script src /
@@ -209,6 +212,8 @@ export function segmentHash(segment, meta, spec, opts = {}) {
     theme: meta.theme || '',
     accent: meta.accent ? JSON.stringify(meta.accent) : '',
     brand: meta.brand || '',
+    // S5a 运动模糊进哈希：换档位必须让全部段缓存失效（它改变每个像素的时间采样）。
+    blur: meta.blur || '',
     assets: assetHashes,
     patches: scopedPatches,
   });
@@ -311,9 +316,13 @@ export function buildPlanFromSpec(input, opts = {}) {
     patches: spec.patches || [],
   };
   plan.warnings = warnings.map((w) => ({ code: w.code, path: w.path, message: w.message }));
+  // S5a 运动模糊：档位 → tmix 权重（进 meta.blur → segmentHash）；渲染参数下发走
+  // renderArgs（farm/batch 纯透传），qa/probe/concat 看到的输出帧率帧数与关时同构。
+  plan.meta.blur = BLUR_WEIGHTS[spec.render?.motionBlur] || '';
 
   for (const s of plan.segments) {
     // 页面哈希同时写进段对象，便于排查「hash 为什么变了」。
+    if (plan.meta.blur) s.renderArgs = [...(s.renderArgs || []), '--motion-blur', plan.meta.blur];
     s.pageHash = pageContentHash(root, s.page);
     s.hash = segmentHash(s, plan.meta, spec, {
       root,

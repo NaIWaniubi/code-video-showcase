@@ -126,3 +126,9 @@ S0 → (S1 ∥ S7 分发) → S2 → S3；S4/S5 可与 S2/S3 并行（不同文�
 | Elo/主观分被当硬闸 | 只出趋势报表，代码级禁止进 exit code |
 | worktree×N 磁盘（本机仅 20GB） | 编排文档标并发上限；缓存目录共享实测 |
 | 无 LICENSE 项目（pdoom/prompts） | 思想用自己的话进 docs，不引原文 |
+
+## S8 冷重跑像素幂等定位（v4.10 立案，P0 级调查）
+- 现象：640×360+cyber-neon 视频三连跑逐帧互异、幅度随帧号增长；同参单帧静帧三点双跑字节同；tmix 后置 pass 本身同输入确定（diag S3）。
+- 嫌疑排序：①SwiftShader/线程池光栅调度（warmUp 注释同族前科「帧 112+ 突变」）②raw POST 路径与 getImageData 的 GPU 回读时序 ③页面某图层依赖合成器节拍。
+- 手段：nightly --video 探针已挂（continue-on-error 观察基线）；定位实验=锁 --disable-gpu/单线程光栅/换 format=png 三段 bisect。
+- 影响判定：单遍交付物无恙（qa 全过即所见即所交）；被侵蚀的是「跨机重放同字节」的对外承诺——若坐实不可修，改口径为「静帧级幂等 + 视频级一次成像」并同步全部文档，绝不含糊。

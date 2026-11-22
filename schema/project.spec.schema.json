@@ -651,6 +651,22 @@
           "exclusiveMinimum": 0,
           "maximum": 2,
           "description": "转场时长（秒），(0,2]，默认 0.4。必须短于最短段，否则 E_TRANSITION_DURATION。"
+        },
+        "motionBlur": {
+          "type": [
+            "string",
+            "boolean",
+            "null"
+          ],
+          "enum": [
+            "weak",
+            "normal",
+            "strong",
+            true,
+            false,
+            null
+          ],
+          "description": "S5a 子帧运动模糊：fps×N 渲染子帧后 tmix 加权回原帧率（weak=2x 快门窗 / normal=3x / strong=5x）。默认关，关闭时全链逐字节与既往一致。"
         }
       }
     }
