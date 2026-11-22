@@ -12,7 +12,7 @@
   （生产主力）根本不产 renderUrl，qa 对 checked=0 还报 PASS——主打的闸自己就是假绿。
   修：ctx.render 返回真实 pageUrl → batch 写 manifest.renderUrl；qa 语义改严（有 done 段缺
   URL=WARN 明说未生效，全 cached=ADVISORY 空转申报）；
-- F2  的 x 被当视频路径（positional 裸过滤吞 flag 值）：VALUED 旗标跳值修复，
+- F2 `cvs qa --plan x` 的 x 被当视频路径（positional 裸过滤吞 flag 值）：VALUED 旗标跳值修复，
   且缺省调用兑现 help 承诺（T10）；--video 旗标同步生效；
 - F3 keepQuery 死参数清除（--keep-page-params 保留为兼容 no-op，注释改真话）；
 - F4 film overrides 撇号截断单引号属性（英文文案 don't 即损坏+可注入）：esc 补 &#39;（T11）；
