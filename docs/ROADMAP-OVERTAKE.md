@@ -132,3 +132,7 @@ S0 → (S1 ∥ S7 分发) → S2 → S3；S4/S5 可与 S2/S3 并行（不同文�
 - 嫌疑排序：①SwiftShader/线程池光栅调度（warmUp 注释同族前科「帧 112+ 突变」）②raw POST 路径与 getImageData 的 GPU 回读时序 ③页面某图层依赖合成器节拍。
 - 手段：nightly --video 探针已挂（continue-on-error 观察基线）；定位实验=锁 --disable-gpu/单线程光栅/换 format=png 三段 bisect。
 - 影响判定：单遍交付物无恙（qa 全过即所见即所交）；被侵蚀的是「跨机重放同字节」的对外承诺——若坐实不可修，改口径为「静帧级幂等 + 视频级一次成像」并同步全部文档，绝不含糊。
+
+## S9 flash 卡文案位（v4.10.1 终版目检发现）
+- 现象：快闪段（f01-f04）走 big-card 但 URL 只有 item/count，吃到内建默认文案「想做」——0.5s×4 的画面出现无关词。
+- 修法：spec.flash 增 words?:string[]，plan 下发 first/keyword 到每个 flash 段 URL；矩阵测试补一条「flash 段 URL 必须带 first」。
