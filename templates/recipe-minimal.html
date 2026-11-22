@@ -51,7 +51,7 @@ const V = vars();
 
 const BRAND = String(V.brand || 'CVS').slice(0, 24);
 const TITLE = String(params.get('title') || V.title || '少即是多').slice(0, 20);
-const SUB = String(V.subtitle || 'THE QUIETEST FRAME WINS').slice(0, 48);
+const SUB = String(params.get('sub') || V.subtitle || 'THE QUIETEST FRAME WINS').slice(0, 48);
 const CAPTION = String(V.caption || '极简原则 · 一页只说一件事').slice(0, 40);
 
 const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;

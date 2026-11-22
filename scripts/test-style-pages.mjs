@@ -163,5 +163,27 @@ test('segment.html 的占位骨架标记仍在（说明我们没有靠删标记�
   assert.ok(/demo content|替换 drawScene/.test(src), 'generic page lost its placeholder marker');
 });
 
+// v4.10.1 文案消耗矩阵（校园墙成片目检暴露：datarace 不吃 ?title、全部 recipe 不吃
+// ?sub——spec 的 style.copy 副题从未上屏，QA 只验 plan 字段存在所以一直绿）。
+test('每个专属配方页必须消费 ?title（画大标题的页面无例外）', () => {
+  for (const [id, page] of Object.entries(STYLE_PAGES)) {
+    if (String(page).split('?')[0] === GENERIC_PAGE) continue;
+    const src = read(page);
+    assert.ok(/get\(['"]title['"]\)/.test(src), `${id} (${page}) ignores ?title= — spec copy would silently not render`);
+  }
+});
+test('凡画 subtitle 变量的配方页必须消费 ?sub', () => {
+  for (const [id, page] of Object.entries(STYLE_PAGES)) {
+    if (String(page).split('?')[0] === GENERIC_PAGE) continue;
+    const src = read(page);
+    // 按行找 SUB/SUBTITLE 的 String(...) 定义行（整行匹配，避免 [^)] 截断陷阱）
+    const line = src.split(/\r?\n/).find((l) => /const SUB(?:TITLE)? = String\(/.test(l));
+    if (!line) continue; // 该页不画副题（如 whiteboard），矩阵记为 N/A
+    if (line.includes('V.subtitle')) {
+      assert.ok(line.includes("get('sub')"), `${id} (${page}) draws a subtitle var but ignores ?sub=`);
+    }
+  }
+});
+
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

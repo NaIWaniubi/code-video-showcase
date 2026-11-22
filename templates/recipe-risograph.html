@@ -41,7 +41,7 @@ const THEME = getTheme(themeFromURL(location.search));
 const V = vars();
 const BRAND = String(V.brand || 'CVS').slice(0, 24);
 const TITLE = String(params.get('title') || V.title || '套色之美').slice(0, 12);
-const SUB = String(V.subtitle || 'TWO INKS · ONE PRINT').slice(0, 40);
+const SUB = String(params.get('sub') || V.subtitle || 'TWO INKS · ONE PRINT').slice(0, 40);
 
 const PAPER = '#f2ede3';
 const BLUE = '#2b4bd6';

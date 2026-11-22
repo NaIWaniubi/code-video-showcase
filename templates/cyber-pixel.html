@@ -49,8 +49,8 @@ const RECIPE = params.get('recipe') || 'cyber-pixel';
 const PAL = cyberPixelPalette(THEME);
 const V = vars();
 const BRAND = V.brand || 'CVS';
-const TITLE = V.title || '星尘 2.0';
-const SUBTITLE = V.subtitle || (RECIPE === 'cyber-pixel'
+const TITLE = params.get('title') || V.title || '星尘 2.0';
+const SUBTITLE = params.get('sub') || V.subtitle || (RECIPE === 'cyber-pixel'
   ? 'CYBER PIXEL / RECIPE 12'
   : `RECIPE ${String(RECIPE).toUpperCase()}`);
 const MONO = '"JetBrains Mono", ui-monospace, monospace';

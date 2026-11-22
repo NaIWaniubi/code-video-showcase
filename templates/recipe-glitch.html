@@ -53,7 +53,7 @@ const V = vars();
 
 const BRAND = String(V.brand || 'CVS').slice(0, 24);
 const TITLE = String(params.get('title') || V.title || '信号异常').slice(0, 10);
-const SUB = String(V.subtitle || 'SYSTEM // SIGNAL LOST').slice(0, 40);
+const SUB = String(params.get('sub') || V.subtitle || 'SYSTEM // SIGNAL LOST').slice(0, 40);
 
 const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;
 const INK = isLight ? TC.ink : TC.paper;

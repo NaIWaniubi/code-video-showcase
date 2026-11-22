@@ -39,7 +39,7 @@ const THEME = getTheme(themeFromURL(location.search));
 const V = vars();
 const BRAND = String(V.brand || 'CVS').slice(0, 24);
 const TITLE = String(params.get('title') || V.title || '网格即秩序').slice(0, 16);
-const SUB = String(V.subtitle || 'GRID · TYPOGRAPHY · CLARITY').slice(0, 48);
+const SUB = String(params.get('sub') || V.subtitle || 'GRID · TYPOGRAPHY · CLARITY').slice(0, 48);
 
 // 瑞士派固定调色板（不随主题漂移）：纸白 / 墨黑 / 信号红。
 const PAPER = '#f4f4f2';

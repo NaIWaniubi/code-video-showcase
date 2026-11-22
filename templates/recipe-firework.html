@@ -37,7 +37,7 @@ const TC = THEME.colors;
 const V = vars();
 
 const TITLE = String(params.get('title') || V.title || '粒子喷泉').slice(0, 14);
-const SUB = String(V.subtitle || '闭式弹道 · 循环发射 · 尾迹彗尾').slice(0, 40);
+const SUB = String(params.get('sub') || V.subtitle || '闭式弹道 · 循环发射 · 尾迹彗尾').slice(0, 40);
 const BRAND = String(V.brand || 'CVS').slice(0, 24);
 
 const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;

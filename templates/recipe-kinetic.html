@@ -45,7 +45,7 @@ const THEME = getTheme(themeFromURL(location.search));
 const TC = THEME.colors;
 const V = vars();
 const TITLE = String(params.get('title') || V.title || '速度即风格').slice(0, 16);
-const SUBTITLE = String(V.subtitle || 'MOTION IS THE MESSAGE').slice(0, 48);
+const SUBTITLE = String(params.get('sub') || V.subtitle || 'MOTION IS THE MESSAGE').slice(0, 48);
 const BRAND = String(V.brand || 'CVS').slice(0, 24);
 
 const isLight = THEME.mode === 'light';

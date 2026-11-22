@@ -50,7 +50,7 @@ const V = vars();
 
 const BRAND = String(V.brand || 'CVS').slice(0, 24);
 const TITLE = String(params.get('title') || V.title || '东方既白').slice(0, 8);
-const SUB = String(V.subtitle || '山水有相逢').slice(0, 12);
+const SUB = String(params.get('sub') || V.subtitle || '山水有相逢').slice(0, 12);
 
 const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;
 // 宣纸：浅色主题直接用纸色；深色主题往暖米色混，保持"纸"的语汇。

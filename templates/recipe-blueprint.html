@@ -40,7 +40,7 @@ const THEME = getTheme(themeFromURL(location.search));
 const V = vars();
 const BRAND = String(V.brand || 'CVS').slice(0, 24);
 const TITLE = String(params.get('title') || V.title || '结构图示').slice(0, 12);
-const SUB = String(V.subtitle || 'SCALE 1:100 · REV C').slice(0, 40);
+const SUB = String(params.get('sub') || V.subtitle || 'SCALE 1:100 · REV C').slice(0, 40);
 
 const BG = '#0d2b45';
 const LINE = '#cfe3ff';

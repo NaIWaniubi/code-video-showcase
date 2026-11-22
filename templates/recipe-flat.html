@@ -50,7 +50,7 @@ const V = vars();
 
 const BRAND = String(V.brand || 'CVS').slice(0, 24);
 const TITLE = String(params.get('title') || V.title || '扁平插画').slice(0, 14);
-const SUB = String(V.subtitle || '矢量色块 · 一眼看懂').slice(0, 40);
+const SUB = String(params.get('sub') || V.subtitle || '矢量色块 · 一眼看懂').slice(0, 40);
 
 const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;
 const INK = isLight ? TC.ink : TC.paper;

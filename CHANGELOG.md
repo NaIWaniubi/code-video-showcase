@@ -3,6 +3,18 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.10.1] - 2026-11-23 — 文案消耗矩阵：20 个配方页 ?title/?sub 全接通（成片目检第二击）
+
+- blur 版校园墙母带目检发现 datarace 仍显示内建标题「播放量竞速」→ 全仓审计：cyber-pixel 不吃 ?title、
+  19 页不吃 ?sub——recipe 的画副题变量只读内建 V.subtitle，spec 的 style.copy.subtitle 自仓以来
+  从未上屏（QA 只验 plan 字段存在、验不到像素，同族盲区再现）；
+- 统一修法：SUB 行改为 params.get('sub') 优先、V.subtitle 兜底、内建压轴——
+  **无参数 URL 逐字节走旧值**，既往片子与 golden 语义安全；datarace 的 title 同法接通；
+- test-style-pages 新增 2 条矩阵断言（专属页必须 get title；画副题行必须 get sub），
+  首跑再抓 glitch（正则截断假阳性，改按行断言）16/16；test:all 38 套件 520 断言全绿；
+- 影响声明：页面字节变化 → pageHash 全量更新 → 下次构建全量重渲；重渲版才是
+  「spec 文案 100% 上屏」的版本（blur 版母带先于本补丁，datarace 段仍是内建标题）。
+
 ## [v4.10.0] - 2026-11-23 — S5a 真子帧运动模糊（--motion-blur weak|normal|strong）
 
 - **`cvs build --motion-blur [档]` / `spec.render.motionBlur`**：以 fps×N 渲染子帧（页面是纯 f(t)，子帧 t 天然合法），

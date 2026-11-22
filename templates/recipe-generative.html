@@ -51,7 +51,7 @@ const TC = THEME.colors;
 const V = vars();
 
 const TITLE = String(params.get('title') || V.title || '生成式画面').slice(0, 14);
-const SUB = String(V.subtitle || '种子驱动的程序化视觉 · 每一帧都可复现').slice(0, 40);
+const SUB = String(params.get('sub') || V.subtitle || '种子驱动的程序化视觉 · 每一帧都可复现').slice(0, 40);
 const BRAND = String(V.brand || 'CVS').slice(0, 24);
 
 const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;

@@ -38,7 +38,7 @@ const TC = THEME.colors;
 const V = vars();
 
 const TITLE = String(params.get('title') || V.title || '骨骼演示').slice(0, 14);
-const SUB = String(V.subtitle || '关节链 · 步幅轨迹 · 闭式走 cycle').slice(0, 40);
+const SUB = String(params.get('sub') || V.subtitle || '关节链 · 步幅轨迹 · 闭式走 cycle').slice(0, 40);
 const BRAND = String(V.brand || 'CVS').slice(0, 24);
 
 const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;

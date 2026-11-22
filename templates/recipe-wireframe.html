@@ -39,7 +39,7 @@ const TC = THEME.colors;
 const V = vars();
 
 const TITLE = String(params.get('title') || V.title || '白模演示').slice(0, 14);
-const SUB = String(V.subtitle || '线框几何 · 透视公转 · 白盒可视化').slice(0, 40);
+const SUB = String(params.get('sub') || V.subtitle || '线框几何 · 透视公转 · 白盒可视化').slice(0, 40);
 const BRAND = String(V.brand || 'CVS').slice(0, 24);
 
 const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;
