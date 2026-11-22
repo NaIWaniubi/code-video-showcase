@@ -401,8 +401,12 @@ if (plan) {
         }
       }
       if (!fails) {
-        const msg = `${checked} 段的实际渲染 URL 携带 plan 全部文案/主题参数${noUrl ? `（${noUrl} 段无 renderUrl——早于 v4.9.2 的 manifest，重渲后自动补全）` : ''}`;
-        add('url provenance', checked || noUrl ? 'PASS' : 'ADVISORY', checked || noUrl ? msg : 'manifest 段全为 cached——本轮无新渲染可溯源（非缺陷，但本闸暂为空转）');
+        // v4.9.3（证伪 F1 配套）：done 段缺 renderUrl 是 WARN 不是 PASS——
+        // 「重渲自动补全」自 v4.9.3 起为真（batch 链已回传 pageUrl），
+        // 更早 manifest 的缺字段必须显式申报而不是绿给谁看。
+        if (noUrl) add('url provenance', 'WARN', `${noUrl} 个 done 段无 renderUrl（manifest 产自 v4.9.3 之前）——本闸对其未生效，重渲后补全；已验 ${checked} 段全带参`);
+        else if (checked) add('url provenance', 'PASS', `${checked} 段的实际渲染 URL 携带 plan 全部文案/主题参数`);
+        else add('url provenance', 'ADVISORY', 'manifest 段全为 cached——本轮无新渲染可溯源（非缺陷，但本闸空转）');
       }
     }
   } catch (e) { add('url provenance', 'FAIL', `manifest unreadable: ${String(e.message).slice(0, 120)}`); }

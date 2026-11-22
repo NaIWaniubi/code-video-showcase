@@ -121,6 +121,53 @@ const baseSpec = JSON.parse(fs.readFileSync(path.join(ROOT, 'fixtures/mini-41s/s
   }
 }
 
+// ── T8-T12: v4.9.3 证伪批次回归（F2/F4/F5/F7/F9） ──────────────────
+{
+  const { toVtt, toSrt } = await import('./caption.mjs');
+  const doc2 = { segments: [{ start: 0, end: 1.5, text: 'Hello, world, 你好，世界' }] };
+  const vtt = toVtt(doc2);
+  ok('T8 vtt dots only in timecodes (F7)', vtt.includes('00:00:01.500') && vtt.includes('Hello, world') && vtt.includes('你好，世界'), vtt.split('\n')[3] || '');
+}
+{
+  // F5：动态 import('pkg') 必须被 E_PAGE_BARE 拦
+  const r = path.join(tmp, 'dyn');
+  fs.mkdirSync(path.join(r, 'templates'), { recursive: true });
+  const spec = structuredClone(baseSpec);
+  spec.opening.page = 'templates/dyn-page.html';
+  fs.writeFileSync(path.join(r, 'templates/dyn-page.html'),
+    `<!doctype html><script type="module">const m = await import('chart.js');\nwindow.DURATION=8;window.renderFrame=()=>{};window.__ready=true;</script>`);
+  writeJson(path.join(r, 'spec.json'), spec);
+  const res = spawnSync(process.execPath, [path.join(ROOT, 'templates/plan.mjs'), '--spec', path.join(r, 'spec.json'), '--root', r, '--check'],
+    { encoding: 'utf8', timeout: 60000 });
+  ok('T9 dynamic import blocked (F5)', res.status !== 0 && ((res.stdout || '') + (res.stderr || '')).includes('E_PAGE_BARE'), `exit=${res.status}`);
+}
+{
+  // F2：qa.mjs 的 --plan 值不得泄漏成视频路径（在空临时目录跑，缺省视频必然不存在）
+  const wd = path.join(tmp, 'qawd'); fs.mkdirSync(wd, { recursive: true });
+  writeJson(path.join(wd, 'plan.json'), { segments: [] });
+  const res = spawnSync(process.execPath, [path.join(ROOT, 'scripts/qa.mjs'), '--plan', path.join(wd, 'plan.json')],
+    { encoding: 'utf8', timeout: 60000, cwd: wd });
+  const out = (res.stdout || '') + (res.stderr || '');
+  ok('T10 flag value not positional (F2)', res.status === 13 && /master\.mp4/.test(out) && !out.includes(path.join(wd, 'plan.json')), `exit=${res.status}`);
+}
+{
+  // F4：overrides 文本含撇号必须转义（单引号属性不破）
+  const { buildFilmHtml } = await import('./lib/film-export.mjs');
+  const ovs = new Map([['00-opening', { text: "don't stop" }]]);
+  const html = buildFilmHtml(baseSpec, { overridesByClip: ovs });
+  ok('T11 apostrophe escaped in overrides attr (F4)', html.includes('&#39;') && !/overrides='[^']*don't/.test(html));
+}
+{
+  // F9：规则目录与 EVALS 脱节必须拦（闸自身故障不许绿）
+  const cat = JSON.parse(fs.readFileSync(path.join(ROOT, 'schema/taste-rules.json'), 'utf8'));
+  cat.rules.push({ id: 'ghost-rule', title: '不存在的规则', severity: 'warning', weight: 5, input: 'spec', waivable: false });
+  const rf = path.join(tmp, 'rules.json'); writeJson(rf, cat);
+  const res = spawnSync(process.execPath, [path.join(ROOT, 'scripts/taste.mjs'), path.join(ROOT, 'fixtures/mini-41s/spec.json'), '--root', ROOT, '--rules', rf],
+    { encoding: 'utf8', timeout: 90000 });
+  const out = (res.stdout || '') + (res.stderr || '');
+  ok('T12 unimplemented rule blocks (F9)', res.status === 13 && out.includes('gate-fault'), `exit=${res.status}`);
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 if (fails) { console.error(`[test-trust-fixes] ${fails} FAIL`); process.exit(1); }
 console.log('[test-trust-fixes] all green');

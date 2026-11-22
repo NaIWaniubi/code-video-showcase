@@ -250,10 +250,15 @@ async function main() {
       ? (line) => { if (/\[warn\]|\[fatal\]/.test(line)) console.log(`[${s.id}] ${line}`); }
       : (line) => console.log(`[${s.id}] ${line}`);
     let lastErr = null;
+    let renderUrl = '';
     for (let attempt = 1; attempt <= retries + 1; attempt++) {
       const started = performance.now();
       try {
-        await ctx.render({ ...opts, log, warn: log });
+        const rr = await ctx.render({ ...opts, log, warn: log });
+        // v4.9.3 溯源修补（证伪代理 F1：v4.9.2 只在 --legacy 路径捕获 [page]，
+        // 默认 batch 生产链根本不产 renderUrl，溯源闸对正常 build 永远空转报 PASS）：
+        // ctx.render 的返回值现在携带实际打开的 pageUrl，写进 manifest 供 qa 对照。
+        if (rr && rr.pageUrl) renderUrl = rr.pageUrl;
       } catch (e) {
         lastErr = e;
         const sec = ((performance.now() - started) / 1000).toFixed(1);
@@ -283,6 +288,7 @@ async function main() {
         manifest.segments[s.id] = {
           status: 'done', frames: got, expected: s.frames, seconds: sec, attempts: attempt,
           out: path.relative(root, outAbs).split(path.sep).join('/'), ...(s.hash ? { hash: s.hash } : {}),
+          ...(renderUrl ? { renderUrl } : {}),
         };
         if (!quiet) console.log(`[${s.id}] ✓ ${s.frames} frames in ${sec}s (attempt ${attempt})`);
         writeCache(s, outAbs, s.frames, sec);

@@ -28,7 +28,7 @@
 | 2 | MotionGit | .motion 开放格式 rc.1 | 站点真 | 逐模板 | **A(格式)** | `cvs ship --emit-motion`（纯打包）；theme 变体层=safe 维 token presets。**占位窗口期** |
 | 3/21 | OpenMotion ≡ OpenDesign Motion（清单重复） | nexu-io/openmotion（引擎=HF pinned） | 9.5–14k | Apache-2.0 | **A** | spec⇄**Motion.md** 互转；五维 rubric 进 ref 拆解；Keep/Replace/Generate 三分进反推产物；revision-check 乐观锁进 edit/build |
 | 4 | SkillVideo | workbuddy/skills **不存在**（三条路径核验） | — | — | **D** | 删除；需求并入 #10 的 shader-transitions/media-treatment/captions 组合 |
-| 5 | Lemo-Opuscar | 99 风格×11 维教义（清单写66错） | 19k | 代码MIT/**文档CC-BY-NC** | **B** | `content/style-doctrine.json` 抄 style.json **字段结构**禁抄文本；`window.__ev/__textsAt` 页面契约→QA 可读性闸；三档可变性→lint（我们加机器闸它没有） |
+| 5 | Lemo-Opuscar | 99 风格×12 维教义（清单写66错） | 19k | 代码MIT/**文档CC-BY-NC** | **B** | `content/style-doctrine.json` 抄 style.json **字段结构**禁抄文本；`window.__ev/__textsAt` 页面契约→QA 可读性闸；三档可变性→lint（我们加机器闸它没有） |
 | 6 | Awesome Opus 5.5 Videos | videos.json 703条/13字段（418=remake子集） | 16k | MIT但**prompt归作者** | **B** | `cvs bench`：703 条本地评测（new→lint→plan 结构合法率/风格命中率），**绝不进发行物** |
 | 7 | PDoomVideo | 156s 水彩 MV+并行施工指南 | 3k | **无LICENSE** | **B(思路)** | shots 层进 spec；cast 注册表+E_CAST_MISSING；**每帧预算 cost-gate**（frameBudgetMs）；safe() 字幕带；PARALLEL-EDIT 纪律 |
 | 8 | Opus Video Prompts | 9路线/54案例/6段骨架 | 1.2k | **无LICENSE** | **B(思路)** | route-map.json；**Banned 反模板味**→cliché 元数据+E_CLICHE_FORBIDDEN(premium)；**subframe+tmix 60fps 运动模糊**（最大画质弹药）；cvs cost 查表 |
@@ -71,7 +71,7 @@
 - **验收断言**：同 spec 双跑 taste 分必相等（确定性）；fixtures 金样 18 规则各 1 正 1 反；waiver 生命周期（加→用→过期 FAIL）测试过；`cvs build` 默认不拦、`--strict` 拦 error。
 
 ### S2 画风升维 + 反模板味（P0–P1，~3 天）
-- S2-1 `content/style-doctrine.json`：现有 27 画风×11 维（**自写文本**，结构借 opuscar style.json 字段命名：essence/notStyles/material/colourLogic/typeRules/motionQuality/cameraGrammar/soundPalette/nativeMoves/pitfalls/engine/variationSpace + uses/aliases/mutable 三档）；`E_DOCTRINE_MISSING` 闸；build-combos 消费 uses[]。
+- S2-1 `content/style-doctrine.json`：现有 27 画风×12 维（**自写文本**，结构借 opuscar style.json 字段命名：essence/notStyles/material/colourLogic/typeRules/motionQuality/cameraGrammar/soundPalette/nativeMoves/pitfalls/engine/variationSpace + uses/aliases/mutable 三档）；`E_DOCTRINE_MISSING` 闸；build-combos 消费 uses[]。
 - S2-2 三档可变性 lint：look.overrides 只许动 safe 维；碰 core 维 WARN `W_DOCTRINE_CORE_TOUCHED`；全改 can't → style 应改名。
 - S2-3 `cvs style new <一句话>`：五步（plan→summary→单帧→demo→keep），产物=recipe 页骨架+doctrine 条目+style-pages 加行+golden 入册。
 - S2-4 cliché 治理：26 效果标 `cliche:true` 元数据（不删）；nl2spec 降权；`--profile premium` 命中 E_CLICHE_FORBIDDEN；score 第六维"模板味"反查。

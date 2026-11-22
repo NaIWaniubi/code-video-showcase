@@ -3,6 +3,32 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.9.3] - 2026-11-23 — 证伪清洗：独立复核揪出 11 条，本版本全部修复并钉 T8-T12
+
+独立批评代理对 v4.7.1→v4.9.2 做「声称↔代码↔测试」三角证伪，产出 11 条 finding（1 high/7 medium/3 low）。
+全部认账、全修，本仓纪律：**证伪自己的工具必须先于超越别人**。
+
+- **F1(high) 溯源闸生产空转**：v4.9.2 的 renderUrl 捕获只接在 --legacy 路径，默认 batch 链
+  （生产主力）根本不产 renderUrl，qa 对 checked=0 还报 PASS——主打的闸自己就是假绿。
+  修：ctx.render 返回真实 pageUrl → batch 写 manifest.renderUrl；qa 语义改严（有 done 段缺
+  URL=WARN 明说未生效，全 cached=ADVISORY 空转申报）；
+- F2  的 x 被当视频路径（positional 裸过滤吞 flag 值）：VALUED 旗标跳值修复，
+  且缺省调用兑现 help 承诺（T10）；--video 旗标同步生效；
+- F3 keepQuery 死参数清除（--keep-page-params 保留为兼容 no-op，注释改真话）；
+- F4 film overrides 撇号截断单引号属性（英文文案 don't 即损坏+可注入）：esc 补 &#39;（T11）；
+- F5 E_PAGE_BARE 漏动态 import('pkg')：importish 加 import( 形态，bare 闸与递归哈希同时补洞（T9）；
+- F6 --browser 换浏览器旧缓存照命中：farm 启动比对 plan.meta.toolchain，不同名即整轮禁缓存
+  并 W_BROWSER_CACHE 申报（宁全渲不混拼）；
+- F7 toVtt 全局逗号替换篡改正文（"Hello, world"→"Hello. world"）：只改时间戳分隔符（T8）；
+- F8 captionSource.appliedAt 首写 1970 假值：改真实时间戳+firstAppliedAt 保留首次；
+- F9 taste 规则表与 EVALS 脱节时静默 0 拦：unimplemented/error 判 gate-fault 强制拦+打印（T12）；
+- F10 mcp/README 工具表补齐 13 行、server 头注释同步；
+- F11 「11 维教义」措辞错报（实际 12 维+uses+mutable 元数据）：全部文档改正。
+
+回归：test-trust-fixes T1-T12 全绿；test:all 37 套件 0 失败。残余项（证伪同时申报、暂不动作）：
+device=auto 缓存键用请求值非解析值（跨机可异，本机可接受）；accentInk 全候选不达标时静默落
+candidates[0]（靠 spec-check E_APCA 兜底）；score pacing 指标对混合节奏宣传片的标定（ROADMAP S1b）。
+
 ## [v4.9.2] - 2026-11-21 — URL 溯源闸：内容错位从此过不了 QA
 
 - render-farm 从渲染器 `[page]` 增量日志捕获**实际打开的 URL** 写入
@@ -52,7 +78,7 @@
   （AGPL 边界 + 零依赖卖点），`cvs caption` 的 python 适配器是自写胶水非移植；
   测试契约层跑（`test-caption.mjs` 11 断言全绿），真模型验收单列不进 CI。
 
-## [v4.8.0] - 2026-11-21 — S1+S2 审美裁判机 `cvs taste` + 27 画风 11 维教义档
+## [v4.8.0] - 2026-11-21 — S1+S2 审美裁判机 `cvs taste` + 27 画风 12 维教义档
 
 依据 22 项目调研（notes/G3：impeccable 62 规则工程形态 × hallmark 58 门可判定子集
 × taste-skill GATE/waivers 纪律；notes/G1：Lemo-Opuscar style.json 字段结构——
@@ -81,7 +107,7 @@
   生命周期、同 spec 两次运行**同分同判决**、17 主题 body 对比度全过。
 
 **S2 画风升维（同版本）**
-- `content/style-doctrine.json`：**27 个画风 × 11 维结构化教义**（essence/not-styles/
+- `content/style-doctrine.json`：**27 个画风 × 12 维结构化教义**（essence/not-styles/
   material/colour-logic/type-rules/motion/camera/sound-palette/native-moves/
   pitfalls/engine/variation-space + uses + mutable 三档），全条目自写；字段命名向
   机器可读风格元数据看齐；

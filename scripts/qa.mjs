@@ -18,22 +18,38 @@ import { parseStrict, rejectUnknown } from './lib/strict-flags.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROG = 'node scripts/qa.mjs';
 const KNOWN = new Set(['video', 'audio', 'plan', 'json', 'strict', 'help']);
+// 取值旗标（证伪代理 F2）：这些 flag 的下一个 token 是**值**，不是位置参数。
+// 旧代码 positional 用「不以--开头」裸过滤，`cvs qa --plan out/plan.json` 会把
+// plan 路径当成视频送 ffprobe——恰好是 help 承诺的缺省用法。
+const VALUED = new Set(['video', 'audio', 'plan']);
 const argv = process.argv.slice(2);
-const positional = argv.filter((a) => !String(a).startsWith('--'));
+const positional = (() => {
+  const out = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = String(argv[i]);
+    if (a.startsWith('--')) {
+      const name = a.slice(2).split('=')[0];
+      if (VALUED.has(name) && !a.includes('=') && i + 1 < argv.length) i++; // 跳过它的值
+      continue;
+    }
+    out.push(a);
+  }
+  return out;
+})();
 const { args, unknown } = parseStrict(argv, KNOWN);
 if (unknown.length) rejectUnknown(PROG, unknown, KNOWN);
 
-if (args.help || (!positional.length && !args.video)) {
-  console.log(`Usage: node scripts/qa.mjs <video.mp4> [options]
-  <video.mp4>         video gate target (default ./out/master.mp4)
-  --plan <plan.json>  plan for content checks (default ./out/plan.json)
-  --audio <wav|mp4>   audio gate source; omit = the video itself (track is measured)
-  --strict            warnings fail too
-  --json              one-line JSON on stdout`);
-  process.exit(args.help ? 0 : 2);
+if (args.help) {
+  console.log(`Usage: node scripts/qa.mjs [video.mp4] [options]
+  [video.mp4]           video gate target (default ./out/master.mp4)
+  --plan <plan.json>    plan for content checks (default: 视频同目录 plan.json → out/plan.json)
+  --audio <wav|mp4>     audio gate source; omit = the video itself (track is measured)
+  --strict              warnings fail too
+  --json                one-line JSON on stdout`);
+  process.exit(0);
 }
 
-const videoFile = path.resolve(process.cwd(), String(positional[0] || path.join('out', 'master.mp4')));
+const videoFile = path.resolve(process.cwd(), String(positional[0] || args.video || path.join('out', 'master.mp4')));
 if (!fs.existsSync(videoFile)) {
   console.error(`[error] [E_QA_VIDEO] no such file: ${videoFile}（先 cvs build）`);
   process.exit(13);

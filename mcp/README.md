@@ -33,6 +33,8 @@ Cursor、Claude Code、ZCode…）零端口、零 token、零常驻地直调。
 | `cvs_build` | lint→plan→渲染→concat→QA 全链 | **默认 dry-run**，显式 apply 才落盘 |
 | `cvs_edit` | 结构四件套 split/drop/move/trim（D 公式闭合） | 默认 dry-run；apply 自动 `.bak` |
 | `cvs_qa` | 双闸质检（视频+音频） | 只读 |
+| `cvs_taste` | 确定性审美闸（规则表·error 硬拦/warning 扣分/advisory 只列） | 只读（写 out/qa/taste.json） |
+| `cvs_caption` | 本地词级字幕（faster-whisper·同输入缓存复用·--into 注入 spec.vo） | 缓存写 out/captions/，注入自动 `.bak` |
 | `cvs_image` | 出图集（封面/海报/卡片/故事图，艺术静帧） | 写 out/ |
 | `cvs_ship` | 交付打包 zip（--check 先过双闸） | 只读校验 |
 | `cvs_demo` | 导演演示集一键出片 | 写 out/ |

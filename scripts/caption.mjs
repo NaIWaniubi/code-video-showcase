@@ -32,8 +32,9 @@ export function toSrt(doc) {
   const tc = (s) => { const ms = Math.round(s * 1000); return `${pad(Math.floor(ms / 3600000))}:${pad(Math.floor(ms / 60000) % 60)}:${pad(Math.floor(ms / 1000) % 60)},${pad(ms % 1000, 3)}`; };
   return (doc.segments || []).map((s, i) => `${i + 1}\n${tc(s.start)} --> ${tc(s.end)}\n${s.text}\n`).join('\n') + '\n';
 }
-/** SRT → WebVTT（同时间轴，逗号换点）。 */
-export function toVtt(doc) { return 'WEBVTT\n\n' + toSrt(doc).replace(/,/g, '.'); }
+/** SRT → WebVTT：只改时间戳的毫秒分隔符（证伪 F7：旧版 replace(/,/g,'.') 把
+ *  字幕正文里的英文逗号全改成句点——"Hello, world" 变 "Hello. world"）。 */
+export function toVtt(doc) { return 'WEBVTT\n\n' + toSrt(doc).replace(/(\d\d:\d\d:\d\d),(\d{3})/g, '$1.$2'); }
 
 function main() {
   const argv = process.argv.slice(2);
@@ -70,7 +71,13 @@ Cache: out/captions/<sha256(media|model|device|lang)>.json — 同输入复用�
       process.exit(10);
     }
     specRaw.audio.vo = voNew;
-    specRaw.audio.captionSource = { engine: doc.engine || 'faster-whisper', model: doc.model || null, mediaSha256: doc.mediaSha256 || null, appliedAt: specRaw.audio.captionSource?.appliedAt || new Date(0).toISOString() };
+    // v4.9.3（证伪 F8）：appliedAt 首写不再落 1970 假值；每次注入刷新 appliedAt，
+    // 首次时间保留在 firstAppliedAt——溯源字段必须说真话。
+    {
+      const prev = specRaw.audio.captionSource || {};
+      const now = new Date().toISOString();
+      specRaw.audio.captionSource = { engine: doc.engine || 'faster-whisper', model: doc.model || null, mediaSha256: doc.mediaSha256 || null, firstAppliedAt: prev.firstAppliedAt || prev.appliedAt || now, appliedAt: now };
+    }
     const bak = String(args.into) + '.bak';
     fs.copyFileSync(path.resolve(String(args.into)), bak);
     fs.writeFileSync(path.resolve(String(args.into)), JSON.stringify(specRaw, null, 2) + '\n');

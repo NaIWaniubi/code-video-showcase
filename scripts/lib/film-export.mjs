@@ -23,7 +23,10 @@ export const TRACK_FLAGS = { PERSON: 'person', AGENT: 'agent' };
 
 const esc = (s) => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;');
+  .replace(/"/g, '&quot;')
+  // v4.9.3（证伪 F4）：overrides 写进**单引号** HTML 属性，撇号不转义会让
+  // 含 don't 类文案截断属性甚至注入。
+  .replace(/'/g, '&#39;');
 
 /** 每段的 OpenFilm 时间区间：at=起点秒；#t=in,out 由 t0/speed/duration 推。 */
 function clipRange(seg, fps = 30) {

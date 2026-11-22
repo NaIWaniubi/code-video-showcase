@@ -117,7 +117,8 @@ export function optionsFromArgs(args) {
     format: str('format', 'raw'),
     capture: str('capture', 'auto'),
     headed: !!args.headed,
-    // R16-W：CLI --keep-page-params（对象路径经 opts 直接传入；此处兜住 flag 写法）。
+    // R16-W→v4.9.1 遗留：--keep-page-params 现为**兼容 no-op**（v4.9.1 起生产链
+    // 本来就保留 plan 全部 query，剥离行为已删——见 withSegmentParams 注释）。
     keepPageParams: !!args['keep-page-params'] || !!args.keepPageParams,
     timeout: num('timeout', 120000),
     launchTimeout: num('launch-timeout', 30000),
@@ -351,7 +352,7 @@ function isPrivateHost(url) {
   return !!host && PRIVATE_HOST_RE.test(host);
 }
 
-export function withSegmentParams(page, port, t, keepQuery = false) {
+export function withSegmentParams(page, port, t) {
   const u = new URL(`http://127.0.0.1:${port}/${page.replace(/^\/+/, '')}`);
   // R19 修正（校园墙宣传片实测暴露的内容错位 bug）：RT-07 P2-2 曾把页面自带
   // query **全剥**，理由是「?logo=… 能原样进成片 URL」——那是过度矫正：logo 类
@@ -367,7 +368,7 @@ export function withSegmentParams(page, port, t, keepQuery = false) {
 }
 
 function buildPageUrl(page, port, t) {
-  let pageUrl = /^https?:\/\//i.test(String(page)) ? page : withSegmentParams(page, port, t, !!t.keepPageParams);
+  let pageUrl = /^https?:\/\//i.test(String(page)) ? page : withSegmentParams(page, port, t);
   if (/^https?:\/\//i.test(String(page))) {
     if (isPrivateHost(pageUrl)) {
       throw new Error(`remote page blocked: ${page} points at a loopback/private range (SSRF guard)`);
@@ -836,7 +837,7 @@ async function renderVideo(ctx, opts, rawPageOpts = {}) {
     const size = fs.statSync(opts.out).size;
     page.log(`[done] ${opts.out}  ${frames} frames @${opts.fps}fps  ${(size / 1024 / 1024).toFixed(2)} MB  capture=${page.mode}`);
     if (page.errors.length) opts.warn('[page errors] ' + page.errors.slice(0, 5).join(' | '));
-    return { out: opts.out, frames, seconds: (performance.now() - started) / 1000, capture: page.mode, errors: page.errors.slice(0, 5) };
+    return { out: opts.out, frames, seconds: (performance.now() - started) / 1000, capture: page.mode, pageUrl: page.url, errors: page.errors.slice(0, 5) };
   } finally {
     await page.close().catch(() => {});
   }

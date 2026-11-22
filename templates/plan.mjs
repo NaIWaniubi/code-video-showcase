@@ -32,6 +32,8 @@ function localRefs(text) {
   const importish = [
     /\bfrom\s+['"]([^'"]+)['"]/g,
     /\bimport\s+['"]([^'"]+)['"]/g,
+    // v4.9.3（证伪 F5）：动态 import('pkg') 以前两头都漏——既不进 bare 闸也不进递归。
+    /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
     /@import\s+(?:url\()?['"]?([^'")\s]+)['"]?\)?/g,
   ];
   const resourceish = [

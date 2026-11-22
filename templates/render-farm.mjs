@@ -107,7 +107,16 @@ const resolveOutPath = (p) => (path.isAbsolute(String(p)) ? path.resolve(String(
 const manifestPath = args.manifest
   ? resolveOutPath(args.manifest)
   : path.join(resolveOutPath(plan.meta.outDir || 'out'), 'render-manifest.json');
-const cacheDir = args['no-cache']
+// v4.9.3（证伪 F6）：--browser 指定与 plan 指纹不同的浏览器时，段缓存必须失效——
+// toolchainFingerprint 是 plan 期按 browserCandidates() 算的，不知道 build 会换
+// 渲染器；两个光栅器的抗锯齿/字距不保证一致，混拼与 F2 同病。宁可全量重渲。
+let browserMismatch = false;
+if (args.browser && plan.meta && plan.meta.toolchain) {
+  const base = path.basename(String(args.browser)).toLowerCase().replace(/\.exe$/, '');
+  if (base && !String(plan.meta.toolchain).toLowerCase().includes(base)) browserMismatch = true;
+}
+if (browserMismatch) console.error(`[farm] [W_BROWSER_CACHE] --browser=${args.browser} 与 plan 指纹（${plan.meta.toolchain}）不含同名浏览器 → 本轮禁用段缓存，全量重渲`);
+const cacheDir = (args['no-cache'] || browserMismatch)
   ? null
   : (args.cache ? resolveOutPath(args.cache) : path.join(resolveOutPath(plan.meta.outDir || 'out'), '.cache'));
 

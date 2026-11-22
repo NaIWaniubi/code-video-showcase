@@ -187,6 +187,9 @@ const fired = new Set(results.filter((x) => x.status === 'fail').map((x) => x.ru
 const unusedWaivers = waivers.filter((w) => !fired.has(String(w.rule))).map((w) => `${w.rule}: ${w.reason || ''}`);
 
 const fails = results.filter((x) => x.status === 'fail');
+// v4.9.3（证伪 F9）：unimplemented/eval 异常此前不进判决——「闸不许假绿」的注释
+// 是虚言。规则目录与 EVALS 脱节属闸自身故障，按 error 拦并显式打印。
+const broken = results.filter((x) => x.status === 'unimplemented' || x.status === 'error');
 const errs = fails.filter((x) => x.severity === 'error');
 const warns = fails.filter((x) => x.severity === 'warning');
 const advisories = fails.filter((x) => x.severity === 'advisory');
@@ -194,20 +197,21 @@ const deducted = warns.reduce((s, x) => s + (catalog.rules.find((r) => r.id === 
 const score = +Math.max(0, 100 - deducted).toFixed(1);
 const report = {
   engine: 'taste/1', rulesVersion: catalog.version, spec: path.basename(specArg),
-  score, blocking: errs.length > 0 || (Boolean(args.strict) && warns.length > 0),
-  counts: { error: errs.length, warning: warns.length, advisory: advisories.length, waived: results.filter((x) => x.status === 'waived').length },
+  score, blocking: errs.length > 0 || broken.length > 0 || (Boolean(args.strict) && warns.length > 0),
+  counts: { error: errs.length, warning: warns.length, advisory: advisories.length, broken: broken.length, waived: results.filter((x) => x.status === 'waived').length },
   results, unusedWaivers: Boolean(args['report-unused-waivers']) ? unusedWaivers : undefined,
 };
 
 const outDir = args.out ? path.resolve(String(args.out)) : path.join(ROOT, 'out', 'qa');
 try { fs.mkdirSync(outDir, { recursive: true }); fs.writeFileSync(path.join(outDir, 'taste.json'), JSON.stringify(report, null, 2) + '\n'); } catch { /* 报告写不进不掩判决 */ }
 
-console.error(`[taste] score ${score}/100 · error ${errs.length} · warning ${warns.length} · advisory ${advisories.length}${report.counts.waived ? ` · waived ${report.counts.waived}` : ''}`);
+console.error(`[taste] score ${score}/100 · error ${errs.length}${broken.length ? ` · broken ${broken.length}` : ''} · warning ${warns.length} · advisory ${advisories.length}${report.counts.waived ? ` · waived ${report.counts.waived}` : ''}`);
+for (const x of broken) console.error(`  ✗ [gate-fault] ${x.rule} — ${x.status} · ${x.evidence}`);
 for (const x of results) {
   if (x.status === 'fail') console.error(`  ✗ [${x.severity}] ${x.rule} — ${x.title} · ${x.evidence}`);
   if (x.status === 'waived') console.error(`  ~ [waived] ${x.rule} — ${x.waivedBy}`);
 }
 if (args['report-unused-waivers'] && unusedWaivers.length) console.error(`  ! 过期豁免: ${unusedWaivers.join(' | ')}`);
 if (args.json) process.stdout.write(JSON.stringify(report) + '\n');
-if (report.blocking) console.error(`[error] [E_TASTE_FAIL] taste 闸不过：error=${errs.length} warning=${warns.length}${args.strict ? '（--strict）' : ''} · 报告 ${path.join(outDir, 'taste.json')}`);
+if (report.blocking) console.error(`[error] [E_TASTE_FAIL] taste 闸不过：error=${errs.length}${broken.length ? ` 闸故障=${broken.length}` : ''} warning=${warns.length}${args.strict ? '（--strict）' : ''} · 报告 ${path.join(outDir, 'taste.json')}`);
 process.exit(report.blocking ? 13 : 0);

@@ -96,7 +96,7 @@ export function deepValidate(raw, { root = process.cwd() } = {}) {
         const p = String(r.style?.page || '').split('?')[0];
         const sid = pageToStyle.get(p);
         if (knownPages.has(p) && sid && !ids.has(sid) && sid !== 'vertical') {
-          issues.push({ code: 'W_DOCTRINE_MISSING', path: `rounds[${i}].style`, message: `画风 "${sid}" 在 content/style-doctrine.json 无 11 维教义档（S2：画风须升维为可被闸消费的数据）`, level: 'warn' });
+          issues.push({ code: 'W_DOCTRINE_MISSING', path: `rounds[${i}].style`, message: `画风 "${sid}" 在 content/style-doctrine.json 无 12 维教义档（S2：画风须升维为可被闸消费的数据）`, level: 'warn' });
         }
       });
     }
