@@ -589,7 +589,11 @@ async function openCdp(opts) {
         await cdpWaitFor(b.client, p.sessionId, 'document.fonts.status !== "loading"', { timeout: 12000, label: 'fonts settled', warn: opts.warn }).catch(() => {});
         await cdpEvaluate(b.client, p.sessionId, () => document.fonts.ready);
 
-        const ev = (fn, arg) => cdpEvaluate(b.client, p.sessionId, fn, arg);
+        // S8/G2 同族补漏：per-frame 取帧 evaluate（raw: renderFrame+getImageData+
+        // 8.3MB base64 POST；canvas: toDataURL）此前吃 cdp.mjs 的 30s 旧默认——
+        // 重段首帧冷启动 + farm 并发下会在 frame 0 撞 `CDP timeout: Runtime.evaluate`
+        // （mini-41s e2e 实测 99-ending 三连败）。与截图同口径：给页面预算。
+        const ev = (fn, arg) => cdpEvaluate(b.client, p.sessionId, fn, arg, opts.timeout || 120000);
         const shot = async () => {
           const r = await b.client.send('Page.captureScreenshot', {
             format: cdpShotFormat(opts), ...(cdpShotFormat(opts) === 'jpeg' ? { quality: opts.quality } : {}),

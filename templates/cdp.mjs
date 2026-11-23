@@ -322,11 +322,11 @@ export async function launchRetry(opts = {}, attempts = 2, launcher = launch) {
 }
 
 /** Evaluate an expression or function-with-arg inside the page. */
-export async function evaluate(client, sessionId, fn, arg) {
+export async function evaluate(client, sessionId, fn, arg, timeoutMs) {
   const expression = typeof fn === 'function' ? `(${fn.toString()})(${arg === undefined ? '' : JSON.stringify(arg)})` : String(fn);
   const res = await client.send('Runtime.evaluate', {
     expression, returnByValue: true, awaitPromise: true, userGesture: true,
-  }, sessionId);
+  }, sessionId, timeoutMs);
   if (res.exceptionDetails) {
     const d = res.exceptionDetails;
     throw new Error(d.exception?.description || d.text || 'page evaluation failed');
