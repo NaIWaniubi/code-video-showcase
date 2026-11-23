@@ -921,6 +921,9 @@ async function renderVideo(ctx, opts, rawPageOpts = {}) {
       const r = spawnSync(opts.ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-i', encOut,
         '-vf', `tmix=frames=${samples}:weights='${blurW}',fps=${opts.fps}`,
         '-c:v', 'libx264', '-preset', opts.preset, '-crf', String(opts.crf),
+        // G6-2：tmix 后置 pass 与主编码同构——以前漏了 -tune，开 blur 的段
+        // 编码器参数与关档不同构（用户指定的 tune 被静默丢弃）。
+        ...(opts.tune ? ['-tune', opts.tune] : []),
         '-threads', '1', '-x264-params', 'threads=1:lookahead_threads=1:rc-lookahead=10',
         '-fflags', '+bitexact', '-flags', '+bitexact',
         '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
