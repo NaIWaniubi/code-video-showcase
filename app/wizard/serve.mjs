@@ -21,6 +21,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
+// G5-4（2026-11 安全审计）：analyze-ref 的 Origin/Host 防线与 server/api.mjs
+// 同一把尺子——直接复用其 isLoopbackHost 判定，不再各写各的。
+// api.mjs 顶层有 isMain 闸，import 不会起服务。
+import { isLoopbackHost } from '../../server/api.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', '..');
@@ -95,7 +99,14 @@ Serves the repository root. Open http://127.0.0.1:5181/app/wizard/`);
   process.exit(0);
 }
 
-const PORT = Number(args.port || process.env.PORT || 5181);
+// G5-4 配套修复：--port 0 = OS 分配临时端口（下方 listen 回调的设计意图）。
+// 旧写法 `Number(args.port || ... || 5181)` 让 0 被 `||` 吃掉——并发测试/多实例
+// 场景全部撞在 5181 上，第二个实例 EADDRINUSE 直接 exit(1)（表现为 ECONNRESET）。
+const PORT = (() => {
+  if (args.port !== undefined && Number.isFinite(args.port)) return args.port;
+  if (process.env.PORT && Number.isFinite(Number(process.env.PORT))) return Number(process.env.PORT);
+  return 5181;
+})();
 const HOST = args.host || process.env.HOST || '127.0.0.1';
 
 function send(res, status, body, headers = {}) {
@@ -173,19 +184,26 @@ function analyzeRefVideo(req, res, bodyBuf) {
       const nextIdx = bodyBuf.indexOf(sep, dataStart);
       const dataEnd = nextIdx >= 0 ? nextIdx - 2 : bodyBuf.length;
       if (dataEnd <= dataStart) { send(res, 400, JSON.stringify({ ok: false, error: "E_EMPTY_UPLOAD" })); return; }
-      const tmpPath = path.join(os.tmpdir(), "cvs-ref-" + process.pid + "-" + Date.now() + ext);
-      fs.writeFileSync(tmpPath, bodyBuf.slice(dataStart, dataEnd));
+      // G5-4：tmp 路径此前由 pid+Date.now() 拼出——可预测，且 writeFileSync 跟随
+      // symlink（本机任意进程可预放链接让上传内容写到链接目标）。
+      // 现在 mkdtemp 独占 0700 目录 + 'wx' 拒已存在/拒 symlink。
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cvs-ref-"));
+      const tmpPath = path.join(tmpDir, "upload" + ext);
+      const fd = fs.openSync(tmpPath, "wx");
+      try { fs.writeSync(fd, bodyBuf.slice(dataStart, dataEnd)); } finally { fs.closeSync(fd); }
       const r = spawnSync(process.execPath, [
         path.join(ROOT, "scripts/ref-video.mjs"), "--video", tmpPath, "--json",
       ], { encoding: "utf8", timeout: 600000, maxBuffer: 32 * 1024 * 1024 });
-      try { fs.rmSync(tmpPath, { force: true }); } catch { /* 尽力清理 */ }
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* 尽力清理 */ }
       if (r.status !== 0 || !r.stdout || !r.stdout.trim()) {
-        const line = String(r.stderr || r.stdout || "").trim().split("/\r?\n/").pop() || "";
+        // G5-4：旧版此处按「/\r?\n/」**字符串**切分——从不按行切，stderr 整段进
+        // 错误消息、stdout 多行时 JSON.parse 必炸（伪装成 E_REF_VIDEO_UNPARSEABLE）。
+        const line = String(r.stderr || r.stdout || "").trim().split(/\r?\n/).pop() || "";
         send(res, 500, JSON.stringify({ ok: false, error: "E_REF_VIDEO_FAILED", message: line.slice(0, 200) }));
         return;
       }
       try {
-        const report = JSON.parse(r.stdout.trim().split("/\r?\n/").filter((l) => l.trim()).pop());
+        const report = JSON.parse(r.stdout.trim().split(/\r?\n/).filter((l) => l.trim()).pop());
         send(res, 200, JSON.stringify(report), { "Content-Type": "application/json; charset=utf-8" });
       } catch (e) {
         send(res, 500, JSON.stringify({ ok: false, error: "E_REF_VIDEO_UNPARSEABLE", message: String(e.message).slice(0, 120) }));
@@ -197,14 +215,62 @@ function analyzeRefVideo(req, res, bodyBuf) {
   send(res, 400, JSON.stringify({ ok: false, error: "E_NO_FILE_PART" }));
 }
 
+const MAX_REF_UPLOAD_BYTES = 400 * 1024 * 1024;
+// G5-4：并发闸。每个 analyze-ref 会把整段上传缓在内存再 spawnSync 一条
+// 10 分钟预算的 ffmpeg 链——不设闸的话几个并发 POST 就把这台开发机打死。
+const MAX_REF_INFLIGHT = 2;
+let refInFlight = 0;
+
+/** G5-4：写端点的同源闸，判定口径与 server/api.mjs 的 assertRequestOrigin 一致：
+ *  有 Origin 必须是回环（向导无 --cors 概念，不放行任何具名跨源）；Host 必须回环。 */
+function assertWizardWriteOrigin(req) {
+  const origin = req.headers && req.headers.origin;
+  if (origin) {
+    let ok = false;
+    try { ok = isLoopbackHost(new URL(origin).host); } catch { ok = false; }
+    if (!ok) return `origin not allowed: ${origin}`;
+  }
+  if (!isLoopbackHost(req.headers && req.headers.host)) {
+    return `host not allowed: ${req.headers && req.headers.host}`;
+  }
+  return null;
+}
+
 const server = http.createServer((req, res) => {
   // R8-W2：POST /api/analyze-ref —— 参考片反推（multipart 上传）。
   if (req.method === 'POST' && new URL(req.url, 'http://localhost').pathname === '/api/analyze-ref') {
+    // G5-4：Origin/Host 校验必须先于读 body——静态页/任意网页此前可白嫖这条
+    // 重管道（CSRF 型资源滥用）。宁可拒服务不可静默放行。
+    const originErr = assertWizardWriteOrigin(req);
+    if (originErr) {
+      req.resume();
+      send(res, 403, JSON.stringify({ ok: false, error: originErr.startsWith('origin') ? 'E_ORIGIN' : 'E_HOST', message: originErr }), { 'Content-Type': 'application/json; charset=utf-8' });
+      return;
+    }
+    // G5-4：Content-Length 预检——旧版只在流式累加中超 400MB 才断，声明天文
+    // 数字的攻击已让服务器建好监听器陪跑。超限直接拒，一个字节不收。
+    const declared = Number(req.headers['content-length']);
+    if (Number.isFinite(declared) && declared > MAX_REF_UPLOAD_BYTES) {
+      req.resume();
+      send(res, 413, JSON.stringify({ ok: false, error: 'E_BODY_TOO_LARGE', message: `参考片最大 ${MAX_REF_UPLOAD_BYTES} 字节` }), { 'Content-Type': 'application/json; charset=utf-8' });
+      return;
+    }
+    // G5-4：in-flight 闸——同 api.mjs 的 MAX_QUEUE 口径，满员回 429。
+    if (refInFlight >= MAX_REF_INFLIGHT) {
+      req.resume();
+      send(res, 429, JSON.stringify({ ok: false, error: 'E_REF_BUSY', message: `analyze-ref 并发已满（${MAX_REF_INFLIGHT}），稍后重试` }), { 'Content-Type': 'application/json; charset=utf-8' });
+      return;
+    }
+    refInFlight++;
+    let released = false;
+    const release = () => { if (!released) { released = true; refInFlight--; } };
+    res.on('close', release);
+    res.on('finish', release);
     const chunks = [];
     let size = 0;
     req.on('data', (c) => {
       size += c.length;
-      if (size > 400 * 1024 * 1024) { send(res, 413, JSON.stringify({ ok: false, error: 'E_BODY_TOO_LARGE', message: '参考片最大 400MB' })); req.destroy(); return; }
+      if (size > MAX_REF_UPLOAD_BYTES) { send(res, 413, JSON.stringify({ ok: false, error: 'E_BODY_TOO_LARGE', message: '参考片最大 400MB' })); req.destroy(); return; }
       chunks.push(c);
     });
     req.on('end', () => { analyzeRefVideo(req, res, Buffer.concat(chunks)); });

@@ -44,6 +44,65 @@ function specOf(specPath, root) {
   return { doc, p };
 }
 
+/**
+ * G5-2（2026-11 安全审计 E_OUTPATH_ESCAPE）：cvs_new 的 outPath 是不可信参数，
+ * 旧版 path.resolve(ROOT, p) 后直接 mkdir+writeFileSync——`../../outside` 这类
+ * 相对逃逸写在仓库外；绝对路径只要进程有权限也照写（复现见
+ * references/security-audit.md）。闸门规则：
+ *   1. 语法层：path.resolve(ROOT, outPath) 必须 isInside(ROOT)；
+ *   2. 真实层：realpath 目标（不存在则逐级解析已存在的最近祖先再拼回），
+ *      防 symlink 把「看起来在内」的路径引到仓库外；
+ *   越界 → 抛带 code=E_OUTPATH_ESCAPE 的 Error，工具层回结构化 error。
+ * 返回真实路径（写盘后用于回报）。宁可拒服务，不可静默放行。
+ */
+export function assertInsideRoot(rootDir, targetPath) {
+  const abs = path.resolve(rootDir, String(targetPath));
+  const inside = (parent, child) => {
+    const rel = path.relative(parent, child);
+    return rel === '' || (!!rel && !rel.startsWith('..') && !path.isAbsolute(rel));
+  };
+  if (!inside(rootDir, abs)) {
+    const e = new Error(`E_OUTPATH_ESCAPE: outPath escapes project root: ${targetPath}`);
+    e.code = 'E_OUTPATH_ESCAPE';
+    throw e;
+  }
+  // realpath 逐级回退：目标可能不存在（正要创建），解析到最近的已存在祖先。
+  let realRoot;
+  try { realRoot = fs.realpathSync(rootDir); } catch { realRoot = rootDir; }
+  let cur = abs;
+  const tail = [];
+  for (;;) {
+    try {
+      const real = fs.realpathSync(cur);
+      const rebuilt = tail.length ? path.join(real, ...tail.reverse()) : real;
+      if (!inside(realRoot, rebuilt)) {
+        const e = new Error(`E_OUTPATH_ESCAPE: outPath resolves outside project root (via symlink?): ${targetPath}`);
+        e.code = 'E_OUTPATH_ESCAPE';
+        throw e;
+      }
+      return rebuilt;
+    } catch (err) {
+      if (err.code === 'E_OUTPATH_ESCAPE') throw err;
+      if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
+        const e = new Error(`E_OUTPATH_ESCAPE: cannot verify outPath ${targetPath}: ${err.message}`);
+        e.code = 'E_OUTPATH_ESCAPE';
+        throw e;
+      }
+      const parent = path.dirname(cur);
+      if (parent === cur) {   // 到盘根仍不存在 → 用语法路径再判一次
+        if (!inside(realRoot, abs)) {
+          const e = new Error(`E_OUTPATH_ESCAPE: outPath escapes project root: ${targetPath}`);
+          e.code = 'E_OUTPATH_ESCAPE';
+          throw e;
+        }
+        return abs;
+      }
+      tail.push(path.basename(cur));
+      cur = parent;
+    }
+  }
+}
+
 // ── 子进程工具封装 ─────────────────────────────────────────────────────────
 
 /** 跑 `bin/cvs.mjs` 子命令；返回 {ok, exitCode, text}。timeout 秒（钳 10..1800）。 */
@@ -83,13 +142,14 @@ export const TOOLS = [
         const spec = await nl2spec(String(a.text), (a.overrides && typeof a.overrides === 'object') ? a.overrides : {});
         let wrote = null;
         if (a.outPath) {
-          const p = path.resolve(ROOT, String(a.outPath));
+          // G5-2：写盘前过根目录闸（语法 + realpath 两级），越界抛 E_OUTPATH_ESCAPE。
+          const p = assertInsideRoot(ROOT, a.outPath);
           fs.mkdirSync(path.dirname(p), { recursive: true });
           fs.writeFileSync(p, JSON.stringify(spec, null, 2));
           wrote = p;
         }
         return { text: `spec 已生成（kind=${spec.kind ?? 'promo'}, style=${spec.style?.id ?? '-'}）。${wrote ? `已写入 ${wrote}` : '未指定 outPath，未落盘。'}`, payload: { wrote, spec } };
-      } catch (e) { return { isError: true, text: String(e && e.message || e) }; }
+      } catch (e) { return { isError: true, code: e && e.code || undefined, text: String(e && e.message || e) }; }
     },
   },
   {
@@ -306,7 +366,8 @@ async function handle(msg) {
       if (!tool) return failReply(id, -32602, `unknown tool: ${params.name}`);
       try {
         const out = await tool.run(params.arguments || {});
-        return reply(id, { content: [{ type: 'text', text: out.text }], isError: !!out.isError });
+        // G5-2：结构化错误码随 result 投影（MCP 客户端忽略未知字段；回归测试据此断言）。
+        return reply(id, { content: [{ type: 'text', text: out.text }], isError: !!out.isError, ...(out.code ? { code: out.code } : {}) });
       } catch (e) {
         return reply(id, { content: [{ type: 'text', text: String(e && e.stack || e) }], isError: true });
       }
@@ -316,13 +377,25 @@ async function handle(msg) {
   }
 }
 
-const readline = (await import('node:readline')).default.createInterface({ input: process.stdin });
-readline.on('line', async (line) => {
-  if (!line.trim()) return;
-  let msg;
-  try { msg = JSON.parse(line); } catch { return failReply(null, -32700, 'parse error'); }
-  try { await handle(msg); } catch (e) { if (msg.id !== undefined) failReply(msg.id, -32603, String(e && e.message || e)); }
-});
+// ── stdio 主循环 ────────────────────────────────────────────────────────────
+// G5-2：加 isMain 闸——被 import（回归测试直调 TOOLS/assertInsideRoot）时
+// 不接管 stdin，否则测试进程会被 readline/stdin 挂住。行为对 CLI 启动不变。
+const isMain = (() => {
+  if (!process.argv[1]) return false;
+  const a = path.resolve(process.argv[1]);
+  const b = path.resolve(fileURLToPath(import.meta.url));
+  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+})();
 
-// stdin EOF 即退出（不常驻）
-process.stdin.on('end', () => process.exit(0));
+if (isMain) {
+  const readline = (await import('node:readline')).default.createInterface({ input: process.stdin });
+  readline.on('line', async (line) => {
+    if (!line.trim()) return;
+    let msg;
+    try { msg = JSON.parse(line); } catch { return failReply(null, -32700, 'parse error'); }
+    try { await handle(msg); } catch (e) { if (msg.id !== undefined) failReply(msg.id, -32603, String(e && e.message || e)); }
+  });
+
+  // stdin EOF 即退出（不常驻）
+  process.stdin.on('end', () => process.exit(0));
+}

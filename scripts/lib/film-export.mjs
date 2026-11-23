@@ -17,6 +17,7 @@
  */
 import path from 'node:path';
 import fs from 'node:fs';
+import { deepValidate } from '../../templates/spec-check.mjs';
 
 /** 轨道语义（与 OpenFilm SPEC 对齐）：person=人的轨道，agent 不许动。 */
 export const TRACK_FLAGS = { PERSON: 'person', AGENT: 'agent' };
@@ -27,6 +28,17 @@ const esc = (s) => String(s ?? '')
   // v4.9.3（证伪 F4）：overrides 写进**单引号** HTML 属性，撇号不转义会让
   // 含 don't 类文案截断属性甚至注入。
   .replace(/'/g, '&#39;');
+
+// G5-1（2026-11 安全审计）：JSON 字符串嵌入内联 <script> 时，`</script>` 会
+// 先于 JS 解析闭合标签——JSON.stringify 不转义 `<`，必须手工转成 \u003c。
+// U+2028/2029 在 JS 字符串里是行终止符，旧引擎同样截断脚本，一并转。
+// 导出以便回归测试直接验（写盘入口被 deepValidate 拦住非法 id，
+// 公开路径够不到这条防线，故做单元级断言）。
+export const jsString = (v) => JSON.stringify(v)
+  .replace(/</g, '\\u003c').replace(/>/g, '\\u003e')
+  .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+/** 数值字段钳制：spec.format 是不可信输入，非有限数回退默认（不进 HTML）。 */
+const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
 
 /** 每段的 OpenFilm 时间区间：at=起点秒；#t=in,out 由 t0/speed/duration 推。 */
 function clipRange(seg, fps = 30) {
@@ -66,12 +78,15 @@ function specToSegments(spec) {
   return segs;
 }
 
-/** 构造 film.html 主体（不写盘——测试与 CLI 共用）。 */
+/** 构造 film.html 主体（不写盘——测试与 CLI 共用）。
+ *  G5-1：纯字符串层，写盘入口是 writeFilmProject（带 spec 闸门）。
+ *  所有来自 spec 的文本进 HTML 前必须过 esc()/jsString()——纵深防御：
+ *  即便上游已校验，任何调用方拿到的输出也不许裸拼。 */
 export function buildFilmHtml(spec, { overridesByClip = null } = {}) {
   const fmt = spec.format || {};
-  const w = fmt.width || 1920;
-  const h = fmt.height || 1080;
-  const fps = fmt.fps || 30;
+  const w = num(fmt.width, 1920);
+  const h = num(fmt.height, 1080);
+  const fps = num(fmt.fps, 30);
   const sections = [];
   for (const s of specToSegments(spec)) {
     const page = String(s.page || '');
@@ -89,7 +104,10 @@ export function buildFilmHtml(spec, { overridesByClip = null } = {}) {
     if (personTrack) { flags.push('locked'); }
     else { flags.push('hidden'); }  // 风格轨默认隐藏：预览只显人控点
     const cls = `track cvs-${esc(s.kind)} ${flags.join(' ')}`;
-    sections.push(`<section class="${cls}"><iframe id="${id}" src="pages/${id}.html?${page.split('?')[1] || ''}${src}" at="${at.toFixed(3)}" style="left:0; top:0; width:${w}; height:${h}"${ov}></iframe></section>`);
+    // G5-1（审计复现载荷 `?a=x" onerror="alert(1)`）：page 的查询串此前裸拼进
+    // src 属性——一个双引号就逃出属性变成事件处理器。与 id 同口径过 esc()。
+    const pageQs = esc(page.split('?')[1] || '');
+    sections.push(`<section class="${cls}"><iframe id="${id}" src="pages/${id}.html?${pageQs}${src}" at="${at.toFixed(3)}" style="left:0; top:0; width:${w}; height:${h}"${ov}></iframe></section>`);
     void fps;
   }
   const body = sections.join('\n');
@@ -133,8 +151,21 @@ export function overridesToSpecPatch(spec, overridesByClip) {
 
 /** CLI：把 spec 展成 OpenFilm IR 目录（film.html + 每段页面壳）。
  *  S0-3：overridesByClip 真正下传 buildFilmHtml（此前 film.mjs 解析了却不传，
- *  导出的 film.html 里没有 overrides 属性）。 */
-export function writeFilmProject(spec, { outDir, overridesByClip = null }) {
+ *  导出的 film.html 里没有 overrides 属性）。
+ *  G5-1（2026-11 安全审计）：spec 是不可信输入（表单/agent/上传都可能喂），
+ *  写盘入口先过 deepValidate（内含 validateSpec 纯逻辑闸 + 页面存在性 +
+ *  主题/APCA），error 级问题直接拒绝导出——宁可拒服务不可静默放行。 */
+export function writeFilmProject(spec, { outDir, overridesByClip = null, root = process.cwd() } = {}) {
+  const { spec: validated, issues } = deepValidate(spec, { root });
+  const errs = issues.filter((i) => i.level === 'error');
+  if (errs.length) {
+    const first = errs[0];
+    const e = new Error(`E_SPEC: spec rejected by validateSpec/deepValidate — ${errs.length} error(s); first: [${first.code}] ${first.path}: ${first.message}`);
+    e.code = 'E_SPEC';
+    e.issues = errs;
+    throw e;
+  }
+  spec = validated;
   fs.mkdirSync(outDir, { recursive: true });
   const dir = path.dirname(outDir);
   const pagesDir = path.join(outDir, 'pages');
@@ -147,11 +178,14 @@ export function writeFilmProject(spec, { outDir, overridesByClip = null }) {
     const { at, durSec } = clipRange(s);
     const inSec = s.t0 || 0;
     const outSec = Math.max(inSec + 0.01, inSec + (durSec || 1));
-    const qs = `${String(s.page).split('?')[1] || ''}`;
-    const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=${(spec.format?.width || 1920)}, height=${(spec.format?.height || 1080)}"></head>
+    // G5-1：src 属性里的 page（含查询串）过 esc()，双引号不再能逃出属性。
+    const pageAttr = esc(String(s.page));
+    const vw = num(spec.format?.width, 1920);
+    const vh = num(spec.format?.height, 1080);
+    const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=${vw}, height=${vh}"></head>
 <body style="margin:0;background:#101014;">
-<iframe id="frame" src="${String(s.page)}${String(s.page).includes('?') ? '&' : '?'}seg=1&t0=${inSec}&speed=${s.speed || 1}&dur=${durSec.toFixed(3)}" style="position:fixed; inset:0; width:100%; height:100%; border:0;"></iframe>
-<script>window.__clip = { id: ${JSON.stringify(String(s.id))}, at: ${at.toFixed(3)}, out: ${outSec.toFixed(3)} };</script>
+<iframe id="frame" src="${pageAttr}${String(s.page).includes('?') ? '&' : '?'}seg=1&t0=${num(inSec, 0)}&speed=${num(s.speed, 1)}&dur=${durSec.toFixed(3)}" style="position:fixed; inset:0; width:100%; height:100%; border:0;"></iframe>
+<script>window.__clip = { id: ${jsString(String(s.id))}, at: ${at.toFixed(3)}, out: ${outSec.toFixed(3)} };</script>
 </body></html>`;
     fs.writeFileSync(path.join(pagesDir, `${stem}.html`), html);
     wrotePages++;

@@ -77,6 +77,20 @@ function parseValue(raw, jsonMode = false) {
 const SPEC_TOP_KEYS = new Set(['specVersion', 'meta', 'format', 'look', 'audio', 'structure',
   'opening', 'rounds', 'moreCard', 'flash', 'ending', 'assets', 'patches', 'render']);
 
+// G5-5（2026-11 安全审计）：--set 的路径段以前直接下标——
+// `meta.__proto__.polluted=1` 会走到 `cur = cur['__proto__']`（Object.prototype）
+// 再赋值，污染整个进程的原型链；`constructor`/`prototype` 同理。
+// 数组索引 `rounds.99999999.x` 在 while-push 循环里是无界内存 DoS。
+// 口径：宁可拒服务不可静默放行——抛错（E_SET_UNSAFE_PATH），不静默跳段。
+const UNSAFE_PATH_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
+const MAX_ARRAY_INDEX = 65535;
+
+function unsafePath(what, detail) {
+  const e = new Error(`E_SET_UNSAFE_PATH: ${what}${detail ? ` (${detail})` : ''}`);
+  e.code = 'E_SET_UNSAFE_PATH';
+  throw e;
+}
+
 function setPath(obj, dotted, value) {
   // R2-16：顶层键必须存在拼写检查——`--set roounds.0...` 这种错别字以前会凭空
   // 造出一个新键、lint 也不报（E_UNKNOWN_FIELD 只认已声明的 schema 节点）。
@@ -84,8 +98,11 @@ function setPath(obj, dotted, value) {
   if (!SPEC_TOP_KEYS.has(head)) {
     throw new Error(`--set ${dotted}: unknown top-level key "${head}" (spec keys: ${[...SPEC_TOP_KEYS].join(', ')})`);
   }
-  if (!dotted.includes('.')) { obj[dotted] = value; return; }
   const keys = dotted.split('.');
+  for (const k of keys) {
+    if (UNSAFE_PATH_SEGMENTS.has(k)) unsafePath(`--set ${dotted}: path segment "${k}" is forbidden (prototype pollution)`);
+  }
+  if (!dotted.includes('.')) { obj[dotted] = value; return; }
   let cur = obj;
   for (let i = 0; i < keys.length - 1; i++) {
     const k = keys[i];
@@ -93,6 +110,7 @@ function setPath(obj, dotted, value) {
     if (isIndex) {
       const n = Number(k);
       if (!Array.isArray(cur)) throw new Error(`--set ${dotted}: "${keys.slice(0, i + 1).join('.')}" is not an array`);
+      if (n > MAX_ARRAY_INDEX) unsafePath(`--set ${dotted}: array index ${n} exceeds cap ${MAX_ARRAY_INDEX}`);
       while (cur.length <= n) cur.push({});
       if (cur[n] == null || typeof cur[n] !== 'object') cur[n] = {};
       cur = cur[n];
@@ -130,7 +148,8 @@ function main() {
     try {
       setPath(spec, assignment.slice(0, eq).trim(), parseValue(assignment.slice(eq + 1), jsonMode));
     } catch (e) {
-      console.error(`[error] [E_USAGE] ${e.message}`);
+      // G5-5：不安全路径用专码报出（仍 exit 2 用法闸），其余照旧 E_USAGE。
+      console.error(`[error] [${e.code === 'E_SET_UNSAFE_PATH' ? 'E_SET_UNSAFE_PATH' : 'E_USAGE'}] ${e.message}`);
       process.exit(2);
     }
   }

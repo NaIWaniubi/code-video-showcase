@@ -52,10 +52,13 @@ const CORS_HEADERS = {
   'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length',
 };
 
-/** 允许的跨源白名单（空 = 不允许跨源）。 */
-let ALLOWED_ORIGINS = new Set();
-/** 可选 bearer token：--host 非回环时强制要求。 */
-let AUTH_TOKEN = '';
+/**
+ * G5-3（2026-11 安全审计）：ALLOWED_ORIGINS / AUTH_TOKEN 此前是**模块级 let**——
+ * 一个进程里 createJobServer(A, {cors}) 会把白名单泄给同进程的 server B（复现：
+ * B 对 A 的 origin 也回 ACAO）；token 同理互相污染，先建带 token 的 server 会
+ * 把 AUTH_TOKEN 永久留给后建的不带 token 的实例（反之亦然）。
+ * 现在两者收进 createJobServer 闭包：工厂函数按下述签名返回实例级实现。
+ */
 
 /** Host 头是否指向本机（含端口）。 */
 export function isLoopbackHost(hostHeader) {
@@ -63,32 +66,33 @@ export function isLoopbackHost(hostHeader) {
   return h === '' || h === '127.0.0.1' || h === 'localhost' || h === '::1';
 }
 
-/**
- * CSRF 防线：写操作必须来自同源。
- *
+/** 实例级 CSRF 防线：写操作必须来自同源。
  * 只靠「监听 127.0.0.1」不够——浏览器里的任意网页都能向 127.0.0.1:5190
  * 发一个 text/plain POST（simple request，不触发预检），服务端照样解析 body。
- * 所以：有 Origin 就必须是回环或 CORS 白名单；Host 必须是回环。
- */
-function assertRequestOrigin(req) {
-  const origin = req.headers?.origin;
-  if (origin) {
-    let ok = false;
-    try { ok = isLoopbackHost(new URL(origin).host); } catch { ok = false; }
-    if (!ok && !ALLOWED_ORIGINS.has(String(origin))) {
-      throw new HttpError(403, `origin not allowed: ${origin}`, 'E_ORIGIN');
+ * 所以：有 Origin 就必须是回环或 CORS 白名单；Host 必须是回环。 */
+function makeAssertRequestOrigin(allowedOrigins) {
+  return function assertRequestOrigin(req) {
+    const origin = req.headers?.origin;
+    if (origin) {
+      let ok = false;
+      try { ok = isLoopbackHost(new URL(origin).host); } catch { ok = false; }
+      if (!ok && !allowedOrigins.has(String(origin))) {
+        throw new HttpError(403, `origin not allowed: ${origin}`, 'E_ORIGIN');
+      }
     }
-  }
-  if (!isLoopbackHost(req.headers?.host)) {
-    throw new HttpError(403, `host not allowed: ${req.headers?.host}`, 'E_HOST');
-  }
+    if (!isLoopbackHost(req.headers?.host)) {
+      throw new HttpError(403, `host not allowed: ${req.headers?.host}`, 'E_HOST');
+    }
+  };
 }
 
-/** 当前请求允许的 CORS 头：白名单命中才发。 */
-function corsHeaders(req) {
-  const origin = req && req.headers && req.headers.origin;
-  if (!origin || !ALLOWED_ORIGINS.has(origin)) return {};
-  return { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' };
+/** 实例级 CORS 头：本实例白名单命中才发。 */
+function makeCorsHeaders(allowedOrigins) {
+  return function corsHeaders(req) {
+    const origin = req && req.headers && req.headers.origin;
+    if (!origin || !allowedOrigins.has(origin)) return {};
+    return { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' };
+  };
 }
 
 /**
@@ -148,18 +152,20 @@ function isInside(parent, child) {
   return rel === '' || (!!rel && !rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
-function sendJson(res, status, body, extra = {}, req = null) {
-  const data = Buffer.from(JSON.stringify(body));
-  res.writeHead(status, {
-    ...CORS_HEADERS,
-    ...corsHeaders(req),
-    ...extra,
-    'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': data.length,
-    'Cache-Control': 'no-store',
-    'X-Content-Type-Options': 'nosniff',
-  });
-  res.end(data);
+function sendJsonWith(corsHeaders) {
+  return function sendJson(res, status, body, extra = {}, req = null) {
+    const data = Buffer.from(JSON.stringify(body));
+    res.writeHead(status, {
+      ...CORS_HEADERS,
+      ...corsHeaders(req),
+      ...extra,
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Length': data.length,
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(data);
+  };
 }
 
 function readBody(req, limit = MAX_BODY_BYTES) {
@@ -291,12 +297,16 @@ export function createJobServer(opts = {}) {
   const concurrency = Math.max(1, Math.min(16, Math.floor(Number(opts.concurrency)) || 1));
   const compileScript = path.join(root, 'scripts', 'compile.mjs');
 
-  // CORS 白名单：默认空（同源）。--cors <origin[,origin]> / opts.cors 显式放行。
-  if (opts.cors) {
+  // G5-3：实例级 CORS 白名单与 token——绝不写模块变量，一进程多 server 互不污染。
+  const ALLOWED_ORIGINS = (() => {
+    if (!opts.cors) return new Set();
     const list = Array.isArray(opts.cors) ? opts.cors : String(opts.cors).split(',');
-    ALLOWED_ORIGINS = new Set(list.map((s) => String(s).trim()).filter(Boolean));
-  }
-  if (opts.token) AUTH_TOKEN = String(opts.token);
+    return new Set(list.map((s) => String(s).trim()).filter(Boolean));
+  })();
+  const AUTH_TOKEN = opts.token ? String(opts.token) : '';
+  const corsHeaders = makeCorsHeaders(ALLOWED_ORIGINS);
+  const assertRequestOrigin = makeAssertRequestOrigin(ALLOWED_ORIGINS);
+  const sendJson = sendJsonWith(corsHeaders);
 
   /** @type {Map<string, any>} */
   const jobs = new Map();

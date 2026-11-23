@@ -82,6 +82,18 @@ AUDIO="${POS[1]:?missing audio}"
 OUT="${POS[2]:?missing output}"
 DURATION="${DURATION_OVERRIDE:-${POS[3]:-61}}"
 FPS="${FPS_OVERRIDE:-${POS[4]:-30}}"
+# G5-7（2026-11 安全审计）：DURATION/FPS 此前未验数值就流进
+#   $((FPS * 2))            —— 算术展开对 `a[$(cmd)]` 形态会命令替换（复现：
+#                            FPS='a[$(touch proof)]' 实际执行了 touch），
+#   python -c "round($DURATION*$FPS)" / awk "BEGIN{...$DURATION*$FPS...}"
+#                            —— 插值进解释器源码，`;import os` 即代码执行。
+# 入口正则断言：DURATION 非负十进制、FPS 正整数；非数 exit 2（宁可拒服务）。
+if ! [[ "$DURATION" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+  echo "[concat] DURATION must be a plain decimal number (seconds), got: $DURATION" >&2; exit 2
+fi
+if ! [[ "$FPS" =~ ^[0-9]+$ ]] || [ "$FPS" -lt 1 ]; then
+  echo "[concat] FPS must be a positive integer, got: $FPS" >&2; exit 2
+fi
 FFMPEG="${FFMPEG:-ffmpeg}"
 FFPROBE="${FFPROBE:-ffprobe}"
 PYTHON="${PYTHON:-python3}"

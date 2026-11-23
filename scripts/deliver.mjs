@@ -180,7 +180,10 @@ function captionRows() {
     else if (s.kind === 'more' && s.card) text = [s.card.first, s.card.keyword].filter(Boolean).join(' ');
     else if (s.kind === 'style' && s.copy) text = s.copy.title || '';
     if (!text) continue;
-    out.push({ start: s.start, end: s.end, text: String(text).trim() });
+    // G5-6（2026-11 安全审计）：文案是 spec/plan 里的不可信内容，直接进
+    // VTT/SRT——一个换行就能伪造 cue 行（复现载荷 'legit\n00:00.000 --> 09:99.000\n…'），
+    // 播放器会把伪造行当真实字幕/样式指令执行。写盘前压平为空格（SRT/VTT 同路径）。
+    out.push({ start: s.start, end: s.end, text: String(text).replace(/[\r\n]+/g, ' ').trim() });
   }
   // R2-33（N08-F4）：零间隙 cue 在播放器里会粘成一片，部分校验器直接告警。
   // 相邻 cue 之间留 ≥0.1s 呼吸（收的是前一条的尾，不动画面时序；短于 0.2s 的不动）。

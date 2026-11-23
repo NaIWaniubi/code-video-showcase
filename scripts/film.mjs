@@ -46,7 +46,9 @@ try {
   // S0-3（内审 F3）：ovMap 此前只用来打汇总行，从未进导出器——film.html 里
   // 根本没有 overrides 属性，「非破坏编辑层」名存实亡。现在真正传给
   // writeFilmProject→buildFilmHtml，先产片再汇总。
-  const res = writeFilmProject(raw, { outDir, overridesByClip: ovMap });
+  // G5-1：writeFilmProject 入口过 validateSpec/deepValidate（root 决定页面
+  // 存在性判定基准），被拒的 spec 不再产出任何文件。
+  const res = writeFilmProject(raw, { outDir, overridesByClip: ovMap, root: path.resolve(String(args.root || process.cwd())) });
   console.error(`[film]   ${res.filmPath}（${res.pages} 个页面壳 · 尺寸 ${raw.format?.width || 1920}×${raw.format?.height || 1080}）`);
   if (ovMap) {
     const patch = overridesToSpecPatch(raw, ovMap);
