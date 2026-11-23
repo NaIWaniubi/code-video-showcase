@@ -3,6 +3,20 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.11.0] - 2026-11-23 — S8 定案：冷重跑像素幂等修复（病灶是 CDP 回读链，不是 SwiftShader）
+
+六路并行深度审计（引擎/QA闸面/ROADMAP对账/CI分发/安全/生态，共 61 finding）后的第一刀，落 `docs/ROADMAP-GAPS-2026-11.md` G2。v4.10.0 诚实立案的那颗雷，本版本定位到层并修复。
+
+- **根因纠偏**：v4.10.0 猜「SwiftShader 光栅 worker 调度」——**错**。三层隔离实测坐实：raw 路径 3/3 逐字节同、canvas 路径 3/3 同、**cdp 合成器截图路径 6 次里 2 次偏离**（PSNR≈73dB，LSB 级，非帧位移）。触发点：`resolveCaptureMode` 的 `visibleOverlay` 启发式把 canvas 的**布局父节点** `#stage`（`segment.html`/`big-card.html` 都是 `<div id=stage><canvas/></div>`）误判为可见覆盖层 → 全部内建页被踢进非确定的 CDP 路径（且慢 4×）。裸 `<canvas>` 的 recipe-flat 不受影响。
+- **修法**：`visibleOverlay` 忽略 canvas 的祖先节点（仅当祖先自绘背景时才算层，即半透明画布+衬底场景）；真 DOM 覆盖层继续用 `data-dom-overlay` 显式声明。**不降口径**：修 forward 让内建页回确定性捕获链，「同输入同字节」对外承诺保持满格。
+- **端到端证据**：`determinism-check --video` 用当年立案的复现配置（640×360 cyber-neon 三连跑）——容器层 + 解码帧层（framemd5）**逐字节同**。
+- **探针补盲（G2-3）**：`determinism-check` 此前只传 `--page/--duration`，无法表达 `--width/--height/--fps/--capture` → S8 类现象结构上测不到（只能渲默认 1080p 配置，而首次偏离在第 61 帧后）。现在透传全部画幅/帧率/捕获旋钮，并把判据从「整只 mp4 一个 sha」升为**容器/解码帧两层分离归因**（复刻 R2-11 三层法）：容器异而分帧同 = mux 抖动（软失败，像素仍可复现）；分帧异 = 真像素漂移（P0 红）。
+- **缓存混拼堵漏（G2-4，审计 F2）**：`capture/format/quality/crf/preset/tune/warmup/browser` 改像素/字节但不进 segmentHash（内容口径，刻意不绑机器）——此前带非默认旋钮直调 render-batch/farm 会把新字节写进同一个 `<hash>.mp4` 槽，正常构建命中「异内容同缓存键」。现在非默认旋钮折进缓存文件名后缀 + meta.knobs 双校验 + resume 核对旋钮；**全默认 → 空后缀，存量 warm 缓存原样命中不失效**。
+- **可审计性（G2-2）**：resolved capture 模式（raw/canvas/cdp）与渲染后端落进 render-manifest 段条目，事后能判定某段是哪条回读链产的——这是 G9 哈希证书/跨机重放验证器的前置。
+- **SSRF 解包（G5 移交，审计 P2）**：`PRIVATE_HOST_RE` 裸正则被 `[::ffff:7f00:1]`（127.0.0.1 的十六进制映射）、`[::ffff:a9fe:a9fe]`（169.254 云元数据）、打包整数 `http://2130706433/` 三式绕过。改为先解包 IPv4-mapped IPv6（点分/十六进制）与打包 IPv4 再判段；新增 `scripts/test-ssrf-ipv6.mjs`（17 私网载荷全拦 + 4 公网不误伤）。
+- **CDP 截图超时**：30s 硬编码 → 随页面 timeout 预算（默认 120s）；1080p `Page.captureScreenshot` 在软件光栅下 30s 不够，探针首跑即因此 `[fatal] CDP timeout` 而红因与「非确定」混淆。
+- 影响：捕获路径纠正 → 走 cdp 的段 pageHash 不变但**渲染字节会变**（cdp→raw/canvas）→ 建议重定 golden 基线（G8，随后续切片一并做）；determinism 探针输出格式新增 frame 层，`gate`/nightly 消费方无破坏性改动。
+
 ## [v4.10.1] - 2026-11-23 — 文案消耗矩阵：20 个配方页 ?title/?sub 全接通（成片目检第二击）
 
 - blur 版校园墙母带目检发现 datarace 仍显示内建标题「播放量竞速」→ 全仓审计：cyber-pixel 不吃 ?title、

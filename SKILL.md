@@ -1,6 +1,6 @@
 ---
 name: code-video-showcase
-version: 4.10.1   # 与 package.json 同值（test-version-sync 钉死）
+version: 4.11.0   # 与 package.json 同值（test-version-sync 钉死）
 description: |
   用纯代码（HTML/Canvas/SVG/Three.js 逐帧渲染 + Python numpy/scipy 合成配乐 + FFmpeg 合成）制作 30–90 秒卡点风格展示视频的完整技能。
   适用于：复刻/仿制《Opus 5.5 视频风格展示》或 DeepSeek V4.1-Flash 61s 风格样片、多风格切换卡点视频、纯代码视频、程序化视频；要求不使用任何视频/图像/音乐生成模型。
