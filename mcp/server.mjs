@@ -19,6 +19,7 @@
  *   cvs_edit       结构四件套（split/drop/move/trim，默认 dry-run）
  *   cvs_suggest    建议切点（内核直调，瞬时无浏览器）
  *   cvs_qa         双闸质检
+ *   cvs_diff       复刻度量（ref video --compare 的包装：切点对齐/节奏/色板/帧级吻合率）
  *   cvs_ship       交付打包（--check 预检）
  *   cvs_demo       导演演示集一键出片
  *   cvs_caption  本地词级字幕（识别/注入两模式）
@@ -246,6 +247,22 @@ export const TOOLS = [
       const args = ['qa', a.videoPath, ...(a.planPath ? ['--plan', a.planPath] : []), ...(a.strict ? ['--strict'] : [])];
       const r = await runCvs(args, { timeoutSeconds: 900 });
       return { isError: !r.ok, text: resultText(r.text.slice(-6000), `qa exit=${r.exitCode}`) };
+    },
+  },
+  {
+    name: 'cvs_diff',
+    description: 'G10/S3 复刻度量：包装 `cvs ref video <ref> --compare <mine>` 的现成能力（不另造 diff 引擎）——切点对齐（±0.4s 最近邻 + 偏移分布）、节奏相似度、色板距离、帧级吻合率与整体 verdict。ref=参考片，mine=复刻片，out=报告目录（可选，默认 analysis/<ref 名>）。',
+    inputSchema: { type: 'object', properties: {
+      ref: { type: 'string', description: '参考片路径（cvs ref video 的第一参数）' },
+      mine: { type: 'string', description: '复刻片路径（--compare 的目标）' },
+      out: { type: 'string', description: '可选：报告输出目录（ref video --out）' },
+    }, required: ['ref', 'mine'] },
+    run: async (a) => {
+      if (!a.ref || !a.mine) return { isError: true, text: 'cvs_diff 需要 ref 与 mine 两个路径' };
+      const args = ['ref', 'video', String(a.ref), '--compare', String(a.mine), '--json'];
+      if (a.out) args.push('--out', String(a.out));
+      const r = await runCvs(args, { timeoutSeconds: 900 });
+      return { isError: !r.ok, text: resultText(r.text.slice(-6000), `diff exit=${r.exitCode}`) };
     },
   },
   {

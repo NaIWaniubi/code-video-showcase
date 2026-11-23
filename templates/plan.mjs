@@ -17,6 +17,13 @@ import { spawnSync } from 'node:child_process';
 import { buildPlan as buildLegacyPlan, concatList, formatPlan } from './timeline.mjs';
 import { normalizeSpec, validateSpec, specToTimeline, specDuration, SPEC_VERSION, ENGINE_VERSION } from './spec.mjs';
 import { browserCandidates } from './cdp.mjs';
+// G10/S3-3 seam gate 的数据面：入场向量语义是仓内既有定义，不新造账本——
+// MOTION_PROFILES[level].transition 是「入场转场」（motion-profile.mjs 字段注释），
+// transitionParams(name, 0) 给出该入场在 t=0 的初始位移 {x,y}（motion.js：位移随 t→1
+// 归零，即元素从该位移处滑入）。出场侧同表只有标量档（easeOut 回弹缓动名，无方向），
+// 所以静态判据落在「相邻段入场位移向量是否一致」上——方向学编辑的第一矛盾。
+import { motionParams, isMotionLevel } from './motion-profile.mjs';
+import { transitionParams } from './motion.js';
 
 export const PLAN_VERSION = 2;
 
@@ -247,6 +254,46 @@ export function segmentHash(segment, meta, spec, opts = {}) {
   return crypto.createHash('sha256').update(payload).digest('hex').slice(0, 16);
 }
 
+/**
+ * G10/S3-3 seam gate：静态校验相邻段「出场/入场运动向量」一致性。
+ *
+ * 判据（纯静态、零新依赖；表数据全部来自 motion-profile.mjs + motion.js 既有定义）：
+ *   - 段的有效档位 = segment.motion || plan.meta.motion || 'standard'；
+ *   - 入场向量 = transitionParams(MOTION_PROFILES[档位].transition, 0) 的初始位移 (x, y)。
+ *     现有四档里只有 dynamic/whip 带横向位移（+0.18，即从右侧甩入），
+ *     slam/fade/glitch 均无方向分量——所以本闸当前恰好拦「whip 贴着非 whip」
+ *     这类方向接缝，calm↔standard↔maximal 相邻不误报（各向同性入场视为一致）。
+ *   - 不一致 → W_SEAM_DIRECTION（warn）。默认不拦；plan.mjs --strict 升级为拦截。
+ *
+ * @param {{segments?:Array<object>, meta?:object}} plan buildPlanFromSpec 产物或其片段
+ * @returns {Array<{code:string, path:string, level:string, message:string}>}
+ */
+export function seamDirectionIssues(plan) {
+  const issues = [];
+  const segments = (plan && Array.isArray(plan.segments)) ? plan.segments : [];
+  const metaMotion = plan && plan.meta && plan.meta.motion;
+  const fallback = isMotionLevel(metaMotion) ? metaMotion : 'standard';
+  const entry = (seg) => {
+    const level = isMotionLevel(seg && seg.motion) ? seg.motion : fallback;
+    const p = motionParams(level);
+    const t0 = transitionParams(p.transition, 0);
+    return { level, transition: p.transition, x: Number(t0.x) || 0, y: Number(t0.y) || 0 };
+  };
+  for (let i = 0; i + 1 < segments.length; i++) {
+    const a = entry(segments[i]);
+    const b = entry(segments[i + 1]);
+    if (a.x === b.x && a.y === b.y) continue;
+    const fmt = (v) => `${v.level}/${v.transition}(${v.x.toFixed(2)},${v.y.toFixed(2)})`;
+    issues.push({
+      code: 'W_SEAM_DIRECTION',
+      path: `${segments[i] && segments[i].id}→${segments[i + 1] && segments[i + 1].id}`,
+      level: 'warn',
+      message: `seam motion vector mismatch: ${fmt(a)} next to ${fmt(b)} — unify look.motion or the per-segment style.motion (or accept the cut); --strict blocks this seam`,
+    });
+  }
+  return issues;
+}
+
 function assertPages(spec, root) {
   const missing = [];
   const pages = [
@@ -343,6 +390,13 @@ export function buildPlanFromSpec(input, opts = {}) {
     patches: spec.patches || [],
   };
   plan.warnings = warnings.map((w) => ({ code: w.code, path: w.path, message: w.message }));
+  // G10/S3-3：seam gate —— 段表成形后才能查相邻段入场向量；结果同时进
+  // issues（返回值）与 plan.warnings（交付物），下游 compile/qa 只读不改。
+  const seamIssues = seamDirectionIssues(plan);
+  for (const s of seamIssues) {
+    issues.push(s);
+    plan.warnings.push({ code: s.code, path: s.path, message: s.message });
+  }
   // S5a 运动模糊：档位 → tmix 权重（进 meta.blur → segmentHash）；渲染参数下发走
   // renderArgs（farm/batch 纯透传），qa/probe/concat 看到的输出帧率帧数与关时同构。
   plan.meta.blur = BLUR_WEIGHTS[spec.render?.motionBlur] || '';
@@ -371,7 +425,7 @@ export function buildPlanFromSpec(input, opts = {}) {
 // 一律被拒），这是把 build 全链打红的回归点。
 import { parseStrict, rejectUnknown } from '../scripts/lib/strict-flags.mjs';
 const PROG_PLAN = 'node templates/plan.mjs';
-const PLAN_KNOWN = new Set(['spec', 'out', 'concat', 'root', 'outdir', 'check', 'print', 'json', 'help']);
+const PLAN_KNOWN = new Set(['spec', 'out', 'concat', 'root', 'outdir', 'check', 'print', 'json', 'strict', 'help']);
 
 function main() {
   // CLI 解析收在这里（本模块也作为库被 compile.mjs import，顶层解析会误伤）。
@@ -387,6 +441,7 @@ function main() {
   --root <dir>            project root (default cwd)
   --outdir <dir>          override outDir
   --check                 validate only
+  --strict                W_SEAM_DIRECTION (adjacent-segment motion vectors) blocks
   --print                 print segment table
   --json                  print plan JSON (only JSON on stdout; progress → stderr)`);
     process.exit(0);
@@ -409,9 +464,22 @@ function main() {
   if (args.check) {
     const spec = normalizeSpec(raw);
     const issues = [...validateSpec(spec), ...assertPages(spec, root)];
+    // G10/S3-3：seam gate 只在 spec 无硬错时跑（有错则 timeline 构造可能抛，跳过即可）。
+    if (!issues.some((i) => i.level === 'error')) {
+      try {
+        const tl = specToTimeline(spec, { root });
+        issues.push(...seamDirectionIssues(buildLegacyPlan(tl, { root })));
+      } catch { /* timeline 构造异常不是 seam 的锅，交给正常 build 路径报 */ }
+    }
     for (const i of issues) console.error(`[${i.level}] [${i.code}] ${i.path}: ${i.message}`);
-    const errors = issues.filter((i) => i.level === 'error');
-    if (errors.length) process.exit(10);
+    // --strict：W_SEAM_DIRECTION 升级为拦截（与 compile/lint 的 strict 语义一致）。
+    const blocking = issues.filter((i) => i.level === 'error' || (args.strict && i.code === 'W_SEAM_DIRECTION'));
+    if (blocking.length) {
+      if (args.strict && !issues.some((i) => i.level === 'error') && issues.some((i) => i.code === 'W_SEAM_DIRECTION')) {
+        console.error('[strict] W_SEAM_DIRECTION 视为失败：统一 look.motion 或去掉 --strict 接受该接缝');
+      }
+      process.exit(10);
+    }
     console.log(`✓ spec valid: ${spec.rounds.length} rounds, ${specDuration(spec)}s @ ${spec.format.fps}fps, ${spec.look.theme}`);
     return;
   }
@@ -428,6 +496,11 @@ function main() {
   }
   const { plan, spec } = built;
   for (const w of plan.warnings) console.error(`[warn] [${w.code}] ${w.path}: ${w.message}`);
+  // --strict：seam 不一致拦在写盘之前（plan.json 不落半成品账）。
+  if (args.strict && plan.warnings.some((w) => w.code === 'W_SEAM_DIRECTION')) {
+    console.error('[strict] W_SEAM_DIRECTION 视为失败：统一 look.motion 或去掉 --strict 接受这些接缝');
+    process.exit(10);
+  }
 
   const outDir = plan.meta.outDir;
   const planPath = path.resolve(String(args.out || path.join(root, outDir, 'plan.json')));

@@ -523,6 +523,31 @@
         }
       }
     },
+    "footage": {
+      "type": "array",
+      "description": "G10/ingest：实拍素材元数据清单（cvs ingest 的 EDL 视频源登记处，时间线语义在 script[].source）。当前为待消费账本——渲染消费层（drawImage+frame(t)）在 S6/G10 落地；与 assets kind:video 不同，footage 不会过 lint 却静默不进画面。",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "path"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
     "patches": {
       "type": "array",
       "description": "画布编辑产生的参数补丁；scope 为空表示全片，否则为段 id。",

@@ -511,16 +511,27 @@ export function edlToScript(edl, opts = {}) {
     flash: { count: 0, each: 0.25 },
   };
 
-  // 素材清单：同一 src 只登记一次
+  // 素材清单：同一 src 只登记一次。G10 联动（E_VIDEO_UNCONSUMED）：视频源登记为
+  // **footage 元数据**而非 assets kind:video——不再制造「过 lint 却永不进画面」的
+  // 暗雷；S6/G10 落地 drawImage+frame(t) 消费层时 footage 就是入口（时间线语义已在
+  // script[].source 里）。音频仍走 assets（合成链路真消费）。
   const assets = [];
+  const footage = [];
   const seen = new Set();
+  const seenFoot = new Set();
   for (const clip of picked) {
     const src = String(clip.src);
+    if (VIDEO_EXT.test(src)) {
+      if (seenFoot.has(src)) continue;
+      seenFoot.add(src);
+      footage.push({ id: `f${pad2(footage.length + 1)}`, path: src.replace(/\\/g, '/'), hash: clip.hash ?? null });
+      continue;
+    }
     if (seen.has(src)) continue;
     seen.add(src);
     assets.push({
       id: `a${pad2(assets.length + 1)}`,
-      kind: VIDEO_EXT.test(src) ? 'video' : 'audio',
+      kind: 'audio',
       path: src.replace(/\\/g, '/'),
       hash: clip.hash ?? null,
       loop: false,
@@ -559,6 +570,7 @@ export function edlToScript(edl, opts = {}) {
     ending: { page: scenePages, name: 'ending' },
     script: blocks,
     assets,
+    footage,
     patches: [],
     render: {
       quality: 'master',

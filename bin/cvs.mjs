@@ -93,6 +93,8 @@ const commands = {
   motion:   (a) => node('scripts/motion.mjs', a),
   // R6 旗舰入口：cvs demo <style> 一键排演示片（导演演示集六件）。
   demo:    (a) => node('scripts/demo.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
+  // G10/S3-4：spec⇄Motion.md（五维 rubric 文档视图 / 反向只出 patch 建议，不直改 spec）。
+  motionmd: (a) => node('scripts/motionmd.mjs', a.length ? a : ['--help']),
   // R11-W2：一键全身体检（doctor + 错误码注册表 + 矩阵 + golden 位级基线）
   health: (a) => node('scripts/health.mjs', a),
   ship:   (a) => node('scripts/ship.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
@@ -148,6 +150,8 @@ usage: cvs <command> [args]
   ingest <file|dir> --target <sec>       footage -> EDL + spec draft
   brand apply|check|list                 brand kit apply / compliance check
   motion list|show|derive|matrix         motion profile levels + kind×style derivation
+  motionmd <spec> [--out f.md]           spec -> five-dimension Motion.md (hook/shot/pacing/type/sound)
+  motionmd --parse <f.md> [--json]       Motion.md -> spec patch *suggestions* (never edits spec)
   golden [--update|--selfcheck]          byte-exact still regression
   image [--spec f] [--set a,b] [--at t]  spec -> image set (cover/card/poster/story/...); --list shows presets
   api [--port 5190] [--host h] [--token t]  job-queue HTTP service (origin-checked)

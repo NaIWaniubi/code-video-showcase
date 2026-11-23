@@ -5,7 +5,7 @@
  *   node scripts/test-mcp-server.mjs
  *
  * 驱动真实子进程 + 真线协议（newline-delimited JSON-RPC 2.0）：
- *   initialize → tools/list（10 工具 + inputSchema）→ suggest/lint/new 实调
+ *   initialize → tools/list（15 工具 + inputSchema）→ suggest/lint/new 实调
  *   → 未知工具错误码 → stdin EOF 干净退出。
  */
 import assert from 'node:assert/strict';
@@ -54,12 +54,14 @@ async function rpc(send, id, method, params) {
     send({ jsonrpc: '2.0', method: 'notifications/initialized' });
     await sleep(150);
 
-    // 3) tools/list —— 10 个工具全带 inputSchema
+    // 3) tools/list —— 15 个工具全带 inputSchema（G10：cvs_attest(G9)+cvs_diff 入表后
+    //    的硬计数断言——再加工具必须同步这里，计数说谎正是 G1-2 点名过的病）。
     r = await rpc(send, 2, 'tools/list');
     const names = r.result.tools.map((t) => t.name);
-    for (const n of ['cvs_new','cvs_lint','cvs_plan','cvs_build','cvs_edit','cvs_suggest','cvs_qa','cvs_ship','cvs_demo','cvs_health','cvs_taste','cvs_caption','cvs_image']) {
+    for (const n of ['cvs_new','cvs_lint','cvs_plan','cvs_build','cvs_edit','cvs_suggest','cvs_qa','cvs_ship','cvs_demo','cvs_health','cvs_taste','cvs_caption','cvs_image','cvs_attest','cvs_diff']) {
       assert.ok(names.includes(n), `缺工具 ${n}`);
     }
+    assert.equal(names.length, 15, `工具数应为 15，实际 ${names.length}：${names.join(',')}`);
     assert.ok(r.result.tools.every((t) => t.inputSchema && t.inputSchema.properties), '每个工具都要有 inputSchema');
 
     // 4) cvs_suggest —— 内核直调，瞬时
@@ -86,7 +88,7 @@ async function rpc(send, id, method, params) {
     assert.equal(r.error.code, -32601);
 
     passed++;
-    console.log('PASS  MCP 全套线协议握手 + 10 工具 + 实调（suggest/lint/new）+ 错误码 + EOF');
+    console.log('PASS  MCP 全套线协议握手 + 15 工具 + 实调（suggest/lint/new）+ 错误码 + EOF');
   } finally {
     child.stdin.end();          // EOF → server 应干净退出
     const code = await new Promise((res) => child.on('exit', res));

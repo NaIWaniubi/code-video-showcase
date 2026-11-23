@@ -25,7 +25,7 @@ import { writeZip } from './lib/zip.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROG = 'node scripts/ship.mjs';
-const KNOWN = new Set(['spec', 'out', 'json', 'check', 'force', 'strict', 'help']);
+const KNOWN = new Set(['spec', 'out', 'json', 'check', 'force', 'strict', 'emit-motion', 'help']);
 const argv = process.argv.slice(2);
 const positional = argv.filter((a) => !String(a).startsWith('--'));
 const { args, unknown } = parseStrict(argv, KNOWN);
@@ -38,6 +38,9 @@ if (args.help || positional.length < 1) {
   --check             打包前对 master.mp4 跑双闸 QA + 审美闸 taste（FAIL 时默认拒绝打包，--force 可强出）
   --strict            传给 taste：warning 级也拦（error 级永远拦）
   --force             QA 未过也照常打包（如实标注）
+  --emit-motion       附带 .motion rc.1 打包档：motion/manifest.json + motion/shots.json
+                      （纯打包：从 out/plan.json 的 segments 映射 meta+shots，零新依赖；
+                      plan.json 缺席时如实跳过）
   --json              one-line JSON on stdout, human text to stderr`);
   process.exit(args.help ? 0 : 2);
 }
@@ -70,6 +73,55 @@ addIf('plan', path.join(deliverableDir, 'plan.json'));
 if (missing.length) {
   // 成片缺席是最常见的前置缺失——说清楚，而不是安静出空壳
   console.error(`[warn] 以下产物未找到（确认已 cvs build 过）：${missing.join(', ')}`);
+}
+
+// ── G10/S3-4：--emit-motion 纯打包 .motion rc.1 目录档 ────────────────────
+// 从 plan.segments 映射 meta + shots 列表；零新依赖（writeZip 已在用，json 手搓）。
+// 语义诚实：这是 CVS plan 到 .motion 目录结构的**打包档**，只做结构映射
+// （startFrame/frames → startSec/durationSec），不重跑渲染、不声称字节等价。
+// plan.json 缺席时如实降级（不伪造 motion/ 目录）。
+let emitMotion = false;
+if (args['emit-motion']) {
+  emitMotion = true;
+  const planFile = path.join(deliverableDir, 'plan.json');
+  if (fs.existsSync(planFile)) {
+    try {
+      const plan = JSON.parse(fs.readFileSync(planFile, 'utf8'));
+      const fps = Number(plan.meta?.fps) || 30;
+      const manifest = {
+        format: 'motion/rc.1',
+        generatedBy: 'code-video-showcase ship --emit-motion',
+        meta: {
+          name: String(raw.meta?.name || stem),
+          title: String(raw.meta?.title || raw.meta?.name || stem),
+          fps,
+          width: Number(plan.meta?.width) || null,
+          height: Number(plan.meta?.height) || null,
+          durationSec: Number(plan.stats?.duration ?? null),
+          theme: plan.meta?.theme || null,
+          motion: plan.meta?.motion || null,
+        },
+      };
+      const shots = (Array.isArray(plan.segments) ? plan.segments : []).map((s) => ({
+        id: s.id ?? null,
+        kind: s.kind ?? null,
+        label: s.label ?? null,
+        startSec: Number(((s.startFrame || 0) / fps).toFixed(4)),
+        durationSec: Number(((s.frames || 0) / fps).toFixed(4)),
+        startFrame: s.startFrame ?? null,
+        frames: s.frames ?? null,
+        page: s.page ?? null,
+        hash: s.hash ?? null,
+      }));
+      files.set(`${stem}/motion/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2) + '\n', 'utf8'));
+      files.set(`${stem}/motion/shots.json`, Buffer.from(JSON.stringify({ shots }, null, 2) + '\n', 'utf8'));
+      console.error(`[ship]  --emit-motion: motion/manifest.json + motion/shots.json（${shots.length} shots，纯打包自 plan.segments）`);
+    } catch (e) {
+      console.error(`[warn] --emit-motion 解析 plan.json 失败，未生成 motion/：${String(e.message || e)}`);
+    }
+  } else {
+    console.error('[warn] --emit-motion 需要 out/plan.json（先 cvs plan/build），未生成 motion/ 目录');
+  }
 }
 
 // ── R11-W1：打包前双闸 QA ──────────────────────────────────
@@ -181,13 +233,17 @@ if (mode === 'dir') {
 
 const archiveName = mode === 'zip' ? `${stemFull}.zip` : null;
 const result = { ok: true, stem, entries: files.size, mode, archive: archiveName,
+  emitMotion,
   missing, qaChecked: !!args.check, qaPass: args.check ? qaStatus === 0 : null,
   tasteChecked: args.check ? tasteStatus !== null : false,
   tastePass: tasteStatus === null ? null : tasteStatus === 0, tasteExit: tasteStatus };
 if (args.json) process.stdout.write(JSON.stringify(result) + '\n');
 
 // 缺成片不算失败（清单如实标注），但要留痕给自动化判断
-if (missing.includes('master.mp4')) {
+// G10 回归：addIf 登记的是 relName（'master'），旧判断查 'master.mp4' 恒 false，
+// 「缺 master 退 13」这条留痕从未生效。两种拼写都认，行为回到文件头注释的口径。
+const masterMissing = missing.some((m) => m === 'master' || m === 'master.mp4');
+if (masterMissing) {
   console.error('[warn] 包内没有 master.mp4——这不是完整交付（先 cvs build）');
 }
-process.exit(missing.includes('master.mp4') ? 13 : 0);
+process.exit(masterMissing ? 13 : 0);
