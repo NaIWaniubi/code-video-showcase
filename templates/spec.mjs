@@ -578,6 +578,17 @@ export function validateSpec(spec) {
       err('E_ASSET_PATH', `${at}.path`,
         `asset path "${bare}" escapes the project root; use a relative path without ".."`);
     }
+    // G10/S6 诚实账（S0-6「半成品不留」欠账）：kind=video 的资产能过 lint、能进
+    // plan.spec.assets，但渲染链没有任何消费者（全仓 grep kind==='video' 的消费 = 0）
+    // ——「过闸却永不进画面」是暗雷。显性拒绝，直到 S6 消费者落地（ROADMAP-GAPS-2026-11
+    // S6/G10：drawImage+frame(t) 实拍消费契约）；届时摘掉本闸即可，
+    // schema/project.spec.schema.json 的 assets.kind enum 保留 "video" 不动。
+    if (a.kind === 'video') {
+      err('E_VIDEO_UNCONSUMED', `${at}.kind`,
+        `kind "video" has no render consumer yet: it would pass lint and never reach the picture. ` +
+        `Planned in S6/G10 (docs/ROADMAP-GAPS-2026-11.md): drawImage+frame(t) footage consumption. ` +
+        `Until then use kind "image" for stills, or route footage through ingest (cvs ingest).`);
+    }
   });
 
   if (!spec.look?.theme) err('E_THEME', 'look.theme', 'theme id is required');

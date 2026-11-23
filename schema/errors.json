@@ -240,6 +240,18 @@
       "meaning": "style.copy.caption 有内容但全仓无页面消费 ?caption=（死文案，历史上静默丢值）；plan 已停发该参数",
       "action": "改用 style.copy.subtitle（各 recipe 页已接通 ?sub=）或 opening.capsule；确要保留 caption 字段则忽略此警告"
     },
+    "W_SEAM_DIRECTION": {
+      "phase": "spec",
+      "exit": 0,
+      "meaning": "G10/S3-3 seam gate：plan 生成时发现相邻段的入场运动向量不一致——一侧是 whip（dynamic，从侧向甩入，有横向位移）一侧是无方向入场（slam/fade/glitch）。默认只 WARN 不拦（`cvs plan` 的 [warn] 行）；`cvs plan --strict` 升级为拦截 exit 10",
+      "action": "统一全片 look.motion，或给接缝两侧段写相同的 style.motion 覆盖；刻意保留方向反差（甩入接砸入做重音）就去掉 --strict 接受它"
+    },
+    "E_VIDEO_UNCONSUMED": {
+      "phase": "asset",
+      "exit": 10,
+      "meaning": "G10/S6 诚实账：assets[].kind=\"video\" 被拒绝——渲染链没有任何 video 消费者（全仓消费点=0），这种资产能过 lint、进 plan，却永不进画面。显性拒绝替代「半成品不留」的暗雷（S0-6 欠账）。schema assets.kind enum 仍保留 video，S6 落地时只摘本闸",
+      "action": "静帧用 kind=\"image\"；实拍素材走 `cvs ingest` 产 EDL/spec draft。消费契约（drawImage+frame(t)）见 docs/ROADMAP-GAPS-2026-11.md 的 S6/G10 计划，落地后此码退役"
+    },
     "E_FPS": {
       "phase": "spec",
       "exit": 10,
@@ -1217,6 +1229,48 @@
       "exit": 11,
       "meaning": "cvs build --motion-blur：tmix 后置 pass 失败（ffmpeg 非零 / 权重串非法 / 权重数不足 2）",
       "action": "确认 ffmpeg 带 tmix（7.x 自带）；spec 里只填三档名"
+    },
+    "E_TEXTS_COPY_NOT_RENDERED": {
+      "phase": "qa",
+      "exit": 1,
+      "meaning": "G7 像素文本闸：plan/spec 声明的 copy/title/sub 在抽样帧的 __textsAt 输出里找不到——「QA 全绿但画面是内建标题」类（v2.9.0/v4.10.1 病根）的像素级抗体",
+      "action": "检查该页是否消费对应 URL 参数（?title/?sub/?first）；改页后用 cvs qa 复跑"
+    },
+    "E_TEXTS_PLACEHOLDER": {
+      "phase": "qa",
+      "exit": 1,
+      "meaning": "G7：抽样帧出现了内建占位/兜底文案（表见 scripts/qa-text.mjs PLACEHOLDER 名单），说明页面在某参数路径下回落到开发者文案",
+      "action": "给页面对应参数补消费（params.get 优先、内建压轴），或修正 plan 下发"
+    },
+    "E_TEXTS_OVERLAP": {
+      "phase": "qa",
+      "exit": 1,
+      "meaning": "G7：同一帧两条正文级文本包围盒硬重叠（相交面积 >30% 小盒且 >400px²）——可读性破坏",
+      "action": "调整文案长度/布局/出现时间；layout 冲突见 assets/catalog.html 代表帧定位"
+    },
+    "E_TEXTS_BAND_INVASION": {
+      "phase": "qa",
+      "exit": 1,
+      "meaning": "G7：交付含烧字幕/侧挂 SRT 时正文文本越入 safe() 字幕带（tokens.mjs subtitle 区）",
+      "action": "上移正文或改排版；字幕带语义见 references/skill-qa.md"
+    },
+    "W_TEXTS_NO_CONTRACT": {
+      "phase": "qa",
+      "exit": 0,
+      "meaning": "G7：段页未暴露 window.__textsAt 契约——像素文本闸对该页盲（31 页续账中的未接页）",
+      "action": "页面 import common.js 管线即自动获得；自定义页按 references/skill-canvas-contract.md 接 __textsAt"
+    },
+    "W_TEXTS_DWELL": {
+      "phase": "qa",
+      "exit": 0,
+      "meaning": "G7：文本停留 <max(1.8s, 语速+0.6s)。默认 WARN（存量 0.8s opening 类会全片红，不宜 error）；--strict 拦",
+      "action": "加长段时长或拆短文案；flash/≤8码点短词已豁免"
+    },
+    "W_TEXTS_GATE_SKIPPED": {
+      "phase": "qa",
+      "exit": 0,
+      "meaning": "G7：qa-text 因无浏览器/降级链失败被跳过（exit 3 转译）——WARN 明示，绝不装绿",
+      "action": "补 CHROME_EXE 后复跑 qa"
     }
   }
 }

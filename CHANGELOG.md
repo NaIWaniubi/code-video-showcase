@@ -3,6 +3,20 @@
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
 
+## [v4.13.0] - 2026-11-24 — 「读不读得完」变成闸 + KNOWN_RED 清零 + 分发实物入库
+
+ROADMAP-GAPS 第二波（G7/G10 + 主题极性 + SKILL 拆分 + G11 分发实物），五路并发后主线程合并。
+
+- **G7 像素文本闸（S1-3/S1-4/余项③落地）**：`window.__textsAt(t)`/`__ev` 页面契约进 common.js（**零像素影响自证**：golden 双 filter 六静帧逐字节同 + recipe 15 页×横竖 75/75 确定性；原型钩子只在录制栈挂载并 finally 还原）；新独立闸 `scripts/qa-text.mjs`——plan 文案全量必须上屏（专杀「QA 全绿但画面是内建标题」类）、占位兜底词表、行聚合停留 ≥max(1.8s,语速+0.6s)（flash/短词豁免）、硬重叠、safe() 字幕带（tokens.mjs 新增 subtitle 带，含巨型 echo 容差判据）；qa-video 带 plan 自动 spawn 合并为 `pixel text` 一行，`--no-text-gate` 显式降级记 WARN 不装绿，无浏览器 exit=3。**首猎**：mini-41s 在 --strict 下被本闸拦出真缺陷（datarace/whiteboard 不读 ?sub 已修成真槽位 params.get 优先内建压轴；glitch 离屏缓存盲区与 31 页续账入 KNOWN_GAPS 账本，test-readability 23/23 钉死）。ship-demo 旗舰 360p 出片第一次被质量闸正确拒绝——这正是闸的意义。
+- **主题极性一般解（KNOWN_RED 清零）**：`themes.js` 装载期对 17 主题 68 支点缀色做双不可读/反极性检测，OKLCH 锁色相彩度沿极性逼近（仅 5 支被重算，原值存 `accents[i].source`）；`cardColors` layout0 走 APCA 双档（60/45），3 主题卡面字翻极性、coral-noir 默认逐字节不变。**theme-audit --strict exit 0，阈值零改动**；960×540 13 静帧双树对拍：6 变 7 恒等，控制组逐字节同。裁决记录：spec.mjs `color ?? '#ffcf5c'` 保留（cardColors 极性修复后该默认值可读链完整，摘除只会平白再动一轮像素）。
+- **G10 补课**：seam gate（plan 期相邻段入场向量一致性，`W_SEAM_DIRECTION`，--strict 拦）、MCP `cvs_diff`（包装 v4.6.0 就存在的 `--compare`，工具面 13→15）、`cvs ship --emit-motion`（.motion rc.1 纯打包；顺手修掉「缺 master.mp4 恒不触发」的死账——`missing.includes('master.mp4')` 永远 false）、`cvs motionmd`（spec⇄五维 markdown：导出可复现、`--parse` 只出建议永不改 spec）、`E_VIDEO_UNCONSUMED`（kind=video 过 lint 却不进画面的暗雷转显性 error，兑现 S0-6 欠账；渲染消费层仍在 S6 计划）。
+- **SKILL 拆分（S7-3）**：35,668B/390 行 → **6,140B/69 行路由主文**，12 个 `references/skill-*.md` 逐字节迁移（双校验：分段 diff + 零丢句重构），动词表与 `cvs --help` 对齐（含 attest/gc）。
+- **G11 分发实物**：`scripts/ship-demo.mjs`（360p 旗舰 demo + attestation 一键产出，8MB 预算硬闸）、`scripts/make-catalog.mjs`（**27/27 画风目录** `assets/catalog/` + `catalog.html`，条目/教义摘要/复制即用命令）、`.gitignore` 显式豁免 `!assets/demos/**`（终结「git add 被静默吞」陷阱）、README 门面：CI 徽章、「无成片」自认句替换为 demo+证书+目录实物链、Quickstart 增 attest 第 4 步、`docs/PUBLISH.md` 发版 runbook（含新仓转正/CANONICAL-URL 切换/不引 LFS 的体积论证）、`docs/WHY-VERIFIABLE.md` 擂台文（话术 vs 哈希对位表 + 本机全链证据）。
+- 门禁/卫生：`test-readability`（BROWSER）+ `test-seam/test-motionmd/test-theme-polarity/test-catalog`（UNIT）注册；errors 注册表 193→200（E_/W_TEXTS_* 七码 + qa-text 实发 code 字段接通）；mcp/README 工具数陈旧 13/10→15 订正。
+- **闸的校准波（demo 实战反哺）**：qa-text 首战 360p 抓出三类问题根治之——① 缓存文字层补 `__textInfos` 约定（glitch TMP 层两行文案入像素层）；② **chrome/正文分层**：drawHud/drawTopMeta/drawCapsuleLabel/drawCountdown/drawStamp 经 `withLayer('chrome')` 贴标，dwell/overlap/band 只量正文，版面元素不再冒充可读正文（96 重叠假阳清零路径）；③ **字幕带烧录感知**：`--burn-subtitles` 交付越带 FAIL、软字幕降 WARN 供人审（qa-video 自动转发）。副产品：立 **G12 小横屏排版专项**（segment.html 继承 1080 设计常量在非 1080 画幅出画/压字，像素层历史性首猎；过渡纪律=1080p 母带+确定性下采样，ship-demo.mjs 按此重写并复用 1080p 段缓存）。
+- **G11 旗舰 demo 闭环（本机实测）**：出片过程中像素闸再抓两雷——flash 段无 words 时 big-card 回落内建「想做/科普视频？」（S9 病根第三次现形，placeholder 闸当场红；派生 spec 补四个演示词），夹具卡面文案超 8 码点 1s 拍读不完（demo 侧改短文案、不放宽闸）。最终 `cvs build --strict` **21 pass · 0 warn · 0 fail**（pixel text/provenance/loudness/dBTP/WCAG-flash 全闸），613KB `assets/demos/showcase-360.mp4` + 60KB attestation 入库，`cvs attest --verify`（带 plan/manifest）对**入库文件**四层全 match（container/frames 984/toolchain/plan 19 段）。catalog 27 画风 3.6MB + catalog.html 目录页落地。
+- **已知边界（如实）**：contract 版本号进 segmentHash 缓至下一次计划中的全量失效（不为元数据单砸一轮缓存）；dwell 为 WARN（strict 拦）——存量 0.8s opening 类直接 error 会全片红；31 页契约续账余 8 个离屏缓存候选页，每页照 glitch/big-card 一行 `__textInfos` 即收；`.motion` 未过 MotionGit 官方 conformance 样例（样例不在仓，GAPS S3-4 验收半程）。
+
 ## [v4.12.0] - 2026-11-23 — 让每一盏绿灯可信：门禁/审美闸/卡点/安全旁路四线收口
 
 ROADMAP-GAPS 六路审计的第二波（G1+G3+G4+G5），四路 builder 并发、主线程合并。主题只有一句：**卖点的地基是"绿灯可信"，这一波把审计抓到的假绿、命名盲区、假快闪、旁路未进尺子全部收口。**

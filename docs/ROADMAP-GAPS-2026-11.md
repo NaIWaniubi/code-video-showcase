@@ -117,7 +117,17 @@
 - 成片入库：解 .gitignore 吞 mp4 的静默陷阱（显式 `!assets/demos/*.mp4` + 小体积 360p 样片或 Git LFS 二选一）；bench/taste/diff 各配一条 demo；每画风模板静态详情页；README CI 徽章行。
 - skills.sh 上榜 + skill 随 tag 版本对齐安装；references 发布带逐文件 sha256 清单（吸收 openfilm community 纪律，本身就是叙事素材）。
 
-## 3. 依赖与顺序
+## 3. 依赖与顺序（G12 为 2026-11-24 新立案，插于此处属 §2 切片序列尾部）
+
+### G12（2026-11-24 新立案，ship-demo 实战首猎）小横屏画幅排版专项
+现象：`cvs build` 直接指定非 1080p 横屏画幅（如 640×360）时，segment.html 系页面的 HUD 与设计常量
+继承 1920×1080 画布（`drawCountdown` 默认 x=1824 直接出画、大标题字号不随画幅缩放压进胶囊区），
+qa-text 像素层当场抓包（96 重叠/倒计时出画）。1080p 母带 + ffmpeg 平台派生路径无恙，但「画幅=任意」
+的对外话术要成立，排版必须参数化。
+方案：引入 `K = min(W/1920, H/1080)` 字号/坐标缩放常量，逐页替换硬编码（big-card 已有 ?seconds 先例）；
+每页改完用 qa-text overlap/band + determinism 双跑回归；验收=任意 320×180~1920×1080 档 build strict 全绿。
+过渡纪律：ship-demo/README 一律「原生 1080p 母带 → 确定性下采样」，不直渲小横屏（已在 ship-demo.mjs 注释钉死）。
+
 G1 ∥ G3 ∥ G5 可先行互不踩；G2 独立热区（render-segment/plan）由主线做；G4 依赖 G2 的哈希 allowlist 骨架；G8 严格在 G2 后；G7 依赖 G4（文案闭环）与 G2（哈希面）；G9 依赖 G1/G2/G3/G8 全绿；G11 的擂台文依赖 G9。
 冲突热区登记：`plan.mjs/spec.mjs/timeline-core.mjs`（G2→G4 串行）、`compile.mjs`（G6 独占）、`workflows/*`（G1 独占）。
 

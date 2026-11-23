@@ -51,7 +51,7 @@ const UNIT_SUITES = [
   'scripts/test-strict-flags.mjs',
   'scripts/test-segment-edit.mjs',
   'scripts/test-spec-edit.mjs',   // R15：agent 向剪辑内核 + edit CLI（EDL/OTIO/dry-run）
-  'scripts/test-mcp-server.mjs',  // R20：MCP stdio 接口层（线协议握手 + 10 工具实调）
+  'scripts/test-mcp-server.mjs',  // R20：MCP stdio 接口层（线协议握手 + 15 工具实调）
   'scripts/test-ref-compare.mjs',  // R22：复刻度量的纯函数回归
   'scripts/test-film-export.mjs',   // R24：spec→OpenFilm IR 导出与 overrides
   'scripts/test-score-core.mjs',    // R24：主观质量评分纯函数
@@ -67,6 +67,10 @@ const UNIT_SUITES = [
   'scripts/test-attest.mjs',        // G9：哈希证书四层结构/digest 稳定性/分层 verdict/真渲闭环
   'scripts/test-gc.mjs',            // G6-4：段缓存回收——护栏/配对删/keep·older-than 语义/孤儿 json
   'scripts/test-blur-cli.mjs',      // G6-1/3：motionBlur off 档对称 + 资源上限乘子帧倍率
+  'scripts/test-seam.mjs',          // G10/S3-3：相邻段入场向量 seam gate（WARN/strict 拦/--check 双路）
+  'scripts/test-motionmd.mjs',      // G10/S3-4：spec→五维 Motion.md 导出 + parse 只出建议不改 spec
+  'scripts/test-theme-polarity.mjs', // R2-05 收口：点缀极性一般解（KNOWN_RED 清零回归）+ layout0 双档 + 显式覆盖优先
+  'scripts/test-catalog.mjs',       // G11：demo/目录实物——体积、豁免语义、catalog 条目数、README 不自认无成片
   'scripts/test-bypass-security.mjs', // G5：安全旁路回归（XSS/逃逸/CORS/原型污染/cue 注入/数值闸），与 test-spec-security 等尺
   'scripts/test-version-sync.mjs',
   'scripts/test-demo-spec.mjs',
@@ -81,6 +85,7 @@ const BROWSER_SUITES = [
   'scripts/still-cyber-pixel.mjs',
   'scripts/test-recipes.mjs',
   'scripts/test-style-pages-render.mjs',
+  'scripts/test-readability.mjs',   // G7：契约形状/零污染 + 假页三正反例 + 真页 KNOWN_GAPS 账本；无 Chrome 走 SKIP 不假绿
   'scripts/test-effects-render.mjs',
   'scripts/test-image.mjs',
   'server/test-api.mjs',

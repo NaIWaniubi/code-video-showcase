@@ -18,7 +18,7 @@
 
 脚本可以用退出码做粗分流，用 `--json` / `error.json` 的 `code` 做精确重试。
 
-## 已注册错误码（191）
+## 已注册错误码（200）
 
 | 错误码 | 阶段 | 退出码 | 含义 | 唯一动作 |
 |---|---|---|---|---|
@@ -112,6 +112,7 @@
 | `W_FLASH_DEAD` | spec | 0 | structure.flash.count=0 但提供了 flash.words：没有任何快闪段消费这些词（死配置） | 把 count 提到 ≥1，或删除 flash.words |
 | `W_FLASH_WORDS_REUSE` | spec | 0 | flash.words 数量 < structure.flash.count：取词会从头循环复用（w[i % len]），同一片子里有重复快闪词 | 补齐到 count 个不重复词，或把 count 降到 words 数量（确认是刻意的可忽略） |
 | `W_FLASH_WORDS_UNUSED` | spec | 0 | flash.words 数量 > structure.flash.count：多出的词没有对应段，被静默截断 | 提高 count 或删除多余 words（确认是刻意的可忽略） |
+| `W_SEAM_DIRECTION` | spec | 0 | G10/S3-3 seam gate：plan 生成时发现相邻段的入场运动向量不一致——一侧是 whip（dynamic，从侧向甩入，有横向位移）一侧是无方向入场（slam/fade/glitch）。默认只 WARN 不拦（`cvs plan` 的 [warn] 行）；`cvs plan --strict` 升级为拦截 exit 10 | 统一全片 look.motion，或给接缝两侧段写相同的 style.motion 覆盖；刻意保留方向反差（甩入接砸入做重音）就去掉 --strict 接受它 |
 | `E_ASR_ENV` | render | 14 | 词级 ASR 环境缺失：python 无 faster-whisper 或模型不可得（在线首拉失败/离线无 HF_HOME 缓存） | pip install faster-whisper；离线机预置 huggingface 缓存（Systran/faster-whisper-large-v3）后用 --model 指本地目录 |
 | `E_ASR_RUN` | render | 13 | 词级 ASR 运行失败（设备/解码/超时） | 看 stderr python 侧原因；CPU 慢可 --device cpu 显式避免探测超时 |
 | `E_BLUR` | render | 11 | cvs build --motion-blur：tmix 后置 pass 失败（ffmpeg 非零 / 权重串非法 / 权重数不足 2） | 确认 ffmpeg 带 tmix（7.x 自带）；spec 里只填三档名 |
@@ -141,7 +142,14 @@
 | `E_TASTE_WAIVER_RULE` | qa | 2 | cvs taste：豁免条目的 rule 不在规则目录（拼错或已删除的规则不许静默放行，G3-7） | 对照 schema/taste-rules.json 修 rule id，或删掉该豁免 |
 | `E_TASTE_WAIVER_UNUSED` | qa | 1 | cvs taste：--report-unused-waivers 下存在从未命中的豁免——失效豁免留在仓库里是债务（G3-7） | 删掉不再触发的豁免条目，或去掉该旗标退回只列示 |
 | `E_TASTE_WRITE` | qa | 0 | cvs taste：--sarif 报告写盘失败（warn 级，不掩判决） | 检查 --out 目录权限 |
+| `E_TEXTS_BAND_INVASION` | qa | 1 | G7：交付含烧字幕/侧挂 SRT 时正文文本越入 safe() 字幕带（tokens.mjs subtitle 区） | 上移正文或改排版；字幕带语义见 references/skill-qa.md |
+| `E_TEXTS_COPY_NOT_RENDERED` | qa | 1 | G7 像素文本闸：plan/spec 声明的 copy/title/sub 在抽样帧的 __textsAt 输出里找不到——「QA 全绿但画面是内建标题」类（v2.9.0/v4.10.1 病根）的像素级抗体 | 检查该页是否消费对应 URL 参数（?title/?sub/?first）；改页后用 cvs qa 复跑 |
+| `E_TEXTS_OVERLAP` | qa | 1 | G7：同一帧两条正文级文本包围盒硬重叠（相交面积 >30% 小盒且 >400px²）——可读性破坏 | 调整文案长度/布局/出现时间；layout 冲突见 assets/catalog.html 代表帧定位 |
+| `E_TEXTS_PLACEHOLDER` | qa | 1 | G7：抽样帧出现了内建占位/兜底文案（表见 scripts/qa-text.mjs PLACEHOLDER 名单），说明页面在某参数路径下回落到开发者文案 | 给页面对应参数补消费（params.get 优先、内建压轴），或修正 plan 下发 |
 | `E_VERSION_UNKNOWN` | qa | 13 | 指定的版本快照不存在 | cvs history 查看可用版本 |
+| `W_TEXTS_DWELL` | qa | 0 | G7：文本停留 <max(1.8s, 语速+0.6s)。默认 WARN（存量 0.8s opening 类会全片红，不宜 error）；--strict 拦 | 加长段时长或拆短文案；flash/≤8码点短词已豁免 |
+| `W_TEXTS_GATE_SKIPPED` | qa | 0 | G7：qa-text 因无浏览器/降级链失败被跳过（exit 3 转译）——WARN 明示，绝不装绿 | 补 CHROME_EXE 后复跑 qa |
+| `W_TEXTS_NO_CONTRACT` | qa | 0 | G7：段页未暴露 window.__textsAt 契约——像素文本闸对该页盲（31 页续账中的未接页） | 页面 import common.js 管线即自动获得；自定义页按 references/skill-canvas-contract.md 接 __textsAt |
 | `E_AUDIO_NOT_FOUND` | env | 14 | --audio 文件不存在 | 检查路径 |
 | `E_AUDIO_REQUIRED` | env | 14 | 没有音轨且未显式豁免 | 装 Python numpy/scipy 自动合成，或传 --audio，或 --no-audio |
 | `E_DEMO_FAILED` | env | 14 | 演示片编译链失败（compile 返回非 0） | 看下方 compile 的 [error] 明细；python/ffmpeg 缺失会先报环境码 |
@@ -213,11 +221,12 @@
 | `E_SCRIPT_GAP` | ui | 2 | E_SCRIPT_GAP：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_SCRIPT_T` | ui | 2 | E_SCRIPT_T：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_SOURCE` | preview | 0 | 帧源打开失败（路径越界/文件缺失/校验失败） | 按报错指引检查路径；视频先 cvs build |
+| `E_VIDEO_UNCONSUMED` | asset | 10 | G10/S6 诚实账：assets[].kind="video" 被拒绝——渲染链没有任何 video 消费者（全仓消费点=0），这种资产能过 lint、进 plan，却永不进画面。显性拒绝替代「半成品不留」的暗雷（S0-6 欠账）。schema assets.kind enum 仍保留 video，S6 落地时只摘本闸 | 静帧用 kind="image"；实拍素材走 `cvs ingest` 产 EDL/spec draft。消费契约（drawImage+frame(t)）见 docs/ROADMAP-GAPS-2026-11.md 的 S6/G10 计划，落地后此码退役 |
 
 ## 覆盖情况
 
-- 代码中出现的 `E_*`：186
-- 已注册且被使用：186
+- 代码中出现的 `E_*`：187
+- 已注册且被使用：187
 - 未注册：0
 
-- 已注册但当前未使用：5（E_OUTPATH_ESCAPE, W_COPY_CAPTION_UNCONSUMED, W_FLASH_DEAD, W_FLASH_WORDS_REUSE, W_FLASH_WORDS_UNUSED）
+- 已注册但当前未使用：13（E_OUTPATH_ESCAPE, E_TEXTS_BAND_INVASION, E_TEXTS_COPY_NOT_RENDERED, E_TEXTS_OVERLAP, E_TEXTS_PLACEHOLDER, W_COPY_CAPTION_UNCONSUMED, W_FLASH_DEAD, W_FLASH_WORDS_REUSE, W_FLASH_WORDS_UNUSED, W_SEAM_DIRECTION, W_TEXTS_DWELL, W_TEXTS_GATE_SKIPPED, W_TEXTS_NO_CONTRACT）
