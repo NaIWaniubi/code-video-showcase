@@ -23,6 +23,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { knobsCacheSuffix } from './render-segment.mjs';
 import { parseStrict, rejectUnknown } from '../scripts/lib/strict-flags.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -119,6 +120,13 @@ if (browserMismatch) console.error(`[farm] [W_BROWSER_CACHE] --browser=${args.br
 const cacheDir = (args['no-cache'] || browserMismatch)
   ? null
   : (args.cache ? resolveOutPath(args.cache) : path.join(resolveOutPath(plan.meta.outDir || 'out'), '.cache'));
+// S8/G2-4：与 render-batch 同口径——非默认渲染旋钮折进缓存文件名后缀，全默认则空后缀
+// （存量 warm 缓存不失效）。farm 的 batch 模式由子进程各自计算，此处覆盖 legacy 模式。
+const knobsSuffix = knobsCacheSuffix({
+  capture: args.capture, format: args.format, quality: args.quality,
+  crf: args.crf, preset: args.preset, browser: args.browser === undefined ? undefined : String(args.browser),
+}, (l) => console.warn(l));
+const cacheBase = (s) => `${s.hash}${knobsSuffix}`;
 
 // ── selection (identical semantics to v2) ───────────────────────────────────
 let segments = plan.segments.slice();
@@ -175,10 +183,10 @@ function writeCache(s, outAbs, frames, seconds) {
   if (!cacheDir || !s.hash) return;
   try {
     fs.mkdirSync(cacheDir, { recursive: true });
-    fs.copyFileSync(outAbs, path.join(cacheDir, `${s.hash}.mp4`));
+    fs.copyFileSync(outAbs, path.join(cacheDir, `${cacheBase(s)}.mp4`));
     fs.writeFileSync(
-      path.join(cacheDir, `${s.hash}.json`),
-      JSON.stringify({ id: s.id, hash: s.hash, frames, seconds, at: new Date().toISOString() }, null, 2),
+      path.join(cacheDir, `${cacheBase(s)}.json`),
+      JSON.stringify({ id: s.id, hash: s.hash, frames, seconds, at: new Date().toISOString(), ...(knobsSuffix ? { knobs: knobsSuffix } : {}) }, null, 2),
     );
   } catch (e) {
     console.warn(`[${s.id}] cache write failed: ${e.message}`);
@@ -191,12 +199,14 @@ function runOneLegacy(s) {
 
     // 内容寻址缓存：段哈希命中且帧数一致 → 直接复用，省掉整段渲染
     if (cacheDir && s.hash) {
-      const cachedMp4 = path.join(cacheDir, `${s.hash}.mp4`);
-      const cachedMeta = path.join(cacheDir, `${s.hash}.json`);
+      const cachedMp4 = path.join(cacheDir, `${cacheBase(s)}.mp4`);
+      const cachedMeta = path.join(cacheDir, `${cacheBase(s)}.json`);
       if (fs.existsSync(cachedMp4) && fs.existsSync(cachedMeta)) {
         try {
           const m = JSON.parse(fs.readFileSync(cachedMeta, 'utf8'));
-          if (Number(m.frames) === Number(s.frames)) {
+          // 双保险：文件名后缀之外，meta.knobs 也必须与本次一致（防手工拷贝投毒）。
+          const metaKnobsOk = String(m.knobs === undefined ? '' : m.knobs) === knobsSuffix;
+          if (metaKnobsOk && Number(m.frames) === Number(s.frames)) {
             fs.mkdirSync(path.dirname(outAbs), { recursive: true });
             fs.copyFileSync(cachedMp4, outAbs);
             // R3-审计（RT-04 #6）：legacy 路径曾只写 {status:'cached',frames,hash,out}——
@@ -204,7 +214,7 @@ function runOneLegacy(s) {
             manifest.segments[s.id] = {
               status: 'cached', frames: m.frames, expected: s.frames,
               framesVerified: Number(m.frames) === Number(s.frames),
-              hash: s.hash, out: s.out,
+              hash: s.hash, out: s.out, knobs: knobsSuffix || 'default',
               ...(m.seconds != null ? { seconds: m.seconds } : {}),
             };
             if (!quiet) console.log(`[${s.id}] ⚡ cache hit ${s.hash}`);
@@ -221,8 +231,9 @@ function runOneLegacy(s) {
       // 同 render-batch：resume 必须同时校验上次记录的 hash，帧数相等不等于内容相等。
       const prev = manifest.segments[s.id];
       const got = probeFrames(outAbs);
-      if (got === s.frames && prev && (!s.hash || prev.hash === s.hash)) {
-        manifest.segments[s.id] = { status: 'skipped', frames: got, expected: s.frames, out: s.out, ...(s.hash ? { hash: s.hash } : {}) };
+      const knobsMatch = !prev || prev.knobs === undefined || prev.knobs === (knobsSuffix || 'default');
+      if (got === s.frames && prev && knobsMatch && (!s.hash || prev.hash === s.hash)) {
+        manifest.segments[s.id] = { status: 'skipped', frames: got, expected: s.frames, out: s.out, knobs: knobsSuffix || 'default', ...(s.hash ? { hash: s.hash } : {}) };
         if (!quiet) console.log(`[${s.id}] resume hit (${got} frames, hash ${s.hash || '-'})`);
         resolve({ id: s.id, ok: true, skipped: true });
         return;
@@ -245,10 +256,13 @@ function runOneLegacy(s) {
       // 所以从每个增量单独解析），写入 manifest 供 qa 对照 plan——防止「参数在
       // 渲染前被剥掉」这类内容错位再骗过全绿（v2.9.0 回归 3 天才被 dogfooding 抓到）。
       let pageUrl = '';
+      let captureMode = '';
       const onData = (d) => {
         const text = d.toString();
         const pm = text.match(/\[page\] (\S+)/);
         if (pm) pageUrl = pm[1];
+        const cm = text.match(/\[done\][^\n]*capture=(\w+)/);
+        if (cm) captureMode = cm[1];
         tail = (tail + text).slice(-4000);
         if (!quiet) {
           for (const line of text.split(/\r?\n/).filter(Boolean)) console.log(`[${s.id}] ${line}`);
@@ -270,6 +284,8 @@ function runOneLegacy(s) {
             frames: got, expected: s.frames, seconds: Number(sec), attempts: attempt, out: s.out,
             ...(s.hash ? { hash: s.hash } : {}),
             ...(pageUrl ? { renderUrl: pageUrl } : {}),
+            knobs: knobsSuffix || 'default',
+            ...(captureMode ? { capture: captureMode } : {}),
           };
           if (!framesOk) {
             console.error(`[${s.id}] frame mismatch: got ${got}, expected ${s.frames}`);

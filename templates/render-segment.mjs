@@ -45,6 +45,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { launch as launchCdp, connect, evaluate as cdpEvaluate, waitFor as cdpWaitFor } from './cdp.mjs';
@@ -207,6 +208,28 @@ export function optionsFromRenderArgs(renderArgs, extra = {}) {
   return normalizeOptions({ ...optionsFromArgs(args), ...extra });
 }
 
+/**
+ * S8/G2-4：改字节但不进 segmentHash 的渲染旋钮（capture/format/crf/preset/tune/
+ * quality/browser…——机器级参数）的缓存隔离后缀。
+ * segmentHash 是内容口径、刻意不含这些；但 render-batch/farm 可被直接带非默认旋钮
+ * 启动——此前新字节会写进同一个 `<hash>.mp4` 槽，正常构建命中「异内容同缓存键」的
+ * 混拼（审计 F2）。现在非默认旋钮折进缓存文件名后缀；全默认 → 空串，旧缓存条目
+ * 原样有效（warm 缓存不砸）。--format jpeg 额外告警：Chrome JPEG 编码非逐字节
+ * 确定（R2-11 根因），其产物不得进位级复现叙事。
+ */
+export function knobsCacheSuffix(raw = {}, warn) {
+  const o = normalizeOptions({ ...raw });
+  const d = normalizeOptions({});
+  const keys = ['capture', 'format', 'quality', 'crf', 'preset', 'tune', 'warmup', 'optimize', 'motionBlur', 'browser'];
+  const diff = {};
+  for (const k of keys) if (String(o[k]) !== String(d[k])) diff[k] = o[k];
+  if (diff.format === 'jpeg' && typeof warn === 'function') {
+    warn('[warn] --format jpeg: Chrome JPEG encode is not byte-deterministic (R2-11); its products do not qualify for the bit-exact reproducibility claim');
+  }
+  if (!Object.keys(diff).length) return '';
+  return '.' + crypto.createHash('sha256').update(JSON.stringify(diff)).digest('hex').slice(0, 10);
+}
+
 // ---------- static server ----------
 
 export function startStaticServer(root, port = 0) {
@@ -349,12 +372,46 @@ function writeAsync(stream, buf) {
 
 // R3-审计（RT-07 P2-3）：allowRemotePages opt-in 后的残余 SSRF——回环/私网/
 // 链路本地段与云元数据地址一律硬拦，导航前失败。
-const PRIVATE_HOST_RE = /^(?:127\.|10\.|192\.168\.|169\.254\.|0\.|172\.(?:1[6-9]|2\d|3[01])\.|localhost$|\[(?:::1|fc[0-9a-f]{2}|fd[0-9a-f]{2}))/i;
+// S8/G5 移交修复：旧版用裸正则匹配 IP 字符串，`[::ffff:127.0.0.1]` 被 Node 归一化为
+// `[::ffff:7f00:1]`（十六进制映射）后绕过 `127\.` 前缀判据；且 `[::ffff:a9fe:a9fe]`
+// （169.254 元数据）同样逃逸。改为先解包 IPv4-mapped IPv6（点分/十六进制两式）再判段，
+// 并把十进制/十六进制打包 IPv4（http://2130706433/ = 127.0.0.1）也还原成点分再判。
+const PRIVATE_HOST_RE = /^(?:127\.|10\.|192\.168\.|169\.254\.|0\.|172\.(?:1[6-9]|2\d|3[01])\.)/i;
 
-function isPrivateHost(url) {
+function ipv4FromPackedInt(s) {
+  // 十进制或 0x 十六进制的单段 IPv4（http://2130706433/、http://0x7f000001/）。
+  if (!/^(?:0x[0-9a-f]+|\d+)$/i.test(s)) return null;
+  const n = /^0x/i.test(s) ? parseInt(s, 16) : parseInt(s, 10);
+  if (!Number.isFinite(n) || n < 0 || n > 0xffffffff) return null;
+  return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+}
+
+export function isPrivateHost(url) {
   let host = '';
   try { host = new URL(url).hostname; } catch { return false; }
-  return !!host && PRIVATE_HOST_RE.test(host);
+  if (!host) return false;
+  host = host.toLowerCase();
+  if (/^localhost(?:$|\.)/.test(host)) return true;
+  if (host.startsWith('[') && host.endsWith(']')) {
+    const inner = host.slice(1, -1).split('%')[0];
+    if (inner === '::1' || inner === '::') return true;               // v6 loopback / unspecified
+    if (/^f[cd][0-9a-f]{2}:/.test(inner) || /^f[cd]/.test(inner)) return true; // ULA fc00::/7
+    // IPv4-mapped：::ffff:a.b.c.d 或 ::ffff:HHHH:HHHH。解出 v4 再走点分判段。
+    const m = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(inner)
+      || /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(inner);
+    if (m) {
+      if (m.length === 2) return isPrivateHost(`http://${m[1]}/`);
+      const hi = parseInt(m[1], 16), lo = parseInt(m[2], 16);
+      return isPrivateHost(`http://${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}/`);
+    }
+    return false;
+  }
+  // 打包整数 IPv4（非点分）先还原，避免 http://2130706433/ 绕过前缀判据。
+  if (!host.includes('.')) {
+    const packed = ipv4FromPackedInt(host);
+    if (packed) return isPrivateHost(`http://${packed}/`);
+  }
+  return PRIVATE_HOST_RE.test(host);
 }
 
 export function withSegmentParams(page, port, t) {
@@ -539,7 +596,7 @@ async function openCdp(opts) {
             fromSurface: true, captureBeyondViewport: false,
             ...(opts.optimize ? { optimizeForSpeed: true } : {}),
             clip: { x: 0, y: 0, width, height, scale: 1 },
-          }, p.sessionId);
+          }, p.sessionId, opts.timeout || 120000);
           return Buffer.from(r.data, 'base64');
         };
         const duration = await cdpEvaluate(b.client, p.sessionId, () => window.DURATION ?? null);
@@ -593,9 +650,18 @@ async function resolveCaptureMode(page, opts) {
         // R3-审计（RT-05 F2）：页面里只要存在「可见的」非 canvas DOM（HUD/水印/
         // 角标常见形态）而没标 data-dom-overlay，raw/canvas 只取画布像素 → 这些层
         // 整块丢帧且无告警。宁可慢走 CDP 截图（含 DOM），不出缺像素的片。
+        // S8（v4.11）：但 canvas 的**布局父节点**（#stage 这类纯容器）不是绘制层——
+        // 把它当覆盖层会把全部内建页踢进 CDP 合成器截图路径，而该路径实测非逐字节
+        // 确定（6 次 2 偏，LSB 级漂移）且慢 4×。祖先节点仅在「自己绘制背景」时才算
+        // 覆盖层（半透明画布+衬底场景）；真 DOM 覆盖层用 data-dom-overlay 显式声明。
+        const c0 = cs[0];
         const visibleOverlay = [...document.querySelectorAll('body *')].some((el) =>
           el.tagName !== 'SCRIPT' && el.tagName !== 'STYLE' && el.tagName !== 'NOSCRIPT' &&
-          el.tagName !== 'TEMPLATE' && el.tagName !== 'CANVAS' && el.offsetParent !== null);
+          el.tagName !== 'TEMPLATE' && el.tagName !== 'CANVAS' && el.offsetParent !== null &&
+          !(el.contains(c0) && (() => {
+            const s = getComputedStyle(el);
+            return s.backgroundColor === 'rgba(0, 0, 0, 0)' && s.backgroundImage === 'none';
+          })()));
         if (visibleOverlay) return 'cdp';
         const c = cs[0];
         if (raw) {

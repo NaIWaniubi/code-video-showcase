@@ -22,9 +22,10 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import {
-  withRenderer, parseArgv, optionsFromRenderArgs, normalizeOptions,
+  withRenderer, parseArgv, optionsFromRenderArgs, normalizeOptions, knobsCacheSuffix,
 } from './render-segment.mjs';
 
 const args = parseArgv(process.argv.slice(2));
@@ -79,6 +80,15 @@ const stopOnError = !!args['stop-on-error'];
 const resolveOut = (p) => (path.isAbsolute(String(p)) ? path.resolve(String(p)) : path.resolve(outDirAbs, String(p)));
 const manifestPath = args.manifest ? resolveOut(args.manifest) : path.join(outDirAbs, 'render-manifest.json');
 const cacheDir = args['no-cache'] ? null : (args.cache ? resolveOut(args.cache) : path.join(outDirAbs, '.cache'));
+// S8/G2-4（审计 F2）：capture/format/quality/crf/preset/browser 等旋钮改像素/字节，
+// 但 segmentHash 是内容口径不含它们——带非默认旋钮直调 batch 时，新字节此前会写进
+// 同一个 `<hash>.mp4` 槽，正常构建命中「异内容同缓存键」混拼。现在非默认旋钮折进
+// 缓存文件名后缀；全默认 → 空后缀，存量 warm 缓存条目原样继续命中。
+const knobsSuffix = knobsCacheSuffix({
+  capture: args.capture, format: args.format, quality: args.quality,
+  crf: args.crf, preset: args.preset, browser: args.browser === undefined ? undefined : String(args.browser),
+}, (l) => console.warn(l));
+const cacheBase = (s) => `${s.hash}${knobsSuffix}`;
 const profileDir = args['no-profile']
   ? null
   : (args['profile-dir']
@@ -165,12 +175,14 @@ function saveManifest() {
 
 function tryCache(s, outAbs) {
   if (!cacheDir || !s.hash) return null;
-  const cachedMp4 = path.join(cacheDir, `${s.hash}.mp4`);
-  const cachedMeta = path.join(cacheDir, `${s.hash}.json`);
+  const cachedMp4 = path.join(cacheDir, `${cacheBase(s)}.mp4`);
+  const cachedMeta = path.join(cacheDir, `${cacheBase(s)}.json`);
   if (!fs.existsSync(cachedMp4) || !fs.existsSync(cachedMeta)) return null;
   try {
     const m = JSON.parse(fs.readFileSync(cachedMeta, 'utf8'));
     if (Number(m.frames) !== Number(s.frames)) return null;
+    // 双保险：文件名后缀之外，meta 里的 knobs 也必须与本次一致（防手工拷贝投毒）。
+    if (String(m.knobs === undefined ? '' : m.knobs) !== knobsSuffix) return null;
     fs.mkdirSync(path.dirname(outAbs), { recursive: true });
     fs.copyFileSync(cachedMp4, outAbs);
     return Number(m.frames);
@@ -183,10 +195,10 @@ function writeCache(s, outAbs, frames, seconds) {
   if (!cacheDir || !s.hash) return;
   try {
     fs.mkdirSync(cacheDir, { recursive: true });
-    fs.copyFileSync(outAbs, path.join(cacheDir, `${s.hash}.mp4`));
+    fs.copyFileSync(outAbs, path.join(cacheDir, `${cacheBase(s)}.mp4`));
     fs.writeFileSync(
-      path.join(cacheDir, `${s.hash}.json`),
-      JSON.stringify({ id: s.id, hash: s.hash, frames, seconds, at: new Date().toISOString() }, null, 2),
+      path.join(cacheDir, `${cacheBase(s)}.json`),
+      JSON.stringify({ id: s.id, hash: s.hash, frames, seconds, at: new Date().toISOString(), ...(knobsSuffix ? { knobs: knobsSuffix } : {}) }, null, 2),
     );
   } catch (e) {
     console.warn(`[${s.id}] cache write failed: ${e.message}`);
@@ -221,7 +233,7 @@ async function main() {
       // R2-17（N04-F4）：cached 条目也带 expected/framesVerified——完成定义④
       // 「frames===expected」在增量构建下才可执行（旧版 cached 缺 expected，
       // 校验退化成 frames===undefined）。
-      manifest.segments[s.id] = { status: 'cached', frames: hit, expected: s.frames, framesVerified: hit === s.frames, hash: s.hash, out: path.relative(root, outAbs).split(path.sep).join('/') };
+      manifest.segments[s.id] = { status: 'cached', frames: hit, expected: s.frames, framesVerified: hit === s.frames, hash: s.hash, knobs: knobsSuffix || 'default', out: path.relative(root, outAbs).split(path.sep).join('/') };
       if (!quiet) console.log(`[${s.id}] cache hit ${s.hash}`);
       saveManifest();
       results.push({ id: s.id, ok: true, cached: true });
@@ -233,8 +245,12 @@ async function main() {
       // 没有上次记录（旧 manifest / 中断后）时保守重渲，避免把旧画面当新画面。
       const prev = manifest.segments[s.id];
       const got = probeFrames(outAbs);
-      if (got === s.frames && prev && (!s.hash || prev.hash === s.hash)) {
-        manifest.segments[s.id] = { status: 'skipped', frames: got, expected: s.frames, out: path.relative(root, outAbs).split(path.sep).join('/'), ...(s.hash ? { hash: s.hash } : {}) };
+      // S8/G2-4：resume 跳过还要求上次 manifest 记录的旋钮 == 本次（旧记录无 knobs
+      // 字段按 'default' 处理）。否则用 --capture cdp 跑过的段会被 --capture canvas
+      // 命中跳过，把非确定字节当已渲好直接复用。
+      const knobsMatch = !prev || prev.knobs === undefined || prev.knobs === (knobsSuffix || 'default');
+      if (got === s.frames && prev && knobsMatch && (!s.hash || prev.hash === s.hash)) {
+        manifest.segments[s.id] = { status: 'skipped', frames: got, expected: s.frames, out: path.relative(root, outAbs).split(path.sep).join('/'), knobs: knobsSuffix || 'default', ...(s.hash ? { hash: s.hash } : {}) };
         if (!quiet) console.log(`[${s.id}] resume hit (${got} frames, hash ${s.hash || '-'})`);
         saveManifest();
         results.push({ id: s.id, ok: true, skipped: true });
@@ -251,6 +267,7 @@ async function main() {
       : (line) => console.log(`[${s.id}] ${line}`);
     let lastErr = null;
     let renderUrl = '';
+    let renderCapture = '';
     for (let attempt = 1; attempt <= retries + 1; attempt++) {
       const started = performance.now();
       try {
@@ -259,6 +276,9 @@ async function main() {
         // 默认 batch 生产链根本不产 renderUrl，溯源闸对正常 build 永远空转报 PASS）：
         // ctx.render 的返回值现在携带实际打开的 pageUrl，写进 manifest 供 qa 对照。
         if (rr && rr.pageUrl) renderUrl = rr.pageUrl;
+        // S8/G2-2：resolved capture 模式（raw/canvas/cdp）落盘，供 qa/attest 判定
+        // 某段到底由哪条回读链产出——跨机重放口径的前提（cdp 非逐字节确定）。
+        if (rr && rr.capture) renderCapture = rr.capture;
       } catch (e) {
         lastErr = e;
         const sec = ((performance.now() - started) / 1000).toFixed(1);
@@ -289,6 +309,8 @@ async function main() {
           status: 'done', frames: got, expected: s.frames, seconds: sec, attempts: attempt,
           out: path.relative(root, outAbs).split(path.sep).join('/'), ...(s.hash ? { hash: s.hash } : {}),
           ...(renderUrl ? { renderUrl } : {}),
+          knobs: knobsSuffix || 'default',
+          ...(renderCapture ? { capture: renderCapture } : {}),
         };
         if (!quiet) console.log(`[${s.id}] ✓ ${s.frames} frames in ${sec}s (attempt ${attempt})`);
         writeCache(s, outAbs, s.frames, sec);
