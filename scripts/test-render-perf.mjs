@@ -5,6 +5,7 @@
  *   CHROME_EXE="..." node scripts/test-render-perf.mjs
  *   node scripts/test-render-perf.mjs --concurrency 4 --max-seconds 420 --warm-max 30
  *   node scripts/test-render-perf.mjs --skip-cold        # 只测缓存命中
+ *   node scripts/test-render-perf.mjs --quick           # 门禁档：单 round 短 spec + 收紧时限
  *
  * 断言：
  *   1. 冷编译（无缓存）完成且帧数 = 期望帧数；
@@ -12,12 +13,17 @@
  *   3. 缓存重编译 ≤ --warm-max，且 render-manifest.json 全部 cached；
  *   4. 段缓存条目数 = 段数。
  *
- * 退出码 0/1。长任务；CI 不默认跑（需要 Chrome）。
+ * --quick（G1-3）：从基线 spec 派生「只保留第 1 个 round」的短 spec（时长用
+ * templates/spec.mjs 的 specDuration 同源重算，不另写公式），独立 outdir，
+ * 时限收紧到冷 ≤240s / 热 ≤20s。注册进 test-all 的 UNIT 组时带 --quick。
+ *
+ * 退出码 0/1。长任务（非 --quick）CI 不默认跑（需要 Chrome）。
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { specDuration } from '../templates/spec.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -33,15 +39,37 @@ function parseArgs(argv) {
   return a;
 }
 const args = parseArgs(process.argv.slice(2));
-const SPEC = path.resolve(String(args.spec || path.join(ROOT, 'fixtures/mini-41s/spec.json')));
-const OUTDIR = path.resolve(String(args.outdir || path.join(ROOT, 'out/perf')));
+const QUICK = !!args.quick;
+
+function deriveQuickSpec(basePath) {
+  const spec = JSON.parse(fs.readFileSync(basePath, 'utf8'));
+  if (!Array.isArray(spec.rounds) || spec.rounds.length <= 1) return null; // 已经够短
+  const quick = { ...spec, rounds: spec.rounds.slice(0, 1) };
+  quick.format = { ...spec.format, duration: specDuration(quick) };
+  return quick;
+}
+
+let SPEC = path.resolve(String(args.spec || path.join(ROOT, 'fixtures/mini-41s/spec.json')));
+let OUTDIR = path.resolve(String(args.outdir || path.join(ROOT, QUICK ? 'out/perf-quick' : 'out/perf')));
+if (QUICK) {
+  const derived = deriveQuickSpec(SPEC);
+  if (derived) {
+    // 放在 OUTDIR 之外：冷启动路径会 rmSync(OUTDIR)，派生 spec 不能被一起删掉。
+    const quickPath = OUTDIR + '.spec.json';
+    fs.mkdirSync(path.dirname(quickPath), { recursive: true });
+    fs.writeFileSync(quickPath, JSON.stringify(derived, null, 2) + '\n');
+    SPEC = quickPath;
+  }
+}
 const CONCURRENCY = String(args.concurrency || 4);
-const MAX_COLD = Number(args['max-seconds'] || 600);
-const MAX_WARM = Number(args['warm-max'] || 30);
+const MAX_COLD = Number(args['max-seconds'] || (QUICK ? 240 : 600));
+const MAX_WARM = Number(args['warm-max'] || (QUICK ? 20 : 30));
 const SKIP_COLD = !!args['skip-cold'];
 
+let checks = 0;
 let failed = 0;
 const check = (name, ok, detail = '') => {
+  checks++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`);
   if (!ok) failed++;
 };
@@ -65,7 +93,7 @@ function probeFrames(file) {
   return r.status === 0 ? Number(String(r.stdout).trim()) : -1;
 }
 
-console.log(`[perf] spec=${path.relative(ROOT, SPEC)} concurrency=${CONCURRENCY} outdir=${path.relative(ROOT, OUTDIR)}`);
+console.log(`[perf] mode=${QUICK ? 'quick' : 'full'} spec=${path.relative(ROOT, SPEC)} concurrency=${CONCURRENCY} outdir=${path.relative(ROOT, OUTDIR)}`);
 if (!SKIP_COLD) {
   fs.rmSync(OUTDIR, { recursive: true, force: true });
 } else {
@@ -119,5 +147,7 @@ const cacheDir = path.join(OUTDIR, '.cache');
 const cacheEntries = fs.existsSync(cacheDir) ? fs.readdirSync(cacheDir).filter((f) => f.endsWith('.mp4')).length : 0;
 check('cache holds one mp4 per segment', cacheEntries === segCount, `${cacheEntries}/${segCount}`);
 
-console.log(`\n${failed ? 'RESULT: FAIL' : 'RESULT: PASS'}`);
+// 汇总行：走 summary-parse 认识的标准格式，test-all --json 才能计到断言数。
+console.log(`\n${checks} checks: ${checks - failed} passed, ${failed} failed`);
+console.log(`${failed ? 'RESULT: FAIL' : 'RESULT: PASS'}`);
 process.exit(failed ? 1 : 0);

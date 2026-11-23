@@ -24,10 +24,17 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install Chrome
+        # G1-5：旧版 `sudo apt install ./x.deb || sudo apt -f -y && sudo apt install x.deb`
+        # 因 shell 优先级（A || (B && C)）在正常路径之外的兜底里执行错误命令（exit 100：
+        # 拿裸文件名当包名装）。改为顺序结构：直接装 deb，失败才修依赖并重装同一个 deb，
+        # 最终仍失败则步骤硬失败（不再吞错）。
         run: |
+          set -o pipefail
           wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          sudo apt-get install -y ./google-chrome-stable_current_amd64.deb || \
-            sudo apt-get install -y -f && sudo apt-get install -y google-chrome-stable_current_amd64.deb
+          if ! sudo apt-get install -y ./google-chrome-stable_current_amd64.deb; then
+            sudo apt-get -f -y install
+            sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
+          fi
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
@@ -39,16 +46,21 @@ jobs:
         env:
           CHROME_EXE: google-chrome
         run: |
+          set -o pipefail  # G1-1：同 compiler.yml，防 `| tee` 吃退出码
           mkdir -p out
           node scripts/test-all.mjs --browser --json | tee out/test-browser.json
 
       # v4.10.0 立案探针：整段视频冷重跑像素幂等（canvas 光栅跨进程稳定性调查）。
       # continue-on-error：先可见化不拦门——定位结论出来那天翻成硬闸（ROADMAP S8）。
+      # TODO(GAPS G1-5)：S8 由主线程修复中；修复经验证后，由 verifier 摘除本
+      # continue-on-error 变硬闸（摘除前提：G2 修好探针配置面）。
       - name: Video-level cold re-run determinism (INVESTIGATING)
         continue-on-error: true
         env:
           CHROME_EXE: google-chrome
-        run: node scripts/determinism-check.mjs --video --duration 1 --runs 3
+        run: |
+          set -o pipefail
+          node scripts/determinism-check.mjs --video --duration 1 --runs 3
 
       - name: Upload report
         if: always()

@@ -42,8 +42,12 @@ jobs:
             [ -z "$tag" ] && continue
             notes="$(mktemp)"
             heading="$(mktemp)"
+            # G1-7：精确锚点，语义 = 标题行以 `## [<tag>]` 开头（index()==1 为
+            # 字面锚定匹配，避开 awk 正则转义的可移植性坑）。旧版
+            # `index($0, tag) > 0` 是裸子串匹配：tag `v4.1` 会命中 `## [v4.10.1]`
+            # （已本地实测复现），正文任何提及同样误中，抓错小节内容。
             awk -v tag="$tag" -v hfile="$heading" '
-              $0 ~ "^## " && index($0, tag) > 0 { hit = 1; print > hfile; next }
+              !hit && index($0, "## [" tag "]") == 1 { hit = 1; print > hfile; next }
               hit && $0 ~ "^## " { exit }
               hit { print }
             ' CHANGELOG.md > "$notes"

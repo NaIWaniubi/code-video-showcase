@@ -35,7 +35,12 @@ jobs:
         run: node -e "const fs=require('fs');const l=JSON.parse(fs.readFileSync('shared/fonts.lock.json','utf8'));if(!l.count||!l.setSha256)process.exit(1);console.log('fonts:',l.count,'set',l.setSha256.slice(0,12))"
 
       - name: Pure-Node test suites (machine-readable)
+        env:
+          # UNIT 组现含 test-render-perf --quick（真渲染，G1-3）；GitHub ubuntu
+          # 运行器自带 google-chrome。其余套件不依赖它。
+          CHROME_EXE: google-chrome
         run: |
+          set -o pipefail  # G1-1：GitHub bash 默认 `-e` 无 pipefail，`cmd | tee` 会吃 cmd 的退出码（假绿）
           mkdir -p out
           node scripts/test-all.mjs --json | tee out/test-all.json
 
@@ -52,6 +57,16 @@ jobs:
 
       - name: Plan compiler
         run: node templates/plan.mjs --spec fixtures/mini-41s/spec.json --root . --check
+
+      # G1-6：`npm run gate` 进 CI 的静帧档（errors --check + build-combos --check
+      # + lint + plan --check + determinism-check 不带 --video）。视频档 determinism
+      # 留在 nightly（G1-5），避免每次 push 跑整段重编。
+      - name: Gate (static-frame tier)
+        env:
+          CHROME_EXE: google-chrome
+        run: |
+          set -o pipefail
+          npm run gate
 
       - name: CLI smoke
         run: |

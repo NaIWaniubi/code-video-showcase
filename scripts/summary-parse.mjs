@@ -37,8 +37,10 @@ export function parseSummary(text) {
   // **从后往前**逐行找，而不是在整段尾部文本里取第一个匹配：
   // 测试用例名本身可能含汇总格式字符串（如 "✓ 格式读对：34 tests: 32 passed, 2 failed"），
   // 取第一个匹配会把用例名当成汇总。真实汇总永远是最后一条像汇总的行。
-  const start = Math.max(0, lines.length - 12);
-  for (let i = lines.length - 1; i >= start; i--) {
+  // G1-2：扫描范围是**全部**输出行，不再截尾 12 行——test-compiler-contract
+  // 这类「先打汇总、后面还有晚定义用例」的套件，汇总行距末尾可远超 12 行，
+  // 截窗会把真实计数整个漏掉（报告 failed:null 与 ok:false 同屏说谎）。
+  for (let i = lines.length - 1; i >= 0; i--) {
     for (const { re, kind } of patterns) {
       const m = lines[i].match(re);
       if (!m) continue;
@@ -64,4 +66,30 @@ export function parseSummary(text) {
     }
   }
   return null;
+}
+
+/**
+ * tallySuite — 单套件计数收敛（G1-2 聚合说谎的修复点，test-all.mjs 消费）。
+ *
+ * 契约（不可协商）：
+ *   1. 套件退出码非 0（含 spawn 失败 status=null）⇒ failed 至少 1。
+ *      解析不出汇总、或解析到 failed=0 时按 1 计，并标 failedUnparsed=true，
+ *      让读报告的人知道这个数字是兜底值而非断言计数。
+ *   2. 退出码 0 但输出自报 failed>0 ⇒ 该套件自己在说谎：ok=false、failed 如实计。
+ *   3. 行级 ok 与行级 failed 强一致（ok ⇒ failed===0，failed>0 ⇒ !ok），
+ *      因此顶层由 rows.every(ok) 与 Σfailed 推出的报告不可能出现
+ *      "ok:false 且 failed:0" 或 "ok:true 且 failed>0" 的同屏矛盾。
+ *
+ * @param {{exit: number|null, parsed: {total:number,passed:number,failed:number}|null}} input
+ * @returns {{ok: boolean, failed: number, failedUnparsed: boolean}}
+ */
+export function tallySuite({ exit, parsed }) {
+  const exitOk = exit === 0;
+  let failed = parsed ? Number(parsed.failed) || 0 : 0;
+  let failedUnparsed = false;
+  if (!exitOk && failed < 1) {
+    failed = 1;
+    failedUnparsed = true;
+  }
+  return { ok: exitOk && failed === 0, failed, failedUnparsed };
 }
