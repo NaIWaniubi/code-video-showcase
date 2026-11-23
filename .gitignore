@@ -16,6 +16,10 @@ tmp/
 *.m4a
 *.mp3
 *.webm
+# G11：仓库内的成品 demo/目录图是**故意的**对外证据，显式豁免防被上面的通配静默吞掉
+# （审计 G11 实测：直接 git add 会被静默忽略，用户以为提交了）
+!assets/demos/**
+!assets/catalog/**.png
 *.log
 
 # OS / editor noise

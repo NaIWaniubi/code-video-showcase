@@ -13,6 +13,7 @@ An Agent Skill for producing 30–90 s "style showcase" films: an 8 s opening, e
 > Send this to your agent: "Install https://github.com/Moessif/code-video-showcase as an Agent Skill: clone it into `~/.dsh/skills/code-video-showcase` (`~/.claude/skills/` for Claude Code, `.agents/skills/` for generic agents), then read `SKILL.md` to confirm it works."
 
 [![MIT License](https://img.shields.io/badge/license-MIT-d97757?style=flat-square)](LICENSE)
+[![CI](https://github.com/NaIWaniubi/code-video-showcase/actions/workflows/compiler.yml/badge.svg)](https://github.com/NaIWaniubi/code-video-showcase/actions/workflows/compiler.yml) <!-- CANONICAL-URL: 切新仓时同步替换 badge/clone/release 三处 -->
 [![Node 22+](https://img.shields.io/badge/node-%E2%89%A5%2022-3c873a?style=flat-square)](https://nodejs.org/)
 [![FFmpeg](https://img.shields.io/badge/ffmpeg-libx264%20%2B%20AAC-007808?style=flat-square)](https://ffmpeg.org/)
 [![No generative models](https://img.shields.io/badge/generative%20models-none-d97757?style=flat-square)](#design-constraints)
@@ -160,11 +161,15 @@ Measured on this machine (Windows 10, 41 s fixture, 1230 frames, 1080p30):
 | warm recompile | **1.9–3.2s** | 23/23 segments served from the content cache |
 | QA | 10 pass / 1 warn / 0 fail | warn = no audio track |
 
-Before the batch worker (one process + one browser per segment) the same cold compile took `9m34s`. `npm run test:perf` re-runs this gate.
+Before the batch worker (one process + one browser per segment) the same cold compile took `9m34s`. `npm run test:perf` re-runs this gate（`--quick` 档已进 CI BROWSER 组；**表内绝对值为 v2.2 旧机型口径，S8 raw-capture 与 ENGINE v5 后待重测**——诚实口径见 docs/ROADMAP-GAPS-2026-11.md G6-3，墙钟只作 advisory 看板项）。
 
 ## Preview
 
-> **There is no finished demo video in this repository**, and the reference sample file is not distributed. The previews are analysis artifacts of the 61 s reference showcase the skill was reverse-engineered from, plus a placeholder still rendered from the shipped big-card template.
+**Ship-ready demo with receipts**: [`assets/demos/showcase-360.mp4`](assets/demos/showcase-360.mp4) — the 41 s fixture rendered at 640×360 by this exact toolchain, shipped together with its attestation [`showcase-360.attestation.json`](assets/demos/showcase-360.attestation.json) (container sha256 + 984-frame framemd5 digest + toolchain fingerprint + 23-segment plan binding). Verify it yourself with one command: `cvs attest assets/demos/showcase-360.mp4 --verify assets/demos/showcase-360.attestation.json`.
+
+**All 27 style doctrines as one glanceable grid**: open [`assets/catalog.html`](assets/catalog.html) — one representative frame per style plus its colour/type/motion/sound notes and a copy-paste preview command. Regenerate with `node scripts/make-catalog.mjs`.
+
+The contact sheets below are analysis artifacts of the 61 s reference showcase the skill was reverse-engineered from.
 
 ![1 fps contact sheet of the 61 s reference showcase](assets/contact-1fps.jpg)
 
@@ -682,6 +687,10 @@ node bin/cvs.mjs build project.spec.json --platform douyin --strict --burn-subti
 # 3) 导演演示集——六个闭式确定引擎一键出片（白模/骨骼/分形/喷泉/地形/网络）
 node bin/cvs.mjs demo skeleton                  # 出 out/demo-skeleton/master.mp4
 node bin/cvs.mjs demo all --only fractal,terrain --seconds 8
+
+# 4) 出证书 / 跨机复核（可验证交付，docs/WHY-VERIFIABLE.md）
+node bin/cvs.mjs attest out/master.mp4 --manifest out/render-manifest.json --plan out/plan.json --out out/attestation.json
+node bin/cvs.mjs attest out/master.mp4 --verify out/attestation.json   # verdict: pass | pass-with-note(mux) | fail(像素/绑定)
 
 # 4) 有参考片？反推它，再交付打包
 node bin/cvs.mjs ref video my-demo.mp4 --emit-spec inspired.spec.json   # 结构+BPM+主题 → 可编译新 spec
