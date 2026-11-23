@@ -46,7 +46,9 @@ const THEME = getTheme(themeFromURL(location.search));
 const TC = THEME.colors;
 const V = vars();
 const TITLE = String(params.get('title') || V.title || '山水之间').slice(0, 6);
-const POEM = String(V.subtitle || '行到水穷处').slice(0, 8);
+// FINDING-v4.10.1 补漏：副题变量名是 POEM——生产链路只走 URL 参数（vars 注入
+// 仅在显式 --vars 路径），旧矩阵按 `const SUB = String(` 正则漏掉了本页。
+const POEM = String(params.get('sub') || V.subtitle || '行到水穷处').slice(0, 8);
 const BRAND = String(V.brand || 'CVS').slice(0, 24);
 
 const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;

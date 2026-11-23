@@ -175,6 +175,28 @@ export function resolveAssetHashes(spec, root) {
   return { issues, hashes };
 }
 
+/** FINDING-9（v4.12/G4）：brand.mjs 把 logo 写进 meta.brandKit（不进 spec.assets），
+ *  resolveAssetHashes 覆盖不到它——同路径换 logo 字节，段哈希不变、缓存命中出旧
+ *  画面且 build 报成功。logo 直接决定画面像素（big-card drawBrandLogo），必须进
+ *  哈希面：实测字节哈希（路径不变字节变 → 缓存失效）。missing: 前缀让「给了路径
+ *  但文件不存在」同样可区分（渲染期会以 __bootError 失败，这里先把账留全）。 */
+export function brandLogoHash(spec, root) {
+  const p = spec && spec.meta && spec.meta.brandKit && spec.meta.brandKit.logo && spec.meta.brandKit.logo.path;
+  if (!p || typeof p !== 'string') return '';
+  const bare = String(p).split('?')[0].split('#')[0];
+  if (!bare) return '';
+  if (isAbsoluteUrl(bare)) return `remote:${bare}`;
+  const abs = path.resolve(root, bare);
+  // 与 assets/page 同一条 containment 规矩：品牌 kit 也是 spec 可写字段，
+  // 不能变成服务端任意文件读取 oracle（哈希就是探针）。
+  const rootAbs = path.resolve(root);
+  if (abs !== rootAbs && !abs.startsWith(rootAbs + path.sep)) return `escaped:${bare}`;
+  try {
+    if (!fs.statSync(abs).isFile()) return `missing:${bare}`;
+    return crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex').slice(0, 16);
+  } catch { return `missing:${bare}`; }
+}
+
 /** 段哈希：任何影响该段像素的输入都必须进来。 */
 export function segmentHash(segment, meta, spec, opts = {}) {
   // R3（RT-04 #3/#4）：素材用实测哈希（与 spec.assets 同序对齐），再垫工具链指纹。
@@ -204,6 +226,11 @@ export function segmentHash(segment, meta, spec, opts = {}) {
     fps: meta.fps,
     width: meta.width,
     height: meta.height,
+    // FINDING-6（v4.12/G4）：bpm 决定拍网格上的动效相位（generative 打拍、
+    // flash 拍对齐）。以前改 bpm 全部段哈希不变 → 90BPM 片子命中 120BPM 旧缓存。
+    bpm: Number(meta.bpm || (spec && spec.audio && spec.audio.bpm) || 120),
+    // FINDING-9：brandKit logo 的实测字节哈希（同路径换 logo 必须失效）。
+    logo: opts.logoHash || '',
     t0: segment.t0 ?? null,
     speed: segment.speed ?? null,
     motion: segment.motion || meta.motion || '',
@@ -320,12 +347,16 @@ export function buildPlanFromSpec(input, opts = {}) {
   // renderArgs（farm/batch 纯透传），qa/probe/concat 看到的输出帧率帧数与关时同构。
   plan.meta.blur = BLUR_WEIGHTS[spec.render?.motionBlur] || '';
 
+  // FINDING-9：logo 哈希一次性算好，进全部段 payload（同路径换字节 = 全缓存失效）。
+  const logoHash = brandLogoHash(spec, root);
+
   for (const s of plan.segments) {
     // 页面哈希同时写进段对象，便于排查「hash 为什么变了」。
     if (plan.meta.blur) s.renderArgs = [...(s.renderArgs || []), '--motion-blur', plan.meta.blur];
     s.pageHash = pageContentHash(root, s.page);
     s.hash = segmentHash(s, plan.meta, spec, {
       root,
+      logoHash,
       assetHashes: (spec.assets || []).map((a) => assetRes.hashes.get(String(a.path)) || a.hash || a.sha256 || null),
     });
   }

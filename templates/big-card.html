@@ -52,11 +52,17 @@ if (stageEl) {
   stageEl.style.height = `${H}px`;
 }
 const ctx = canvas.getContext('2d');
-window.DURATION = 1.0;
-window.__viewport = { width: W, height: H, aspect: ASPECT, orient: ORIENT };
-
 // ---------- per-card config (pass via the --page URL, e.g. --page "/big-card.html?layout=1&index=2") ----------
 const p = new URLSearchParams(location.search);
+// FINDING-5（v4.12/G4）：动画时钟由段时长驱动，不再硬编 1.0s。
+// 以前 renderFrame 直接把绝对秒 clamp(u,0,1)：flash 的 0.5s 段只烧进半截入场动画，
+// structure.card>1 的卡从第 1 秒起冻结。plan 对 card/more/flash 段都下发
+// ?seconds=；?dur= 是渲染器段模式追加的同义参数（common.js createSegment 先例）。
+// 不传（直接开页）→ 1.0，旧行为逐字节不变。
+const DUR_PARAM = Number(p.get('seconds') ?? p.get('dur'));
+const DURATION = Number.isFinite(DUR_PARAM) && DUR_PARAM > 0 ? DUR_PARAM : 1.0;
+window.DURATION = DURATION;
+window.__viewport = { width: W, height: H, aspect: ASPECT, orient: ORIENT };
 const CARD = {
   layout: parseInt(p.get('layout') ?? '0', 10) % 4,   // 0 accent bg / 1 paper / 2 dark centered / 3 dark left
   index: parseInt(p.get('index') ?? '1', 10),
@@ -754,7 +760,9 @@ function registerHits(S, view) {
 }
 
 window.renderFrame = (u) => {
-  const t = clamp(u, 0, 1);
+  // FINDING-5：u 是绝对秒（render-segment 按 i/fps 传入）；除以段时长归一到
+  // 0..1，动画时间轴（slam 0.5 拍、下划线 0.72 拍）对任何 seconds 都完整跑完。
+  const t = clamp(u / DURATION, 0, 1);
   bridge.setTime(t);
   bridge.begin();
   const S = ensureState();

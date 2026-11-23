@@ -240,6 +240,14 @@ export function buildPlan(spec, { root = '.', outDir } = {}) {
         ...(meta.brandFont ? { brandFont: meta.brandFont } : {}),
       }
     : {};
+  // FINDING-6：拍速下发（页面里消费 ?bpm 的按片速打拍，不再恒 120）。
+  const bpmParam = Number.isFinite(bpm) && bpm > 0 ? bpm : 120;
+  // FINDING-9：card/more 也带 logo/brandFont（big-card 支持 ?logo=/?brandFont=；
+  // 仅在有值时追加——timeline v1 没有 brandKit，旧 URL 逐字节不变）。
+  const cardChromeParams = {
+    ...(meta.logo ? { logo: meta.logo } : {}),
+    ...(meta.brandFont ? { brandFont: meta.brandFont } : {}),
+  };
 
   // 1) nominal segments in order
   const nominal = [];
@@ -273,6 +281,7 @@ export function buildPlan(spec, { root = '.', outDir } = {}) {
       ...(card.color ? { color: card.color } : {}),
       brand: meta.brand,
       seconds: Number(st.card),
+      ...cardChromeParams,
       ...(card.params || {}),
     };
     nominal.push({
@@ -286,16 +295,21 @@ export function buildPlan(spec, { root = '.', outDir } = {}) {
     const styleCopy = style.copy || {};
     const styleTitle = String(styleCopy.title || style.name || r.name || '').trim();
     const styleSub = String(styleCopy.subtitle || '').trim();
-    const styleCaption = String(styleCopy.caption || '').trim();
+    // FINDING-v4.10.1：style.copy.caption 历史上经 ?caption 下发但全仓无页面
+    // get('caption')（死参数，同 item/count 一族）。停发，validateSpec 以
+    // W_COPY_CAPTION_UNCONSUMED 明示「该字段当前不上屏」，不再静默。
     nominal.push({
       id: `${rid}-style`, kind: 'style', index: idx, label: style.name || r.name || rid,
       page: query(style.page, {
         ...themeParams, ...motionParams, ...accentParams, ...brandParams,
         // 单段动效覆盖全局档位（style.motion），写错不再是静默无效。
         ...(style.motion ? { mp: style.motion } : {}),
+        // FINDING-6（v4.12/G4）：bpm 下发到消费它的页面（recipe-generative 读
+        // ?bpm 打拍；不读的页面忽略即可，与 theme 同族 chrome 参数）。以前 90BPM
+        // 的片子逐字仍按 120 跳。specMode 门保证 v1 旧项目 URL 逐字节不变。
+        ...(specMode ? { bpm: bpmParam } : {}),
         ...(specMode && styleTitle ? { title: styleTitle } : {}),
         ...(specMode && styleSub ? { sub: styleSub } : {}),
-        ...(specMode && styleCaption ? { caption: styleCaption } : {}),
       }),
       duration: Number(st.round) - Number(st.card),
       t0: Number(style.t0 ?? 0),
@@ -321,6 +335,7 @@ export function buildPlan(spec, { root = '.', outDir } = {}) {
       ...(more.color ? { color: more.color } : {}),
       brand: meta.brand,
       seconds: Number(st.moreCard),
+      ...cardChromeParams,
     }),
     duration: Number(st.moreCard),
   });
@@ -330,15 +345,38 @@ export function buildPlan(spec, { root = '.', outDir } = {}) {
     const flash = spec.flash || {};
     const flashEach = resolveFlashEach(spec);
     const flashTotal = Number(st.flash.count) * flashEach;
+    // FINDING-4 / S9（v4.12/G4）：以前只下发 item/count，而全仓没有任何页面
+    // get('item') → 四段 flash 是同一画面放 4 遍（假快闪）。现在逐段下发
+    // first/keyword（取词 words[i]，不足取模循环——W_FLASH_WORDS_REUSE 在
+    // validateSpec 层留痕）+ layout i%4 轮转 + index/total + seconds（页面
+    // 时钟，FINDING-5）+ brandParams（big-card/segment 都支持 ?logo=）。
+    // timeline v1（非 specMode）保持旧 URL 逐字节不变（golden 兼容）。
+    const flashWords = (Array.isArray(flash.words) ? flash.words : [])
+      .map((w) => String(w ?? '').trim())
+      .filter(Boolean);
+    const flashFirst = String(flash.first ?? '').trim();
+    const flashKeyword = String(flash.keyword ?? '').trim();
     for (let i = 0; i < flashCount; i++) {
+      const word = flashWords.length ? flashWords[i % flashWords.length] : '';
+      const contentParams = specMode
+        ? {
+            layout: flash.layout != null ? flash.layout : i % 4,
+            index: i + 1,
+            total: flashCount,
+            seconds: flashEach,
+            ...(word || flashFirst ? { first: word || flashFirst } : {}),
+            ...(word || flashKeyword ? { keyword: word || flashKeyword } : {}),
+            ...(flash.color ? { color: flash.color } : {}),
+          }
+        : { item: i, count: flashCount };
       nominal.push({
         id: `f${String(i + 1).padStart(2, '0')}`, kind: 'flash', index: i, label: `flash ${i + 1}/${flashCount}`,
         page: query(flash.page || DEFAULT_PAGES.flash, {
           ...themeParams,
           ...motionParams,
           ...accentParams,
-          item: i,
-          count: flashCount,
+          ...brandParams,
+          ...contentParams,
           ...(flash.params || {}),
         }),
         duration: flashEach,

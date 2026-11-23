@@ -287,7 +287,7 @@
       "$ref": "#/definitions/pageBlock"
     },
     "flash": {
-      "$ref": "#/definitions/pageBlock"
+      "$ref": "#/definitions/flashBlock"
     },
     "ending": {
       "$ref": "#/definitions/pageBlock"
@@ -703,6 +703,52 @@
         },
         "keyword": {
           "type": "string"
+        },
+        "color": {
+          "type": "string"
+        }
+      }
+    },
+    "flashBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "快闪块（S9 真闭环，v4.12/G4）。FLASH_KEYS 白名单见 templates/spec.mjs；未知字段 validateSpec 报 E_UNKNOWN_FIELD。",
+      "properties": {
+        "page": {
+          "type": "string",
+          "description": "快闪页；默认 segments/flash.html（new-project 副本）或 templates/big-card.html。两者都消费 ?first。"
+        },
+        "name": {
+          "type": "string"
+        },
+        "params": {
+          "type": "object",
+          "description": "原样拼进 flash 段 URL 的自定义参数（页面侧逃生口）。",
+          "additionalProperties": {
+            "type": ["string", "number", "boolean"]
+          }
+        },
+        "words": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "maxItems": 256,
+          "description": "快闪词表：plan 逐段 first=keyword=words[i % len]（不足取模=W_FLASH_WORDS_REUSE，多余=W_FLASH_WORDS_UNUSED，count=0=W_FLASH_DEAD）。每项 trim 后非空、≤8 码点（对齐 big-card slice(0,8)；防劈代理对用 [...s]，见 spec.mjs cjkLength），否则 E_FLASH_WORDS。"
+        },
+        "layout": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "first": {
+          "type": "string",
+          "description": "无 words 时的静态首行词（words 优先）。"
+        },
+        "keyword": {
+          "type": "string",
+          "description": "无 words 时的静态关键词（words 优先）。"
         },
         "color": {
           "type": "string"

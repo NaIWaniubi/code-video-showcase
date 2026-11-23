@@ -21,7 +21,7 @@ export const SPEC_VERSION = 1;
  * v2.3.5 → 2：页面开始消费 title/sub/brand/capsule 参数，默认画面文案变了，
  * 所有旧缓存段必须失效一次（一次性全量重渲，是有意为之）。
  */
-export const ENGINE_VERSION = 4; // v4.9.1: 生产 URL 保留 plan query（此前全剥→成片渲染成内建 demo 文案）——所有历史段缓存字节级不可信，bump 强制全失效
+export const ENGINE_VERSION = 5; // v4.12/G4：flash 逐段取词/轮转 layout、big-card 时钟按 ?seconds 归一、bpm 进 URL+哈希、logo 字节进哈希、card/more/flash 补 brand 参数——逐帧像素与段哈希面同时变化，历史段缓存一律失效（有意为之，golden 需主线程重录）
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
@@ -48,6 +48,15 @@ const ABS_PATH_RE = /^(?:\/|[A-Za-z]:[\\/]|\\\\)/;
  * `params` 是给页面自定义参数留的逃生口。
  */
 const STYLE_KEYS = new Set(['page', 'recipe', 't0', 'speed', 'motion', 'copy', 'reflow', 'name', 'label', 'params']);
+
+/**
+ * flash 块允许的字段（S9）：以前 flash 块没有任何白名单，`words` 拼错成
+ * `wordz` 会一路写进 spec、被 plan 忽略、成片继续放 4 遍默认词。
+ * words = 快闪词表（plan 逐段取词 first/keyword=words[i%len]）。
+ */
+const FLASH_KEYS = new Set(['page', 'name', 'params', 'words', 'layout', 'first', 'keyword', 'color']);
+/** flash 单词上限（码点）：对齐 big-card slice(0,8)；校验用 [...s] 防劈代理对。 */
+export const FLASH_WORD_MAX_CODEPOINTS = 8;
 
 /** 资源上限（防止一个 spec 排出天文数字的段与帧）。 */
 export const MAX_FLASH_COUNT = 256;
@@ -224,6 +233,9 @@ export function deriveFromScript(script, base = {}) {
       case 'flash':
         structure.flash.count = (structure.flash.count || 0) + 1;
         if (dur > 0) structure.flash.each = dur;
+        // S9：flash 块的 copy 不再丢——累积进 spec.flash.words，
+        // 由 timeline-core 逐段取词 first/keyword=words[i%len] 下发上屏。
+        flash.words = [...(flash.words || []), ...(Array.isArray(b.copy) ? b.copy : [])];
         break;
       case 'ending':
         ending.page = b.page || DEFAULT_PAGES.ending;
@@ -358,6 +370,50 @@ export function validateSpec(spec) {
   if (Number(st.flash.count) > MAX_FLASH_COUNT) {
     err('E_FLASH_MAX', 'structure.flash.count', `flash.count must be <= ${MAX_FLASH_COUNT}, got ${st.flash.count}`);
   }
+  // ── flash 块（S9 真闭环）：白名单 + words 形状 + 词↔段数对账 ──
+  const flashBlock = spec.flash || {};
+  for (const k of Object.keys(flashBlock)) {
+    if (!FLASH_KEYS.has(k)) {
+      err('E_UNKNOWN_FIELD', `flash.${k}`,
+        `unknown flash field "${k}"; allowed: ${[...FLASH_KEYS].join(', ')}`);
+    }
+  }
+  if (flashBlock.words != null) {
+    const flashN = Number(st.flash.count) || 0;
+    if (!Array.isArray(flashBlock.words)) {
+      err('E_FLASH_WORDS', 'flash.words', `words must be an array of strings, got ${typeof flashBlock.words}`);
+    } else {
+      if (flashBlock.words.length > MAX_FLASH_COUNT) {
+        err('E_FLASH_WORDS', 'flash.words',
+          `words must have at most ${MAX_FLASH_COUNT} entries, got ${flashBlock.words.length}`);
+      }
+      flashBlock.words.forEach((w, i) => {
+        if (typeof w !== 'string') {
+          err('E_FLASH_WORDS', `flash.words[${i}]`, `each word must be a string, got ${typeof w}`);
+        } else if (!w.trim()) {
+          // 空串经 query() 的 v!=='' 闸门被丢 → 页面回落内建「想做」（S9 病根）。
+          err('E_FLASH_WORDS', `flash.words[${i}]`,
+            'each word must contain non-whitespace text; empty strings are dropped by the plan query and the page falls back to built-in copy');
+        } else if (cjkLength(w.trim()) > FLASH_WORD_MAX_CODEPOINTS) {
+          err('E_FLASH_WORDS', `flash.words[${i}]`,
+            `word "${w.trim().slice(0, 12)}…" is ${cjkLength(w.trim())} code points (max ${FLASH_WORD_MAX_CODEPOINTS}, matches big-card slice(0,8))`);
+        }
+      });
+      const nWords = flashBlock.words.filter((w) => typeof w === 'string' && w.trim()).length;
+      if (flashN > 0 && nWords > 0 && nWords < flashN) {
+        warn('W_FLASH_WORDS_REUSE', 'flash.words',
+          `${nWords} word(s) across ${flashN} flash segments: words are reused modulo (i % len); add more words or reduce structure.flash.count`);
+      }
+      if (flashN > 0 && nWords > flashN) {
+        warn('W_FLASH_WORDS_UNUSED', 'flash.words',
+          `${nWords - flashN} word(s) unused: ${nWords} words but structure.flash.count=${flashN}; raise count or drop words`);
+      }
+      if (flashN === 0 && nWords > 0) {
+        warn('W_FLASH_DEAD', 'flash.words',
+          `structure.flash.count=0 but ${nWords} word(s) provided — nothing consumes flash.words; set count>0 or remove words`);
+      }
+    }
+  }
   for (const k of ['opening', 'round', 'card', 'ending', 'moreCard']) {
     if (Number(st[k]) > MAX_SEGMENT_SECONDS) {
       err('E_STRUCTURE_MAX', `structure.${k}`, `${k} must be <= ${MAX_SEGMENT_SECONDS}s, got ${st[k]}`);
@@ -409,6 +465,12 @@ export function validateSpec(spec) {
           } else if (typeof r.style.copy[k] !== 'string') {
             err('E_COPY', `${at}.style.copy.${k}`, `${k} must be a string`);
           }
+        }
+        // FINDING-v4.10.1（G4-5 停发面）：全仓 0 个页面读 ?caption=，历史上它
+        // 是死参数。plan 已停发，这里把「该字段当前不上屏」从静默变留痕。
+        if (typeof r.style.copy.caption === 'string' && r.style.copy.caption.trim()) {
+          warn('W_COPY_CAPTION_UNCONSUMED', `${at}.style.copy.caption`,
+            'style.copy.caption is not rendered by any page (no page consumes ?caption=); use opening.capsule or style.copy.subtitle instead');
         }
       }
     }

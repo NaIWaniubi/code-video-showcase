@@ -165,6 +165,16 @@ test('segment.html 的占位骨架标记仍在（说明我们没有靠删标记�
 
 // v4.10.1 文案消耗矩阵（校园墙成片目检暴露：datarace 不吃 ?title、全部 recipe 不吃
 // ?sub——spec 的 style.copy 副题从未上屏，QA 只验 plan 字段存在所以一直绿）。
+// v4.12/G4 重写（FINDING-v4.10.1 残留）：旧版按 `const SUB(?:TITLE)? = String(`
+// 正则找副题行——变量名不叫 SUB 的页（editorial 的 DECK、inkwash 的 POEM）全部漏网，
+// 命名盲区正是「修了 20 页还剩 2 页」的根因。现在改成**下发参数名 ↔ 页面读取**
+// 的命名无关对账：
+//   1) 副题槽位 = 源码引用 V.subtitle（变量别名无关）⇒ 必须读 get('sub')；
+//   2) 用真实 buildPlan 的 URL 收集每页实际下发的内容参数，逐个断言页面读取；
+//   3) 下发的内容参数集合 ⊆ {title, sub}：caption 停发（0 消费者，W_COPY_CAPTION_
+//      UNCONSUMED 留痕），未来新增下发参数必须先接通消费，否则此闸红。
+import { buildPlan } from '../templates/timeline.mjs';
+
 test('每个专属配方页必须消费 ?title（画大标题的页面无例外）', () => {
   for (const [id, page] of Object.entries(STYLE_PAGES)) {
     if (String(page).split('?')[0] === GENERIC_PAGE) continue;
@@ -172,15 +182,52 @@ test('每个专属配方页必须消费 ?title（画大标题的页面无例外�
     assert.ok(/get\(['"]title['"]\)/.test(src), `${id} (${page}) ignores ?title= — spec copy would silently not render`);
   }
 });
-test('凡画 subtitle 变量的配方页必须消费 ?sub', () => {
+
+test('副题槽位命名无关对账：引用 V.subtitle 的页必须读 ?sub（DECK/POEM 不再漏网）', () => {
   for (const [id, page] of Object.entries(STYLE_PAGES)) {
     if (String(page).split('?')[0] === GENERIC_PAGE) continue;
     const src = read(page);
-    // 按行找 SUB/SUBTITLE 的 String(...) 定义行（整行匹配，避免 [^)] 截断陷阱）
-    const line = src.split(/\r?\n/).find((l) => /const SUB(?:TITLE)? = String\(/.test(l));
-    if (!line) continue; // 该页不画副题（如 whiteboard），矩阵记为 N/A
-    if (line.includes('V.subtitle')) {
-      assert.ok(line.includes("get('sub')"), `${id} (${page}) draws a subtitle var but ignores ?sub=`);
+    const hasSlot = src.includes('V.subtitle');
+    const readsSub = src.includes("get('sub')") || src.includes('get("sub")');
+    if (hasSlot) {
+      assert.ok(readsSub, `${id} (${page}) 有副题槽位（引用 V.subtitle）但不读 ?sub= —— 变量名正则盲区复活`);
+    }
+  }
+});
+
+test('plan 实际下发的内容参数 ↔ 页面读取双向对账（命名无关，含 v1 兼容）', () => {
+  // 用 timeline-core 纯函数构造 specMode plan（不触 fs 哈希，毫秒级）。
+  const specFor = (page) => ({
+    version: 1,
+    meta: { title: 'T', theme: 'coral-noir', fps: 30, bpm: 120, specMode: true, brand: 'ACME' },
+    structure: { opening: 1, round: 4, card: 1, ending: 1, moreCard: 1, flash: { count: 0, each: 1 } },
+    rounds: [{
+      id: 'r01', name: '轮一',
+      card: { page: 'templates/big-card.html' },
+      style: { page, copy: { title: '轮标题', subtitle: '轮副题', caption: '轮说明' } },
+    }],
+  });
+  for (const [id, page] of Object.entries(STYLE_PAGES)) {
+    const bare = String(page).split('?')[0];
+    if (bare === GENERIC_PAGE) continue;
+    const plan = buildPlan(specFor(page), { root: ROOT });
+    const seg = plan.segments.find((s) => s.kind === 'style');
+    const sp = new URLSearchParams(String(seg.page).split('?')[1] || '');
+    const src = read(page);
+    const reads = (k) => src.includes(`get('${k}')`) || src.includes(`get("${k}")`);
+    // ① 标题页必须收到并读取 ?title
+    assert.equal(sp.get('title'), '轮标题', `${id}: plan 未下发 ?title`);
+    assert.ok(reads('title'), `${id}: 收到 ?title 但页面不读`);
+    // ② 副题：有槽位的页必须读到；下发集合不允许出现 caption
+    assert.ok(!sp.has('caption'), `${id}: ?caption 已停发（0 消费者），不得回流`);
+    if (src.includes('V.subtitle')) {
+      assert.equal(sp.get('sub'), '轮副题', `${id}: plan 未下发 ?sub`);
+      assert.ok(reads('sub'), `${id}: 收到 ?sub 但页面不读`);
+    }
+    // ③ 下发面 ⊆ 已知集合（新增 chrome 参数需显式登记，防止无名死参数）
+    const KNOWN = new Set(['theme', 'mp', 'accent', 'accentInk', 'accentSoft', 'brand', 'logo', 'brandFont', 'recipe', 'title', 'sub', 'bpm']);
+    for (const k of sp.keys()) {
+      assert.ok(KNOWN.has(k), `${id}: style URL 出现未登记参数 ?${k}（先接消费再下发）`);
     }
   }
 });

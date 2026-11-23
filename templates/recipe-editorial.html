@@ -42,7 +42,9 @@ const V = vars();
 const BRAND = String(V.brand || 'CVS').slice(0, 24);
 const KICKER = String(V.caption || '特稿 · FEATURE').slice(0, 24);
 const TITLE = String(params.get('title') || V.title || '标题的诞生').slice(0, 18);
-const DECK = String(V.subtitle || '一份报纸的版面，如何把一件事讲清楚').slice(0, 40);
+// FINDING-v4.10.1 补漏：副题变量名是 DECK——生产链路只走 URL 参数（vars 注入
+// 仅在显式 --vars 路径），旧矩阵按 `const SUB = String(` 正则漏掉了本页。
+const DECK = String(params.get('sub') || V.subtitle || '一份报纸的版面，如何把一件事讲清楚').slice(0, 40);
 
 const PAPER = '#f5f1e8';
 const INK = '#1a1a1a';

@@ -86,6 +86,10 @@ const HUD = HAS_THEME ? chrome(THEME) : null;
 // plan 会把 title/sub/brand/capsule 下发到 URL；直接打开页面时用品牌兜底。
 const PARAM_TITLE = String(p.get('title') || '').trim();
 const PARAM_SUB = String(p.get('sub') || '').trim();
+// S9（v4.12/G4）：new-project 的 flash.html 就是本页的副本，只认 title/sub 的话
+// flash.words 下发的 ?first 落不进画面、回落到内建「想做」——病根换个页复活。
+// ?first 作为标题的同义参数（plan 只给 flash 段下发 first）。
+const PARAM_FIRST = String(p.get('first') || '').trim();
 const PARAM_BRAND = String(p.get('brand') || '').trim();
 const PARAM_CAPSULE = String(p.get('capsule') || '').trim();
 // ---------- brand visuals（v2.4 / P1-12） ----------
@@ -117,7 +121,7 @@ function drawBrandLogo() {
   ctx.restore();
 }
 const BRAND_LABEL = PARAM_BRAND || '';
-const TITLE = PARAM_TITLE || BRAND_LABEL;
+const TITLE = PARAM_TITLE || PARAM_FIRST || BRAND_LABEL;
 const SUB = PARAM_SUB || '';
 // R2-29（N02-F2）：胶囊（左上 eyebrow）兜底用**品牌**而非标题——旧版
 // `TITLE.slice(0,12)` 让仅传 ?title= 的官方命令形态把标题复读两遍（中央大字
