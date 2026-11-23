@@ -30,7 +30,7 @@
 
 export const THEME_SCHEMA_VERSION = 3; // v3 adds four skins + four material kinds
 
-import { apcaAbs } from './color.js'; // v4.9.0：accentInk 兜底与 auditApca 同尺（此前 WCAG 候选挑色 vs APCA 闸判色 = 两把尺互斥死结，校园墙宣传片实测暴露）
+import { apcaAbs, apcaLc, toOklch, withLightness, toHex } from './color.js'; // v4.9.0：accentInk 兜底与 auditApca 同尺（此前 WCAG 候选挑色 vs APCA 闸判色 = 两把尺互斥死结，校园墙宣传片实测暴露）；v4.12.x KNOWN_RED 收口：点缀极性重算走 OKLCH
 
 /* ────────────────────────────────────────────────────────────────────────────
  * 主题数据
@@ -958,6 +958,66 @@ export const THEMES = {
   },
 };
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * R2-05 收口 · 点缀色极性重算（KNOWN_RED：theme-audit 上屏组合矩阵 8 项硬不可读）
+ * ----------------------------------------------------------------------------
+ * 上屏组合矩阵（theme-audit / R2-28）把 theme.accents 直接印在 bg/surface 上判可读性。
+ * 画风表里 5 支「透光的粉彩 / 压暗的深酒」点缀对自家底色是白字白底级别的组合
+ * （淡粉/暖沙对莫兰迪雾底、月白对青瓷纸白、暗酒红/近黑对剧场近黑，Lc 0–19.3）。
+ * 修法 = 极性规则的一般解（不是 8 项组合特判）：
+ *
+ *   浅底出深点缀，深底出浅点缀。
+ *
+ * 触发（不达标才动，最小改动面）：该点缀色对 底 或 表面 任一满足「双不可读」
+ * （WCAG<2 且 |APCA Lc|<20，与 theme-audit 矩阵硬闸同尺），或极性与主题明暗相反。
+ * 重算：OKLCH 锁色相/彩度，明度沿极性正确方向以 1% 步长逼近，直到双档达标——
+ * 主底（大面积正文档）|Lc| ≥ 60，表面（次要档）≥ 45。步长确定性 → 像素可复刻。
+ * 原值留在 accents[i].source（theme-sheet/board 展示与既有资产溯源仍可读回）；
+ * 达标的点缀色逐字节不动。17 主题 × 4 点缀里只有 5 个被重算。
+ *
+ * 纪律：本函数只动 accents 推荐列表；colors.* token（bg/accent/accentInk/…）
+ * 与材质层（glow/tints/foil 字面量，莫兰迪柔光三团等）完全不经过这里——
+ * 「只从光里透出来」的粉彩在光里原样保留，只有直接印上底色的推荐点缀变极性安全。
+ * ──────────────────────────────────────────────────────────────────────────── */
+const ACCENT_GRADE = { bg: 60, surface: 45 };   // 双档：主底正文档 / 表面次要档
+const ACCENT_UNREADABLE = (fg, ground) =>        // 与 theme-audit 矩阵 hard 判据同尺
+  contrastRatio(fg, ground) < 2 && Math.abs(apcaLc(fg, ground)) < 20;
+
+/**
+ * 点缀色极性兜底：可读且极性正确 → 原样；否则锁色相彩度、沿 OKLCH 明度走到
+ * 对底 ≥60 / 对表面 ≥45 的第一档（浅底向下、深底向上，1% 步长，确定性）。
+ * 纯计算，不查表——任何新主题/新点缀自动适用，无 8 项组合特判。
+ */
+export function polarityAccentHex(hex, theme) {
+  const bg = theme.colors.bg;
+  const sf = theme.colors.surface;
+  const dir = theme.mode === 'light' ? 1 : -1; // 浅底深点缀 Lc>0；深底浅点缀 Lc<0
+  const pass = (fg, ground) => !(ACCENT_UNREADABLE(fg, ground) || dir * apcaLc(fg, ground) <= 0);
+  const grade = (fg, ground, min) => dir * apcaLc(fg, ground) >= min;
+  if (pass(hex, bg) && pass(hex, sf)) return hex;
+  let out = hex;
+  for (const [ground, min] of [[bg, ACCENT_GRADE.bg], [sf, ACCENT_GRADE.surface]]) {
+    if (grade(out, ground, min)) continue;
+    const o = toOklch(out);
+    for (let i = 1; i <= 100; i++) {
+      const L = dir > 0 ? o.l * (1 - i / 100) : o.l + (1 - o.l) * (i / 100);
+      out = toHex(withLightness(o, Math.min(1, Math.max(0, L))));
+      if (grade(out, ground, min)) break;
+    }
+  }
+  return out;
+}
+
+// 模块装载时归一一次（单一计算路径：THEME_LIST / getTheme / themeFromURL 全部吃到）。
+for (const theme of Object.values(THEMES)) {
+  if (!Array.isArray(theme.accents)) continue;
+  theme.accents = theme.accents.map((a) => {
+    if (!a || typeof a.hex !== 'string') return a;
+    const fixed = polarityAccentHex(a.hex, theme);
+    return fixed === a.hex ? a : { ...a, source: a.hex, hex: fixed, polarityFixed: true };
+  });
+}
+
 export const THEME_IDS = Object.keys(THEMES);
 export const THEME_LIST = THEME_IDS.map((id) => THEMES[id]);
 export const DEFAULT_THEME = 'coral-noir';
@@ -1150,9 +1210,17 @@ export function cardColors(themeRef, layout = 0) {
     return cands.find((hex) => contrastRatio(hex, bg) >= min) || cands[0];
   };
   if (layout === 0) {
-    // R2-05：强调底上的 ink 也要极性兜底——浅色 accent（或 ?color= 覆盖）
-    // 配近白 accentInk 会白字白底。候选含暗/亮两端，挑达标者。
-    const ink0 = readable(c.accentInk, c.accent, [c.cardDarkInk, c.paperInk, '#0e0e0d', '#f7f4ea']);
+    // R2-05：强调底上的字必须按**实际底色**做极性重算，判据从旧 WCAG≥3 升到 APCA 双档：
+    // 优先 ≥60（正文档），够不着落 ≥45（大字地板）。旧链只查 WCAG，在中亮度强调底
+    // （claude 陶土橙 / 莫兰迪水蓝 / 信号橙）会把 accentInk 盲选留在 Lc 42.6–43.7，
+    // 并在更浅的底上退化成白字白底级；双档后这三主题的卡面字翻极性到 cardDarkInk，
+    // 其余主题首选仍是 accentInk 原 token（14/17 逐字节不变）。两端都够不着
+    // （饱和中灰底）才回退旧 WCAG 候选链，行为与修复前一致。
+    const inkCands = [c.accentInk, c.cardDarkInk, c.paperInk, '#0e0e0d', '#f7f4ea'].filter(Boolean);
+    const inkByLc = (min) => inkCands.find((h) => Math.abs(apcaAbs(h, c.accent)) >= min);
+    const ink0 = inkByLc(60) || inkByLc(45)
+      || readable(c.accentInk, c.accent, inkCands.slice(1))
+      || c.accentInk;
     return {
       field: 'accent',
       bg: c.accent,
