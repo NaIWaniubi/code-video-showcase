@@ -80,7 +80,7 @@ assert(fs.existsSync(path.resolve(ROOT, TMP_MANIFEST)), `golden --update did not
 
 const manifest = readManifest(TMP_MANIFEST);
 
-test('manifest covers card/cyber/mixed with 3 stills each (9 total)', () => {
+test('manifest covers card/cyber/demo-skeleton/mixed with 3 stills each (12 total)', () => {
   assert(Array.isArray(manifest.specs), 'manifest.specs must be an array');
   const names = manifest.specs.map((s) => s.name);
   assert(JSON.stringify(names) === JSON.stringify(['card', 'cyber', 'demo-skeleton', 'mixed']), `unexpected spec names: ${JSON.stringify(names)}`);
@@ -89,7 +89,9 @@ test('manifest covers card/cyber/mixed with 3 stills each (9 total)', () => {
     assert(Array.isArray(s.stills) && s.stills.length === 3, `${s.name}: expected 3 stills, got ${s.stills?.length}`);
     count += s.stills.length;
   }
-  assert(count === 9, `expected 9 stills total, got ${count}`);
+  // demo-skeleton 加入 golden 夹具时此处只同步了上面的名字列表、漏改总数，
+  // 于是 test-golden 这条自那以后恒红（4×3=12 不是 9）——正是「golden 入门禁只做到一半」的显形。
+  assert(count === manifest.specs.length * 3, `expected ${manifest.specs.length * 3} stills total, got ${count}`);
 });
 
 test('every manifest still exists and hashes to its recorded value', () => {
