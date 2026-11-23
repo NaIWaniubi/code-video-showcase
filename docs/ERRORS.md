@@ -8,6 +8,7 @@
 | 退出码 | 阶段 | 用法 |
 |---|---|---|
 | 0 | ok | ok |
+| 1 | taste | taste gate verdict blocking（cvs taste；G3-9 对齐 0/1/2 承诺。13 仍归 qa 族） |
 | 2 | usage | usage / unknown command |
 | 10 | spec | spec (spec.json / lint / plan) |
 | 11 | render | render (segment render) |
@@ -17,7 +18,7 @@
 
 脚本可以用退出码做粗分流，用 `--json` / `error.json` 的 `code` 做精确重试。
 
-## 已注册错误码（172）
+## 已注册错误码（188）
 
 | 错误码 | 阶段 | 退出码 | 含义 | 唯一动作 |
 |---|---|---|---|---|
@@ -25,6 +26,7 @@
 | `E_DEMO_ONLY` | usage | 2 | --only 里的演示风格名不在导演演示集六件内 | 用 wireframe|skeleton|fractal|firework|terrain|network 之一 |
 | `E_PLAN_INCOMPLETE` | usage | 2 | qa-audio 的 --plan 是合法 JSON 但缺 audio.bpm/cues（旧行为直接 KeyError 崩溃，脚本无法路由） | 重新跑 `cvs plan` 生成完整 plan；残缺 plan 下 cue/tempo/HF 门禁无法执行 |
 | `E_PLAN_MISSING` | usage | 2 | qa-audio 的 --plan 指向不存在的文件（旧行为静默丢掉 cue/HF 门禁假绿） | 先跑 `cvs plan` 生成 plan.json，或修正 --plan 路径 |
+| `E_SET_UNSAFE_PATH` | usage | 2 | G5-5：`cvs again --set` 的路径含危险段（__proto__/constructor/prototype 原型污染）或数组索引超上限 65535（无界内存 DoS） | 只用 spec 声明过的字段路径（meta/look/format/rounds.… 等）；索引给真实段号 |
 | `E_UNKNOWN_COMMAND` | usage | 2 | 未知子命令 | 运行 `cvs --help` |
 | `E_UNKNOWN_FLAG` | usage | 2 | 未知命令行 flag（拼错的 --strict 等不再被静默忽略） | 按报错里的 did-you-mean 修正；`cvs <cmd> --help` 看全表 |
 | `E_UNKNOWN_STYLE` | usage | 2 | demo 命令的风格 id 不在 STYLE_IDS 词表内 | 用 cvs --help 列出的风格 id，或 cvs motion list 看目录 |
@@ -46,6 +48,7 @@
 | `E_EXCEPTION` | spec | 10 | E_EXCEPTION：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_FLASH` | spec | 10 | flash 参数非法 | count ≥ 0 且 each > 0 |
 | `E_FLASH_MAX` | spec | 10 | flash.count 超过 256 | 减少闪帧 |
+| `E_FLASH_WORDS` | spec | 10 | flash.words 非法：不是字符串数组，或某项为空/纯空白（经 query() 会被丢弃 → 页面回落内建「想做」，S9 病根），或码点 >8（超出 big-card 单屏容量），或项数 >MAX_FLASH_COUNT | 每个词 trim 后非空、≤8 码点（[...s].length，不劈代理对）；总数 ≤ structure.flash.count 上限；删掉空串或补上真实快闪文案 |
 | `E_FPS` | spec | 10 | fps 非法 | 1..120 的整数 |
 | `E_JSON` | spec | 10 | JSON 解析失败 | 检查 JSON 语法或改用 --json 获取机器可读错误 |
 | `E_JSON_PARSE` | spec | 10 | spec JSON 语法错误 | 修正 JSON |
@@ -105,6 +108,10 @@
 | `E_VO_ENTRY` | spec | 10 | audio.vo[i] 条目不合法（缺 text / start 为负 / duration 非正） | 按报错 path 修对应字段；duration 省略则按字数估速 |
 | `E_VO_TYPE` | spec | 10 | spec.audio.vo 不是 {text,start,duration} 条目数组 | 改成数组；每条含非空 text（start/duration 可缺省） |
 | `E_VO_WORDS` | spec | 10 | audio.vo[].words 形状不合法：每个词须 {w:string, t0<=t1 finite} | 用 cvs caption 产词级时间戳，或按秒（三位小数）手工对齐 |
+| `W_COPY_CAPTION_UNCONSUMED` | spec | 0 | style.copy.caption 有内容但全仓无页面消费 ?caption=（死文案，历史上静默丢值）；plan 已停发该参数 | 改用 style.copy.subtitle（各 recipe 页已接通 ?sub=）或 opening.capsule；确要保留 caption 字段则忽略此警告 |
+| `W_FLASH_DEAD` | spec | 0 | structure.flash.count=0 但提供了 flash.words：没有任何快闪段消费这些词（死配置） | 把 count 提到 ≥1，或删除 flash.words |
+| `W_FLASH_WORDS_REUSE` | spec | 0 | flash.words 数量 < structure.flash.count：取词会从头循环复用（w[i % len]），同一片子里有重复快闪词 | 补齐到 count 个不重复词，或把 count 降到 words 数量（确认是刻意的可忽略） |
+| `W_FLASH_WORDS_UNUSED` | spec | 0 | flash.words 数量 > structure.flash.count：多出的词没有对应段，被静默截断 | 提高 count 或删除多余 words（确认是刻意的可忽略） |
 | `E_ASR_ENV` | render | 14 | 词级 ASR 环境缺失：python 无 faster-whisper 或模型不可得（在线首拉失败/离线无 HF_HOME 缓存） | pip install faster-whisper；离线机预置 huggingface 缓存（Systran/faster-whisper-large-v3）后用 --model 指本地目录 |
 | `E_ASR_RUN` | render | 13 | 词级 ASR 运行失败（设备/解码/超时） | 看 stderr python 侧原因；CPU 慢可 --device cpu 显式避免探测超时 |
 | `E_BLUR` | render | 11 | cvs build --motion-blur：tmix 后置 pass 失败（ffmpeg 非零 / 权重串非法 / 权重数不足 2） | 确认 ffmpeg 带 tmix（7.x 自带）；spec 里只填三档名 |
@@ -124,8 +131,16 @@
 | `E_SCORE` | qa | 13 | cvs score：评分报告写出失败（磁盘/权限/路径）。plan 缺失不再触发本码——相应维度标 skipped 照常出分 | 换 --out 目录或检查磁盘；其余维度证据看 stderr 各行 |
 | `E_SNAPSHOT_TAMPERED` | qa | 13 | 快照文件与记录的 sha256 不符，拒绝回滚 | cvs verify <v> 定位文件；从备份恢复 |
 | `E_SUBTITLES_MISSING` | qa | 13 | 要烧字幕但 master.srt 不存在 | 去掉 --no-deliver，或去掉 --burn-subtitles |
-| `E_TASTE_FAIL` | qa | 13 | cvs taste 审美闸不过：存在 error 级 finding（或 --strict 下有 warning）。逐条判决见 out/qa/taste.json（evidence 带实测值） | 按 findings 修 spec/主题 token；确属误判走 .cvs/waivers.json 豁免（rule+reason+date），**绝不为过闸改规则阈值** |
+| `E_TASTE_ASSERT` | qa | 2 | cvs taste：规则目录某条缺 assert 或 assert 非法（缺失/类型错/regex 不可编译/id 重复/severity 非法）。判决阈值唯一真值破损时启动即错，绝不静默回退硬编码（G3-6） | 补全该条 assert 的必需字段后重跑；各条目形状见 schema/taste-rules.json 与 scripts/taste.mjs ASSERT_OK |
+| `E_TASTE_FAIL` | qa | 1 | cvs taste 审美闸判决阻断（G3-9 退出码 0/1/2：1=error/broken/expired-waiver/strict-warning 任一存在）。逐条判决见 out/qa/taste.json（evidence 带实测值）；帧级规则 input=frames 显式 skip 并计数，不参与判决 | 按 findings 修 spec/主题 token；确属误判走 .cvs/waivers.json 豁免（rule+reason+date，date=有效期止），**绝不为过闸改规则阈值**（阈值唯一真值在 schema/taste-rules.json 的 assert） |
 | `E_TASTE_READ` | qa | 2 | cvs taste：spec.json 或规则目录不可读/非法 JSON | 确认路径存在且为 JSON；规则目录缺省 schema/taste-rules.json（--rules 可指） |
+| `E_TASTE_WAIVER` | qa | 2 | cvs taste：.cvs/waivers.json 结构非法（既不是数组也不是 {waivers:[...]}，或条目不是对象） | 按 {waivers:[{rule,reason,date}]} 形状修文件 |
+| `E_TASTE_WAIVER_DATE` | qa | 2 | cvs taste：豁免条目 date 不是 YYYY-MM-DD（无法判过期即启动错，不许拿『永不过期』兜底） | 改成 YYYY-MM-DD；该值是豁免有效期止 |
+| `E_TASTE_WAIVER_EXPIRED` | qa | 1 | cvs taste：豁免已过有效期（date < 今天；时钟可 --today 注入）——该条 fail 不再被豁免并计入 blocking（G3-7） | 重新评审：修 spec、续期（换新 date 并留新 reason）或删条目 |
+| `E_TASTE_WAIVER_REASON` | qa | 2 | cvs taste：豁免条目缺 reason 或 reason 为空白——豁免是留痕承诺不是过闸开关（G3-7） | 写明为什么这条审美判定对本片不适用 |
+| `E_TASTE_WAIVER_RULE` | qa | 2 | cvs taste：豁免条目的 rule 不在规则目录（拼错或已删除的规则不许静默放行，G3-7） | 对照 schema/taste-rules.json 修 rule id，或删掉该豁免 |
+| `E_TASTE_WAIVER_UNUSED` | qa | 1 | cvs taste：--report-unused-waivers 下存在从未命中的豁免——失效豁免留在仓库里是债务（G3-7） | 删掉不再触发的豁免条目，或去掉该旗标退回只列示 |
+| `E_TASTE_WRITE` | qa | 0 | cvs taste：--sarif 报告写盘失败（warn 级，不掩判决） | 检查 --out 目录权限 |
 | `E_VERSION_UNKNOWN` | qa | 13 | 指定的版本快照不存在 | cvs history 查看可用版本 |
 | `E_AUDIO_NOT_FOUND` | env | 14 | --audio 文件不存在 | 检查路径 |
 | `E_AUDIO_REQUIRED` | env | 14 | 没有音轨且未显式豁免 | 装 Python numpy/scipy 自动合成，或传 --audio，或 --no-audio |
@@ -180,10 +195,12 @@
 | `E_NO_FFMPEG` | ingest | 15 | E_NO_FFMPEG：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_NO_FFPROBE` | ingest | 15 | E_NO_FFPROBE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_NO_FILE_PART` | preview | 0 | multipart 里没有带 filename 的文件分段 | 用 fetch FormData 附加 File |
+| `E_OUTPATH_ESCAPE` | mcp | 2 | G5-2：cvs_new 的 outPath 逃逸项目根（../ 穿越、绝对路径或 symlink 解析后落在 ROOT 之外），写盘被拒 | 把 outPath 指到仓库内路径（相对项目根或仓库内绝对路径）；需要写仓库外请显式换用文件系统工具 |
 | `E_PAGE_BARE` | plan | 10 | 页面（或其递归依赖）import 了 bare 模块说明符（node_modules/CDN 包名）。它不进 segmentHash：库一升级缓存就命中旧画面且 build 报成功——正是 plan.mjs 注释点名要防的假绿。CVS 是零依赖产品，第三方渲染库必须自实现或走页面内联脚本 | 把该 import 换成仓内相对路径（./、templates/、shared/、assets/、content/）或内联实现；确需外部库时写进 docs/DECISIONS.md 并经 --allow-remote-pages 之外的显式评审 |
 | `E_PATH` | preview | 0 | 预览路径非法（穿越/隐藏目录） | 路径必须落在仓库根内 |
 | `E_PAYLOAD_TOO_LARGE` | preview | 413 | 反代请求体超过 1MB 上限（源头掐断，不向上游灌数据） | 缩小提交体：拆小 spec 或分次评论 |
 | `E_READ_ERROR` | preview | 0 | 读取上传数据出错（连接中断或超限已断） | 重试；大文件建议先裁剪 |
+| `E_REF_BUSY` | preview | 429 | G5-4：wizard 的 /api/analyze-ref 并发已满（每路上传都要吃 400MB 预算 + 一路 ffmpeg 反推链） | 等当前参考片分析完成后重试；向导页收到 429 会提示稍后再传 |
 | `E_REF_VIDEO_FAILED` | ingest | 15 | 参考片反推失败（CLI 退出非 0：读不了/解码错/python 或 ffmpeg 不可用） | 检查文件与编码；FFMPEG/PYTHON 可用环境变量覆盖 |
 | `E_REF_VIDEO_TYPE` | preview | 0 | 参考片扩展名不在接受清单（mp4/webm/mov/mkv） | 转成 mp4/webm 再传 |
 | `E_REF_VIDEO_UNPARSEABLE` | preview | 0 | 反推脚本输出不是合法 JSON | 重试或换短一点的参考片 |
@@ -196,8 +213,8 @@
 
 ## 覆盖情况
 
-- 代码中出现的 `E_*`：172
-- 已注册且被使用：172
+- 代码中出现的 `E_*`：183
+- 已注册且被使用：183
 - 未注册：0
 
-- 已注册但当前未使用：0
+- 已注册但当前未使用：5（E_OUTPATH_ESCAPE, W_COPY_CAPTION_UNCONSUMED, W_FLASH_DEAD, W_FLASH_WORDS_REUSE, W_FLASH_WORDS_UNUSED）

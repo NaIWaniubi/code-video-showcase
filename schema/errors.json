@@ -3,6 +3,7 @@
   "description": "code-video-showcase 错误码注册表。每个 code 必须唯一对应一个 phase 与一个修复动作。",
   "exitCodes": {
     "0": "ok",
+    "1": "taste gate verdict blocking（cvs taste；G3-9 对齐 0/1/2 承诺。13 仍归 qa 族）",
     "2": "usage / unknown command",
     "10": "spec (spec.json / lint / plan)",
     "11": "render (segment render)",
@@ -34,6 +35,24 @@
       "exit": 2,
       "meaning": "qa-audio 的 --plan 指向不存在的文件（旧行为静默丢掉 cue/HF 门禁假绿）",
       "action": "先跑 `cvs plan` 生成 plan.json，或修正 --plan 路径"
+    },
+    "E_OUTPATH_ESCAPE": {
+      "phase": "mcp",
+      "exit": 2,
+      "meaning": "G5-2：cvs_new 的 outPath 逃逸项目根（../ 穿越、绝对路径或 symlink 解析后落在 ROOT 之外），写盘被拒",
+      "action": "把 outPath 指到仓库内路径（相对项目根或仓库内绝对路径）；需要写仓库外请显式换用文件系统工具"
+    },
+    "E_SET_UNSAFE_PATH": {
+      "phase": "usage",
+      "exit": 2,
+      "meaning": "G5-5：`cvs again --set` 的路径含危险段（__proto__/constructor/prototype 原型污染）或数组索引超上限 65535（无界内存 DoS）",
+      "action": "只用 spec 声明过的字段路径（meta/look/format/rounds.… 等）；索引给真实段号"
+    },
+    "E_REF_BUSY": {
+      "phase": "preview",
+      "exit": 429,
+      "meaning": "G5-4：wizard 的 /api/analyze-ref 并发已满（每路上传都要吃 400MB 预算 + 一路 ffmpeg 反推链）",
+      "action": "等当前参考片分析完成后重试；向导页收到 429 会提示稍后再传"
     },
     "E_READ": {
       "phase": "spec",
@@ -172,6 +191,36 @@
       "exit": 10,
       "meaning": "flash.count 超过 256",
       "action": "减少闪帧"
+    },
+    "E_FLASH_WORDS": {
+      "phase": "spec",
+      "exit": 10,
+      "meaning": "flash.words 非法：不是字符串数组，或某项为空/纯空白（经 query() 会被丢弃 → 页面回落内建「想做」，S9 病根），或码点 >8（超出 big-card 单屏容量），或项数 >MAX_FLASH_COUNT",
+      "action": "每个词 trim 后非空、≤8 码点（[...s].length，不劈代理对）；总数 ≤ structure.flash.count 上限；删掉空串或补上真实快闪文案"
+    },
+    "W_FLASH_WORDS_REUSE": {
+      "phase": "spec",
+      "exit": 0,
+      "meaning": "flash.words 数量 < structure.flash.count：取词会从头循环复用（w[i % len]），同一片子里有重复快闪词",
+      "action": "补齐到 count 个不重复词，或把 count 降到 words 数量（确认是刻意的可忽略）"
+    },
+    "W_FLASH_WORDS_UNUSED": {
+      "phase": "spec",
+      "exit": 0,
+      "meaning": "flash.words 数量 > structure.flash.count：多出的词没有对应段，被静默截断",
+      "action": "提高 count 或删除多余 words（确认是刻意的可忽略）"
+    },
+    "W_FLASH_DEAD": {
+      "phase": "spec",
+      "exit": 0,
+      "meaning": "structure.flash.count=0 但提供了 flash.words：没有任何快闪段消费这些词（死配置）",
+      "action": "把 count 提到 ≥1，或删除 flash.words"
+    },
+    "W_COPY_CAPTION_UNCONSUMED": {
+      "phase": "spec",
+      "exit": 0,
+      "meaning": "style.copy.caption 有内容但全仓无页面消费 ?caption=（死文案，历史上静默丢值）；plan 已停发该参数",
+      "action": "改用 style.copy.subtitle（各 recipe 页已接通 ?sub=）或 opening.capsule；确要保留 caption 字段则忽略此警告"
     },
     "E_FPS": {
       "phase": "spec",
@@ -1049,11 +1098,59 @@
       "meaning": "cvs taste：spec.json 或规则目录不可读/非法 JSON",
       "action": "确认路径存在且为 JSON；规则目录缺省 schema/taste-rules.json（--rules 可指）"
     },
+    "E_TASTE_ASSERT": {
+      "phase": "qa",
+      "exit": 2,
+      "meaning": "cvs taste：规则目录某条缺 assert 或 assert 非法（缺失/类型错/regex 不可编译/id 重复/severity 非法）。判决阈值唯一真值破损时启动即错，绝不静默回退硬编码（G3-6）",
+      "action": "补全该条 assert 的必需字段后重跑；各条目形状见 schema/taste-rules.json 与 scripts/taste.mjs ASSERT_OK"
+    },
+    "E_TASTE_WAIVER": {
+      "phase": "qa",
+      "exit": 2,
+      "meaning": "cvs taste：.cvs/waivers.json 结构非法（既不是数组也不是 {waivers:[...]}，或条目不是对象）",
+      "action": "按 {waivers:[{rule,reason,date}]} 形状修文件"
+    },
+    "E_TASTE_WAIVER_RULE": {
+      "phase": "qa",
+      "exit": 2,
+      "meaning": "cvs taste：豁免条目的 rule 不在规则目录（拼错或已删除的规则不许静默放行，G3-7）",
+      "action": "对照 schema/taste-rules.json 修 rule id，或删掉该豁免"
+    },
+    "E_TASTE_WAIVER_REASON": {
+      "phase": "qa",
+      "exit": 2,
+      "meaning": "cvs taste：豁免条目缺 reason 或 reason 为空白——豁免是留痕承诺不是过闸开关（G3-7）",
+      "action": "写明为什么这条审美判定对本片不适用"
+    },
+    "E_TASTE_WAIVER_DATE": {
+      "phase": "qa",
+      "exit": 2,
+      "meaning": "cvs taste：豁免条目 date 不是 YYYY-MM-DD（无法判过期即启动错，不许拿『永不过期』兜底）",
+      "action": "改成 YYYY-MM-DD；该值是豁免有效期止"
+    },
+    "E_TASTE_WAIVER_EXPIRED": {
+      "phase": "qa",
+      "exit": 1,
+      "meaning": "cvs taste：豁免已过有效期（date < 今天；时钟可 --today 注入）——该条 fail 不再被豁免并计入 blocking（G3-7）",
+      "action": "重新评审：修 spec、续期（换新 date 并留新 reason）或删条目"
+    },
+    "E_TASTE_WAIVER_UNUSED": {
+      "phase": "qa",
+      "exit": 1,
+      "meaning": "cvs taste：--report-unused-waivers 下存在从未命中的豁免——失效豁免留在仓库里是债务（G3-7）",
+      "action": "删掉不再触发的豁免条目，或去掉该旗标退回只列示"
+    },
+    "E_TASTE_WRITE": {
+      "phase": "qa",
+      "exit": 0,
+      "meaning": "cvs taste：--sarif 报告写盘失败（warn 级，不掩判决）",
+      "action": "检查 --out 目录权限"
+    },
     "E_TASTE_FAIL": {
       "phase": "qa",
-      "exit": 13,
-      "meaning": "cvs taste 审美闸不过：存在 error 级 finding（或 --strict 下有 warning）。逐条判决见 out/qa/taste.json（evidence 带实测值）",
-      "action": "按 findings 修 spec/主题 token；确属误判走 .cvs/waivers.json 豁免（rule+reason+date），**绝不为过闸改规则阈值**"
+      "exit": 1,
+      "meaning": "cvs taste 审美闸判决阻断（G3-9 退出码 0/1/2：1=error/broken/expired-waiver/strict-warning 任一存在）。逐条判决见 out/qa/taste.json（evidence 带实测值）；帧级规则 input=frames 显式 skip 并计数，不参与判决",
+      "action": "按 findings 修 spec/主题 token；确属误判走 .cvs/waivers.json 豁免（rule+reason+date，date=有效期止），**绝不为过闸改规则阈值**（阈值唯一真值在 schema/taste-rules.json 的 assert）"
     },
     "E_CAPTION_MEDIA": {
       "phase": "qa",

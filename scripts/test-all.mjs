@@ -20,7 +20,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 // 解析器单独成模块，便于直接单测（本文件有顶层执行副作用，import 就会跑全套）。
-import { parseSummary } from './summary-parse.mjs';
+import { parseSummary, tallySuite } from './summary-parse.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
@@ -60,10 +60,20 @@ const UNIT_SUITES = [
   'scripts/test-caption.mjs',         // S4-1：词级字幕契约层（注入/备份/冲突闸/漂移告警，不跑重模型）
   'scripts/test-motion-blur.mjs',      // S5a：模糊档位/哈希失效/renderArgs 下发（纯逻辑；--render 真机模式手动）
   'scripts/test-taste.mjs',         // S1：审美裁判机——判决/豁免生命周期/确定性同分/17 主题 body 对比度
+  'scripts/test-qa-forward.mjs',    // G3-1：qa --strict 转发子闸 argv 回归（假绿同形复发防线）
+  'scripts/test-theme-audit.mjs',   // G3-5：HUD 行 APCA 用合成后前景色（永不拦 bug 的回归）
+  'scripts/test-ssrf-ipv6.mjs',     // S8/G5：IPv4-mapped IPv6 与打包整数回环/元数据地址硬拦
+  'scripts/test-flash-words.mjs',   // G4：flash 真多变体/S9 words 闭环/bpm 进哈希/时钟
+  'scripts/test-bypass-security.mjs', // G5：安全旁路回归（XSS/逃逸/CORS/原型污染/cue 注入/数值闸），与 test-spec-security 等尺
   'scripts/test-version-sync.mjs',
   'scripts/test-demo-spec.mjs',
   'scripts/test-ui.mjs',
   'ingest/test-edl.mjs',
+  // G1-3：perf 进 UNIT（--quick 档：单 round 短 spec + 收紧时限），
+  // 性能回归从此有门禁；完整档仍走 `npm run test:perf` 手动跑。
+  // 注意：--quick 仍是真渲染套件（要 Chrome + ffmpeg），比纯逻辑套件慢一个
+  // 数量级；--suite-timeout 由 test-all 消费（不透传子进程），覆盖全局默认。
+  'scripts/test-render-perf.mjs --quick --suite-timeout 600000',
 ];
 
 const BROWSER_SUITES = [
@@ -105,7 +115,10 @@ if (args.help) {
   --tap             TAP version 14 output
   --browser         include suites that need real Chrome / ffmpeg
   --only <a,b>      run only suites whose path contains one of the substrings
-  --timeout <ms>    per-suite timeout (default 900000 browser / 300000 unit)`);
+  --timeout <ms>    per-suite timeout (default 900000 browser / 300000 unit).
+                    Suite entries may carry inline args, e.g.
+                    'scripts/test-render-perf.mjs --quick --suite-timeout 600000'
+                    (--suite-timeout is consumed by test-all, not passed on).`);
   process.exit(0);
 }
 
@@ -120,24 +133,40 @@ if (!selected.length) {
   process.exit(2);
 }
 
-const timeout = Number(args.timeout) || (args.browser ? 900000 : 300000);
+// 优先级：CLI --timeout（调试用，最高）> 套件条目内联 --suite-timeout > 组默认。
+const USER_TIMEOUT = Number(args.timeout) > 0 ? Number(args.timeout) : 0;
+const timeout = USER_TIMEOUT || (args.browser ? 900000 : 300000);
 
 export { parseSummary };
 
 const rows = [];
 const startedAll = Date.now();
-for (const suite of selected) {
-  const file = path.join(ROOT, suite);
+for (const spec of selected) {
+  // 条目可以是 'path/to/suite.mjs'，也可以带内联参数 'path --quick'（G1-3）。
+  // `--suite-timeout <ms>` 由 test-all 自己消费（本套件 spawn 超时覆盖），不透传。
+  const [suitePath, ...suiteArgsRaw] = String(spec).split(/\s+/).filter(Boolean);
+  const suiteArgs = [];
+  let suiteTimeout = timeout;
+  for (let i = 0; i < suiteArgsRaw.length; i++) {
+    if (suiteArgsRaw[i] === '--suite-timeout') {
+      const v = Number(suiteArgsRaw[++i]);
+      if (!USER_TIMEOUT && Number.isFinite(v) && v > 0) suiteTimeout = v;
+      continue;
+    }
+    suiteArgs.push(suiteArgsRaw[i]);
+  }
+  const file = path.join(ROOT, suitePath);
   if (!fs.existsSync(file)) {
-    rows.push({ suite, ok: false, exit: null, passed: null, failed: null, total: null, durationMs: 0, summary: 'missing suite file', output: '' });
+    // 缺失套件 = 硬失败：failed 兜底计 1 并标 failedUnparsed（G1-2 一致性）。
+    rows.push({ suite: spec, ok: false, exit: null, passed: null, failed: 1, failedUnparsed: true, total: null, durationMs: 0, summary: 'missing suite file', output: '' });
     continue;
   }
-  if (MODE === 'text') console.log(`\n=== ${suite} ===`);
+  if (MODE === 'text') console.log(`\n=== ${spec} ===`);
   const t0 = Date.now();
-  const r = spawnSync(process.execPath, [file], {
+  const r = spawnSync(process.execPath, [file, ...suiteArgs], {
     cwd: ROOT,
     encoding: 'utf8',
-    timeout,
+    timeout: suiteTimeout,
     maxBuffer: 64 * 1024 * 1024,
     windowsHide: true,
     env: process.env,
@@ -145,17 +174,21 @@ for (const suite of selected) {
   const out = `${r.stdout || ''}${r.stderr || ''}`;
   if (MODE === 'text') process.stdout.write(out.endsWith('\n') ? out : `${out}\n`);
   const parsed = parseSummary(out);
-  const ok = r.status === 0;
+  // 聚合唯一事实源：tallySuite（回归在 scripts/test-summary-parse.mjs）。
+  // 旧版在此处对「exit≠0 且解析不出」写 failed:null，顶层再 Σ 时把 null 当 0 吞掉，
+  // 造成报告 "ok:false + failed:0" 同屏说谎（G1-2）。
+  const tally = tallySuite({ exit: r.status, parsed });
   const summary = out.trim().split(/\r?\n/).filter((l) => /passed|failed|RESULT|tests?/i.test(l)).slice(-2).join(' | ');
   rows.push({
-    suite,
-    ok,
+    suite: spec,
+    ok: tally.ok,
     exit: r.status,
     passed: parsed ? parsed.passed : null,
-    failed: parsed ? (ok ? parsed.failed : Math.max(parsed.failed, 1)) : (ok ? 0 : null),
+    failed: tally.failed,
+    ...(tally.failedUnparsed ? { failedUnparsed: true } : {}),
     total: parsed ? parsed.total : null,
     durationMs: Date.now() - t0,
-    summary: summary || (ok ? 'ok' : `exit ${r.status}${r.signal ? ` signal ${r.signal}` : ''}`),
+    summary: summary || (r.status === 0 ? (tally.ok ? 'ok' : `self-reported ${tally.failed} failed`) : `exit ${r.status}${r.signal ? ` signal ${r.signal}` : ''}`),
     output: r.error ? String(r.error.message || r.error) : '',
   });
 }
@@ -165,6 +198,8 @@ const totals = rows.reduce((acc, r) => {
   acc.failed += Number(r.failed || 0);
   return acc;
 }, { passed: 0, failed: 0 });
+// 一致性由行级契约保证（tallySuite）：ok ⇒ failed===0；failed>0 ⇒ !ok。
+// 顶层因此不可能出现 ok 与 failed 互相矛盾的同屏说谎（G1-2）。
 const ok = rows.every((r) => r.ok);
 const report = {
   ok,
@@ -173,7 +208,7 @@ const report = {
   browser: !!args.browser,
   suites: rows.length,
   passed: totals.passed,
-  failed: rows.every((r) => r.failed === null) ? (ok ? 0 : null) : totals.failed,
+  failed: totals.failed,
   results: rows.map(({ output, ...r }) => ({ ...r, ...(output ? { detail: output } : {}) })),
 };
 

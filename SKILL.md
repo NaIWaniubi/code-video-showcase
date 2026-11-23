@@ -1,6 +1,6 @@
 ---
 name: code-video-showcase
-version: 4.11.0   # 与 package.json 同值（test-version-sync 钉死）
+version: 4.12.0   # 与 package.json 同值（test-version-sync 钉死）
 description: |
   用纯代码（HTML/Canvas/SVG/Three.js 逐帧渲染 + Python numpy/scipy 合成配乐 + FFmpeg 合成）制作 30–90 秒卡点风格展示视频的完整技能。
   适用于：复刻/仿制《Opus 5.5 视频风格展示》或 DeepSeek V4.1-Flash 61s 风格样片、多风格切换卡点视频、纯代码视频、程序化视频；要求不使用任何视频/图像/音乐生成模型。
@@ -47,7 +47,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 | `E_BURN_SUBTITLES` / `E_COVER` | 换 ffmpeg（需 libass），或去掉该开关 |
 | `E_SNAPSHOT_TAMPERED` / `E_ROLLBACK_HASH` / `E_ENV_MISMATCH` | 快照被动过 / 环境与基线不同：`cvs verify`、`golden --selfcheck` |
 
-**退出码**：0 ok · 2 用法 · 10 spec · 11 render · 12 concat · 13 qa · 14 env。
+**退出码**：0 ok · 2 用法/配置错 · 10 spec · 11 render · 12 concat · 13 qa · 14 env。`cvs taste` 单列：0 无拦截发现 · 1 有 error 级拦截发现（或 `--strict` 下 warning 计数超阈）· 2 用法/规则表/豁免表配置错（E_TASTE_ASSERT 等启动即错，绝不误当"干净")。
 
 ## 0.5 编译器入口（新项目优先）
 

@@ -2,6 +2,10 @@
 node_modules/
 .pnpm-store/
 
+# agent swarm scratch / collaboration ledgers (never ship in the public repo — audit FINDING-13)
+.team/
+.cluster/
+
 # build products / rendered media
 out/
 analysis/
