@@ -18,7 +18,7 @@
 
 脚本可以用退出码做粗分流，用 `--json` / `error.json` 的 `code` 做精确重试。
 
-## 已注册错误码（188）
+## 已注册错误码（191）
 
 | 错误码 | 阶段 | 退出码 | 含义 | 唯一动作 |
 |---|---|---|---|---|
@@ -171,6 +171,9 @@
 | `E_ASSET_PATH` | asset | 10 | E_ASSET_PATH：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_ASSET_REMOTE` | asset | 10 | E_ASSET_REMOTE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
 | `E_ASSETS_TYPE` | asset | 10 | E_ASSETS_TYPE：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
+| `E_ATTEST_DRIFT` | attest | 13 | G9 分层复核判红：帧层像素漂移/帧数不一致，或 plan 段哈希绑定不一致，或 attestation 自摘要校验失败（证书被篡改）。容器层不同而帧层同是 mux 抖动，不属本码 | 看 verdict JSON 的 layers 指认：frames→渲染/编码器漂移（对比 toolchain 层）；plan→manifest/plan 与产物对不上；selfDigestOk=false→证书文件被改过，重新 attest |
+| `E_ATTEST_FRAMES` | attest | 14 | G9 帧层取证失败：ffmpeg 不可用（FFMPEG_EXE 未设且 PATH 无 ffmpeg）或成片无视频流/容器损坏，framemd5 提取不到任何解码帧 | 装 ffmpeg 或设 FFMPEG_EXE；确认 mp4 可被 ffmpeg 解码（ffprobe 看一眼） |
+| `E_ATTEST_INPUT` | attest | 2 | G9 证书入口用法/输入错误：缺成片路径、mp4 不可读、--verify/--manifest/--plan 指向的文件不存在或不可解析、attestation schema 不识别 | 按提示补路径；`cvs attest --help` 看四层语义 |
 | `E_BACKUP` | edit | 13 | --apply 写回前备份原 spec 失败（磁盘只读/权限等）——已中止写回，原文件未动 | 修复磁盘/权限后重试；dry-run 验证不涉及备份 |
 | `E_BAD_REQUEST` | preview | 0 | 帧 API 请求参数缺失/非法 | 补齐 id/n 查询参数 |
 | `E_BRAND` | brand | 10 | E_BRAND：该模块的校验/运行错误（自动登记） | 按报错位置修正；无法判断时运行 `cvs doctor` 并附 out/error.json |
@@ -213,8 +216,8 @@
 
 ## 覆盖情况
 
-- 代码中出现的 `E_*`：183
-- 已注册且被使用：183
+- 代码中出现的 `E_*`：186
+- 已注册且被使用：186
 - 未注册：0
 
 - 已注册但当前未使用：5（E_OUTPATH_ESCAPE, W_COPY_CAPTION_UNCONSUMED, W_FLASH_DEAD, W_FLASH_WORDS_REUSE, W_FLASH_WORDS_UNUSED）

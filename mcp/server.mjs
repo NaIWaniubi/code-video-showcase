@@ -21,6 +21,8 @@
  *   cvs_qa         双闸质检
  *   cvs_ship       交付打包（--check 预检）
  *   cvs_demo       导演演示集一键出片
+ *   cvs_caption  本地词级字幕（识别/注入两模式）
+ *   cvs_attest   产物哈希证书 / 跨机重放验证（G9，四层 verdict）
  *   cvs_health     一键全身体检
  */
 import fs from 'node:fs';
@@ -327,6 +329,27 @@ export const TOOLS = [
       } else return { isError: true, text: '需要 media（识别）或 applyJson+into（注入）' };
       const r = await runCvs(['caption', ...args], { timeoutSeconds: 1800 });
       return { isError: !r.ok, text: resultText(r.text.slice(-4000), `caption exit=${r.exitCode}`) };
+    },
+  },
+  {
+    name: 'cvs_attest',
+    description: 'G9 产物哈希证书 + 跨机重放验证：产证书 = 容器 sha256 + framemd5 逐帧摘要 + toolchain 指纹 + 段哈希（digest 不含时间戳，跨机重算可比）；verifyPath 给出另一机/另一份成片时离线分层复核——帧同容器异=mux 抖动(pass-with-note)，帧异=真像素漂移(FAIL, exit 13)。',
+    inputSchema: { type: 'object', properties: {
+      videoPath: { type: 'string', description: '成片 mp4 路径' },
+      verifyPath: { type: 'string', description: '已有 attestation.json → 复核模式' },
+      manifestPath: { type: 'string', description: 'render-manifest.json（默认自动找 <mp4 目录>/）' },
+      planPath: { type: 'string', description: 'plan.json（段哈希权威顺序）' },
+      outPath: { type: 'string', description: '证书输出路径（产证书模式，默认 <mp4 同名>.attestation.json）' },
+    }, required: ['videoPath'] },
+    run: async (a) => {
+      const args = ['attest', a.videoPath];
+      if (a.verifyPath) args.push('--verify', a.verifyPath);
+      if (a.manifestPath) args.push('--manifest', a.manifestPath);
+      if (a.planPath) args.push('--plan', a.planPath);
+      if (a.outPath && !a.verifyPath) args.push('--out', a.outPath);
+      args.push('--json');
+      const r = await runCvs(args, { timeoutSeconds: 600 });
+      return { isError: !r.ok, text: resultText(r.text.slice(-6000), `attest exit=${r.exitCode}`) };
     },
   },
   {

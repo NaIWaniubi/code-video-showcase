@@ -104,6 +104,9 @@ const commands = {
   taste:   (a) => node('scripts/taste.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
   // S4-1：cvs caption — 本地词级字幕（faster-whisper 适配器 + sha256 缓存 + spec 注入）。
   caption: (a) => node('scripts/caption.mjs', a.length ? a : ['--help']),
+  // G9：cvs attest — 产物哈希证书 + 跨机重放验证器（容器/帧/工具链/段哈希四层，
+  // 帧同容器异=mux 抖动，帧异=真像素漂移 FAIL）。
+  attest:  (a) => node('scripts/attest.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
   api:      (a) => node('server/api.mjs', a),
   wizard:   (a) => surface('wizard', SURFACES.wizard, a),
   canvas:   (a) => surface('canvas', SURFACES.canvas, a),
@@ -157,6 +160,9 @@ usage: cvs <command> [args]
                                         export an OpenFilm-IR timeline (film.html + pages/)
   score <video> [--plan f] [--qa-audio f]   subjective quality score (5 parts, A-D grade)
   taste <spec> [--strict] [--waivers f]  deterministic aesthetic gate (rules table, error/warning/advisory)
+  attest <out.mp4> [--verify attestation.json] [--manifest f] [--plan f] [--out f] [--json]
+                                        产物哈希证书（container sha + framemd5 逐帧 + toolchain + 段哈希，
+                                        digest 无时间戳可跨机重算）；--verify 离线分层复核
   health                 full checkup: doctor + error registry + combos + golden
   test [--browser]                       run all suites
   doctor                                 environment check (renderer capability probe)

@@ -81,6 +81,7 @@ node bin/cvs.mjs again --set look.theme=amber-noir            # recompile only d
 node bin/cvs.mjs deliver --spec project.spec.json             # delivery.json + master.srt/.vtt
 node bin/cvs.mjs motion matrix      # motion profile table
 node bin/cvs.mjs image --spec project.spec.json   # same spec -> image set (cover/card/poster/story)
+node bin/cvs.mjs attest out/master.mp4            # 产物哈希证书（G9）；--verify 跨机离线复核
 ```
 
 **Delivery contract (since v2.3.5, hardened in v2.5.2)** — `cvs build` runs the same deep
@@ -396,6 +397,48 @@ Notes:
 - The templates expect a local `shared/fonts.css` with `@font-face` rules. `new-project --fonts` copies the bundled set; otherwise download OFL fonts yourself.
 - Useful env vars: `CHROME_EXE` / `FFMPEG_EXE` for the renderer; `FFMPEG` / `FFPROBE` / `PLATFORM` / `CRF` for the shell script; `PYTHON` for audio QA. `--help` is implemented by every script.
 - `synth_audio.py` is a toolkit plus a runnable 8 s demo; extend `build_arrangement()` to the full 61 s timeline using `references/audio-recipes.md`, and read `plan.json` cues so audio and cuts share one time base.
+
+## 可验证交付 / Verifiable Reproducibility（G9）
+
+「same t same picture」这句话谁都在 README 里写过。区别在于：**说完之后你手里有没有一张
+别人可以离线复核的证书**。`cvs attest` 把成片证据封成内容寻址的 `attestation.json`，
+`--verify` 在另一台机、另一份产物上逐层归因——不需要账号、不需要网络、不需要相信我们。
+
+```bash
+# 产证书：容器 sha256 + framemd5 逐帧摘要 + toolchain 指纹 + 段哈希，四层一体
+cvs attest out/master.mp4                      # 自动读同目录 render-manifest.json / plan.json
+
+# 跨机重放复核：另一台机重渲（或拿到对方成品）后离线比对，输出分层 verdict
+cvs attest out/master.mp4 --verify master.attestation.json
+cvs attest out/master.mp4 --verify master.attestation.json --json   # 机器可读 verdict
+```
+
+四层证据与两种「不同」的语义（详见 `references/reproducibility.md`）：
+
+| 层 | 取自 | 回答的问题 |
+|---|---|---|
+| container | mp4 本体 sha256 | 这个字节流还是那个字节流吗（文件完整性） |
+| frames | `ffmpeg -f framemd5` 逐帧 md5 序列 | 像素本身可复现吗（与容器/时间戳/mux 解耦） |
+| toolchain | Node / ffmpeg / 浏览器版本指纹 | 证据是在什么条件下产的（差异如实上报） |
+| plan | render-manifest / plan 的段哈希列表 | 成片与哪一版时间轴、哪一批段绑定（R2-17 时间轴键序） |
+
+- **帧层同、容器异 → `pass-with-note`**（exit 0）：mux 时间戳/头部抖动，像素复现成立；
+- **帧层异 / 帧数不一致 → `FAIL`**（exit 13，`E_ATTEST_DRIFT`）：真像素漂移，指认到首个漂移帧号；
+- **toolchain 异而帧层同 → 信息不是失败**：不同 ffmpeg 版本产字节本就不同——证书如实分层，
+  归因交给你，而不是笼统一个「hash 不符」。
+
+核心 `digest` 覆盖的是四层数据本体：递归键排序的 canonical JSON，**不含生成时间、不含路径**
+（归属信息在 `meta` 段、digest 之外）——同一产物在另一台机重算，digest 才可比、才应该相等。
+
+与赛道话术的对位差异（对照 2026-11 对账，见 `docs/ROADMAP-GAPS-2026-11.md` G9）：
+
+| | OpenFilm / HyperFrames 的「hash」 | `cvs attest` |
+|---|---|---|
+| 哈希对象 | 文件/产物字节 | 分层：容器字节、解码帧、工具链、时间轴段哈希 |
+| 回答的问题 | 「下载的文件没被篡改」 | 「这台机重渲的画面与那台机**逐帧相同**吗？不同在哪一层？」 |
+| 「same t same picture」 | README 声称 | 可离线复核的证书 + 分层 verdict + 非零退出码 |
+| 换编码器/mux 抖动 | 未定义 | 显式区分：帧同容器异 = pass-with-note；帧异 = FAIL |
+| 复核条件 | 无工具 | `cvs attest --verify`，零网络零新依赖，JSON 可进 CI |
 
 ## Install as an Agent Skill
 

@@ -12,6 +12,24 @@
     "14": "env (missing binary / python / audio synthesis)"
   },
   "codes": {
+    "E_ATTEST_INPUT": {
+      "phase": "attest",
+      "exit": 2,
+      "meaning": "G9 证书入口用法/输入错误：缺成片路径、mp4 不可读、--verify/--manifest/--plan 指向的文件不存在或不可解析、attestation schema 不识别",
+      "action": "按提示补路径；`cvs attest --help` 看四层语义"
+    },
+    "E_ATTEST_FRAMES": {
+      "phase": "attest",
+      "exit": 14,
+      "meaning": "G9 帧层取证失败：ffmpeg 不可用（FFMPEG_EXE 未设且 PATH 无 ffmpeg）或成片无视频流/容器损坏，framemd5 提取不到任何解码帧",
+      "action": "装 ffmpeg 或设 FFMPEG_EXE；确认 mp4 可被 ffmpeg 解码（ffprobe 看一眼）"
+    },
+    "E_ATTEST_DRIFT": {
+      "phase": "attest",
+      "exit": 13,
+      "meaning": "G9 分层复核判红：帧层像素漂移/帧数不一致，或 plan 段哈希绑定不一致，或 attestation 自摘要校验失败（证书被篡改）。容器层不同而帧层同是 mux 抖动，不属本码",
+      "action": "看 verdict JSON 的 layers 指认：frames→渲染/编码器漂移（对比 toolchain 层）；plan→manifest/plan 与产物对不上；selfDigestOk=false→证书文件被改过，重新 attest"
+    },
     "E_USAGE": {
       "phase": "usage",
       "exit": 2,

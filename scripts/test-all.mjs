@@ -64,6 +64,7 @@ const UNIT_SUITES = [
   'scripts/test-theme-audit.mjs',   // G3-5：HUD 行 APCA 用合成后前景色（永不拦 bug 的回归）
   'scripts/test-ssrf-ipv6.mjs',     // S8/G5：IPv4-mapped IPv6 与打包整数回环/元数据地址硬拦
   'scripts/test-flash-words.mjs',   // G4：flash 真多变体/S9 words 闭环/bpm 进哈希/时钟
+  'scripts/test-attest.mjs',        // G9：哈希证书四层结构/digest 稳定性/分层 verdict/真渲闭环
   'scripts/test-bypass-security.mjs', // G5：安全旁路回归（XSS/逃逸/CORS/原型污染/cue 注入/数值闸），与 test-spec-security 等尺
   'scripts/test-version-sync.mjs',
   'scripts/test-demo-spec.mjs',
