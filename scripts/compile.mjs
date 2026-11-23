@@ -22,7 +22,7 @@ import { spawnSync as _spawnSync } from 'node:child_process';
 import { buildPlanFromSpec } from '../templates/plan.mjs';
 import { concatList } from '../templates/timeline.mjs';
 import { deepValidate } from '../templates/spec-check.mjs';
-import { xfadeOffsets, xfadeFilterGraph } from '../templates/transitions.mjs';
+import { xfadeOffsets, xfadeFilterGraph, isMotionBlurOff } from '../templates/transitions.mjs';
 
 // R2-14（N04-F2）：build --json 机器模式——stdout 只有一行结果 JSON，
 // 所有进度（含子进程 render-farm/ffmpeg/qa 的输出）退到 stderr。旧版 build
@@ -312,9 +312,11 @@ if (args['transition-duration'] !== undefined) {
   raw.render.transitionDuration = Number(args['transition-duration']);
 }
 // S5a 运动模糊开关（v4.10.0）：同 transition，必须在建 plan 前注入（它进段哈希）。
+// G6-1：`--motion-blur off|none|false|0` 归一为 JSON false（对齐 --transition none 先例）。
 if (args['motion-blur'] !== undefined) {
   raw.render = raw.render || {};
-  raw.render.motionBlur = args['motion-blur'] === true ? 'normal' : String(args['motion-blur']);
+  raw.render.motionBlur = args['motion-blur'] === true ? 'normal'
+    : (isMotionBlurOff(args['motion-blur']) ? false : String(args['motion-blur']));
 }
 
 // ── 1. 深度校验（与 spec-lint 同一套） ──────────────────────────────────────

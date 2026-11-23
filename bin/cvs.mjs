@@ -107,6 +107,9 @@ const commands = {
   // G9：cvs attest — 产物哈希证书 + 跨机重放验证器（容器/帧/工具链/段哈希四层，
   // 帧同容器异=mux 抖动，帧异=真像素漂移 FAIL）。
   attest:  (a) => node('scripts/attest.mjs', a.length && !a[0].startsWith('--') ? a : ['--help']),
+  // G6-4：cvs gc — 内容寻址段缓存回收（21GB out/.cache 的运维止血）。只删 .cache 下的
+  // <hash>.mp4/.json 对，永不碰成片与非 .cache 内容；--dry-run 只报将释放字节。
+  gc:      (a) => node('scripts/gc.mjs', a),
   api:      (a) => node('server/api.mjs', a),
   wizard:   (a) => surface('wizard', SURFACES.wizard, a),
   canvas:   (a) => surface('canvas', SURFACES.canvas, a),
@@ -163,6 +166,9 @@ usage: cvs <command> [args]
   attest <out.mp4> [--verify attestation.json] [--manifest f] [--plan f] [--out f] [--json]
                                         产物哈希证书（container sha + framemd5 逐帧 + toolchain + 段哈希，
                                         digest 无时间戳可跨机重算）；--verify 离线分层复核
+  gc [--cache dir] [--keep N] [--older-than days] [--dry-run] [--json]
+                                        回收内容寻址段缓存（.cache 下 mp4+json 对，可再生）；
+                                        护栏拒非 .cache 目录，默认无策略时只报告不删
   health                 full checkup: doctor + error registry + combos + golden
   test [--browser]                       run all suites
   doctor                                 environment check (renderer capability probe)

@@ -12,7 +12,7 @@
  */
 import { query, resolveFlashEach } from './timeline-core.mjs';
 import { MOTION_LEVELS, deriveMotionProfile, motionQuery } from './motion-profile.mjs';
-import { isTransition, isTransitionOff, normalizeTransition } from './transitions.mjs';
+import { isTransition, isTransitionOff, normalizeTransition, isMotionBlurOff } from './transitions.mjs';
 import { THEMES } from './themes.js';
 
 export const SPEC_VERSION = 1;
@@ -421,11 +421,19 @@ export function validateSpec(spec) {
   }
   // 总帧数上限（30 fps 下约 10 分钟成片）。非有限 duration 直接拒绝——
   // 旧版 isFinite 跳过守卫会让 Infinity 绕过上限检查。
+  // G6-3（审计 F11）：S5a 运动模糊以 fps×N 渲子帧，真实抓取帧数是基帧率的
+  // N 倍（weak=2/normal=3/strong=5）。18000 帧顶格 spec 开 strong 档实际抓 90000
+  // 帧（1080p raw 每帧 ~8.3MB → 约 700GB 走本地 POST），资源上限必须乘倍率否则形同虚设。
+  const BLUR_TAPS = { weak: 2, normal: 3, strong: 5 };
+  const blurMult = BLUR_TAPS[spec.render?.motionBlur] || 1;
   if (!Number.isFinite(Number(duration))) {
     err('E_DURATION', 'format.duration', `duration must be a finite number, got ${duration}`);
-  } else if (Number(duration) * Number(fps) > MAX_TOTAL_FRAMES) {
+  } else if (Number(duration) * Number(fps) * blurMult > MAX_TOTAL_FRAMES) {
+    const baseSeconds = Math.round(MAX_TOTAL_FRAMES / (Number(fps) * blurMult));
     err('E_DURATION_MAX', 'format.duration',
-      `duration ${duration}s @ ${fps}fps exceeds the ${MAX_TOTAL_FRAMES}-frame limit (~${Math.round(MAX_TOTAL_FRAMES / Number(fps))}s)`);
+      blurMult > 1
+        ? `duration ${duration}s @ ${fps}fps ×${blurMult} motion-blur(${spec.render.motionBlur}) exceeds the ${MAX_TOTAL_FRAMES}-frame limit (~${baseSeconds}s at this blur tier)`
+        : `duration ${duration}s @ ${fps}fps exceeds the ${MAX_TOTAL_FRAMES}-frame limit (~${baseSeconds}s)`);
   }
 
   const ids = new Set();
@@ -632,9 +640,10 @@ export function validateSpec(spec) {
     if (!Number.isFinite(td) || td <= 0 || td > 2) err('E_TRANSITION_DURATION', 'render.transitionDuration', 'transitionDuration must be in (0, 2] seconds');
   }
   // S5a 运动模糊（v4.10.0）：三档白名单枚举（权重表在 plan.mjs BLUR_WEIGHTS 单一真值）。
-  if (spec.render?.motionBlur != null && spec.render.motionBlur !== false
+  // G6-1：off/none/false/0/JSON false 一律「关闭」，与 --transition none 对称。
+  if (spec.render?.motionBlur != null && !isMotionBlurOff(spec.render.motionBlur)
     && !['weak', 'normal', 'strong'].includes(spec.render.motionBlur)) {
-    err('E_MOTION_BLUR', 'render.motionBlur', `motionBlur must be weak|normal|strong|false, got ${JSON.stringify(spec.render.motionBlur)}`);
+    err('E_MOTION_BLUR', 'render.motionBlur', `motionBlur must be weak|normal|strong|off|false, got ${JSON.stringify(spec.render.motionBlur)}`);
   }
   // outDir 是 spec 里唯一能决定「写到哪」的字段，必须钉在项目根内。
   // page 有闸门、id 有闸门，唯独它以前没有：`../../escape` 能把 plan/master 写到仓库外。

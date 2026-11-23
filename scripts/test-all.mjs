@@ -65,6 +65,8 @@ const UNIT_SUITES = [
   'scripts/test-ssrf-ipv6.mjs',     // S8/G5：IPv4-mapped IPv6 与打包整数回环/元数据地址硬拦
   'scripts/test-flash-words.mjs',   // G4：flash 真多变体/S9 words 闭环/bpm 进哈希/时钟
   'scripts/test-attest.mjs',        // G9：哈希证书四层结构/digest 稳定性/分层 verdict/真渲闭环
+  'scripts/test-gc.mjs',            // G6-4：段缓存回收——护栏/配对删/keep·older-than 语义/孤儿 json
+  'scripts/test-blur-cli.mjs',      // G6-1/3：motionBlur off 档对称 + 资源上限乘子帧倍率
   'scripts/test-bypass-security.mjs', // G5：安全旁路回归（XSS/逃逸/CORS/原型污染/cue 注入/数值闸），与 test-spec-security 等尺
   'scripts/test-version-sync.mjs',
   'scripts/test-demo-spec.mjs',

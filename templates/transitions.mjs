@@ -81,6 +81,18 @@ export function isTransitionOff(v) {
 }
 
 /**
+ * S5a 运动模糊关闭态判定（G6-1）：CLI `--motion-blur off|none|false|0` 与
+ * spec `render.motionBlur: false` 都是「关」——对齐 isTransitionOff 的写法。
+ * 兄弟开关 --transition none 早有这一档，blur 之前只认 JSON false，
+ * 命令行写 off 直接撞 E_MOTION_BLUR（不对称，审计 G6-1）。
+ */
+export function isMotionBlurOff(v) {
+  if (v === undefined || v === null || v === false || v === '') return true;
+  const s = String(v).trim().toLowerCase();
+  return s === 'off' || s === 'none' || s === 'false' || s === '0';
+}
+
+/**
  * 归一化转场配置。返回 null 表示「关闭」（硬切，与旧版一致）。
  * @param {unknown} raw  spec.render.transition / CLI --transition
  * @param {unknown} dur  spec.render.transitionDuration / CLI --transition-duration
