@@ -323,7 +323,9 @@ window.renderFrame = (u) => {
   drawTopMeta(ctx, {
     W, H, pad,
     text: `${BRAND} · ${String(THEME.nameEn || THEME.id).toUpperCase()}`,
-    sub: 'RECIPE 14 · DATA RACE',
+    // G7 账（datarace 真不读 ?sub）：badge 位升格真副题槽，params.get 优先、内建压轴
+    // ——无参数 URL 逐字节走旧值（v4.10.1 同款纪律），slice 防长文案撑爆眉栏。
+    sub: String(params.get('sub') || 'RECIPE 14 · DATA RACE').slice(0, 24),
     color: MUTED,
     accent: ACCENT,
   });

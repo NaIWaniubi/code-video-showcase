@@ -403,6 +403,10 @@ function textLayer(text, { size, weight, color, blur = 0, y = H / 2, align = 'ce
   c.__textW = g.measureText(text).width;
   c.__text = text;
   c.__color = color;
+  // S1-3 页面契约元数据（零像素）：文字预渲染进离屏层后，renderFrame 里只剩
+  // drawImage——__textsAt 的 fillText 钩子看不见缓存内容。这里把「层内文字 +
+  // 位置」挂成元数据，common.js 记录器在录制帧内包装 drawImage 时据此补记。
+  c.__textInfo = { text, x, y, align, size: s, color };
   return c;
 }
 

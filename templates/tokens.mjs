@@ -44,6 +44,9 @@ export function typeSize(role, W, H) {
 
 /**
  * 单一安全区。返回数值像素；left === right（验收断言）。
+ * v4.13（S1-4/G7-3）追加 subtitle 字幕带：画面底部预留给平台字幕 / 交付 SRT/VTT 的横带，
+ * 可读性闸用它判「正文压字幕」。纯增量字段——既有消费方（probe/页边距）零感知。
+ * 带高 = max(安全底边距, 10% 画高)，钳到 [24px, 30% 画高]；横向贴左右安全边。
  * @param {number} W
  * @param {number} H
  */
@@ -51,12 +54,16 @@ export function safe(W, H) {
   const w = Number(W) || 1920;
   const h = Number(H) || 1080;
   const x = clampInt(Math.min(w, h) * SAFE_RATIO.x, 18, 240);
+  const top = clampInt(h * SAFE_RATIO.top, 18, 320);
+  const bottom = clampInt(h * SAFE_RATIO.bottom, 18, 360);
+  const bandH = clampInt(Math.max(bottom, h * 0.10), 24, Math.round(h * 0.30));
   return {
     x,
     left: x,
     right: x,
-    top: clampInt(h * SAFE_RATIO.top, 18, 320),
-    bottom: clampInt(h * SAFE_RATIO.bottom, 18, 360),
+    top,
+    bottom,
+    subtitle: { x0: x, y0: h - bandH, x1: w - x, y1: h, height: bandH },
   };
 }
 

@@ -15,6 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const args = {};
 const positional = [];
@@ -40,6 +41,7 @@ if (args.help || !FILE) {
   --contact <file>       contact sheet path, default qa/contact.jpg
   --no-contact           skip the contact sheet
   --strict               treat warnings as failures
+  --no-text-gate         skip the pixel-text gate (scripts/qa-text.mjs; needs plan+Chrome) — recorded as a WARN, not a pass
   --quiet                only print the summary`);
   process.exit(args.help ? 0 : 1);
 }
@@ -410,6 +412,52 @@ if (plan) {
       }
     }
   } catch (e) { add('url provenance', 'FAIL', `manifest unreadable: ${String(e.message).slice(0, 120)}`); }
+}
+
+// ── 像素文本闸（v4.13 · G7-2/余项③） ────────────────────────────────────────
+// 病根（v2.9.0/v4.10.1 两次「全绿但画面是内建标题」）：此前 QA 最高只验到 URL 层
+// （url provenance）与 plan 字段层（copy present），页面把下发文案丢了照样全绿。
+// 现在带 plan 的交付级质检会起 scripts/qa-text.mjs：与渲染器同 URL 参数面逐段开页，
+// 抽样帧跑页面契约 window.__textsAt(t)，在**像素文本层**断言
+//   ① spec.copy + 每段下发文案全量上屏  ② 内建占位兜底词不出现  ③ 可读性三则
+// （停留/重叠/字幕带）。判决合并进本闸的 checks——FAIL 拦交付；WARN 仅 --strict 拦。
+// 浏览器缺失 = 降级：记 WARN（strict 拦），报告里写死「未验证」，不许装成绿。
+// --no-text-gate：显式跳过（快检/无浏览器机器的逃生门，同样记 WARN 留痕）。
+if (plan) {
+  if (args['no-text-gate']) {
+    add('pixel text', 'WARN', 'W_TEXTS_GATE_SKIPPED: --no-text-gate：像素文本层未验证（降级显式申报，非通过）');
+  } else {
+    try {
+      const HERE = path.dirname(fileURLToPath(import.meta.url));
+      const gate = path.join(HERE, 'qa-text.mjs');
+      const textJson = path.join(QA_DIR, 'qa-text.json');
+      // G7 校准：字幕带硬闸跟随烧录事实——--burn-subtitles 时 SRT 真进画面，越带=FAIL；
+      // 软字幕交付越带只 WARN（落位冲突供人审）。
+      const burnGate = args['burn-subtitles'] ? ['--burn'] : [];
+      const tp = run(process.execPath, [gate, '--plan', path.resolve(String(args.plan)), '--json', textJson, '--quiet', ...burnGate], { timeout: 20 * 60 * 1000 });
+      let trep = null;
+      try { trep = JSON.parse(fs.readFileSync(textJson, 'utf8')); } catch { /* 判失败 */ }
+      if (tp.status === 3) {
+        add('pixel text', 'WARN', 'qa-text 未运行：无 Chrome/Edge（设 CHROME_EXE）——像素文本层未验证，此降级在 --strict 下拦交付');
+      } else if (trep && (trep.checks || []).length) {
+        let worst = 'PASS';
+        const notes = [];
+        for (const c of trep.checks) {
+          if (c.status === 'FAIL') worst = 'FAIL';
+          else if (c.status === 'WARN' && worst !== 'FAIL') worst = 'WARN';
+          if (c.status !== 'PASS') notes.push(`${c.name}: ${c.detail}`);
+        }
+        const m = trep.metrics || {};
+        add('pixel text', worst, notes.length
+          ? notes.join(' · ').slice(0, 800)
+          : `像素文本层 ${trep.checks.length} 项全过（${m.framesSampled ?? '?'} 采样帧 / ${m.textsRecorded ?? '?'} 条文本记录；覆盖/占位/停留/重叠/字幕带）`);
+      } else {
+        add('pixel text', 'FAIL', `qa-text 退出码 ${tp.status} 且无可读报告——检查未跑成 ≠ 检查通过：${String(tp.stderr || tp.stdout || '').slice(-200)}`);
+      }
+    } catch (e) {
+      add('pixel text', 'FAIL', `文本闸调用异常：${String(e && e.message || e).slice(0, 200)}`);
+    }
+  }
 }
 
 // ── summary ────────────────────────────────────────────────────────────────

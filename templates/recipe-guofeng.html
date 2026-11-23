@@ -78,8 +78,14 @@ function buildLayout() {
   probe('title', titleSize, safe(W, H));
   const lineH = Math.round(titleSize * 1.28);
   const colX = portrait ? Math.round(W * 0.62) : Math.round(W * 0.70);
-  const colTop = Math.round(H * (portrait ? 0.14 : 0.16));
   const sealSize = Math.round(titleSize * 1.05);
+  let colTop = Math.round(H * (portrait ? 0.14 : 0.16));
+  // G7 像素文本闸实战：长标题时竖排末字（mini-41s r06 的「白」）落进 safe() 字幕带
+  // （交付 SRT/VTT 落位区）。整列上移适配，8% 屏高封顶——构图语义不变，字不入带。
+  const bandTop = Math.round(H * 0.9) - Math.round(titleSize * 0.62);
+  if (colTop + (TITLE.length - 1) * lineH + titleSize / 2 > bandTop) {
+    colTop = Math.max(Math.round(H * 0.08), bandTop - (TITLE.length - 1) * lineH - Math.round(titleSize / 2));
+  }
   // 印章落在末字左侧（落款位置），并夹在安全区内——之前放在列底会掉出画面。
   const lastCharY = colTop + (TITLE.length - 1) * lineH + titleSize / 2;
   const sealX = Math.round(colX - titleSize * 0.62 - sealSize);

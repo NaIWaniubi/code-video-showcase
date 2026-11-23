@@ -14,6 +14,8 @@ export const TAU = Math.PI * 2;
 
 // v2.4/P1-06：安全区唯一真值。util.js 只 re-export，页面继续 import safePad。
 import { safe } from '../tokens.mjs';
+// G7 校准：HUD/顶栏属版面 chrome，见 common.js withLayer —— 不改任何绘制，只贴标签。
+import { withLayer } from '../common.js';
 
 /* ─────────────────────────────── 数值 / 缓动 ─────────────────────────────── */
 
@@ -209,7 +211,7 @@ const MONO = '"JetBrains Mono", ui-monospace, monospace';
  * 底部 HUD：左侧 STYLE 编号 + 风格名，中间品牌/帧号，右侧时间码。
  * 颜色默认取主题 hud 角色；页面可覆盖。
  */
-export function drawHud(ctx, {
+function _drawHud(ctx, {
   W, H, u, duration = 3, fps = 30,
   theme = null, label = 'STYLE 13 / 16', name = 'RECIPE', brand = '',
   pad = safePad(W, H), font = MONO,
@@ -258,9 +260,11 @@ export function drawHud(ctx, {
   ctx.fillText(`TC ${timecode(u, fps)}`, W - pad, y);
   ctx.restore();
 }
+/** 导出包装：录制栈内贴 chrome 层（零像素影响，非录制路径直落原实现）。 */
+export function drawHud(...args) { return withLayer('chrome', () => _drawHud(...args)); }
 
 /** 右上角品牌 / 主题标签（透明度压在 0.6 以内，不抢主视觉）。 */
-export function drawTopMeta(ctx, {
+function _drawTopMeta(ctx, {
   W, H, pad = safePad(W, H), text = '', sub = '',
   color = 'rgba(245,240,232,0.42)', accent = '#d97757',
   font = MONO, align = 'right',
@@ -289,3 +293,4 @@ export function drawTopMeta(ctx, {
   }
   ctx.restore();
 }
+export function drawTopMeta(...args) { return withLayer('chrome', () => _drawTopMeta(...args)); }

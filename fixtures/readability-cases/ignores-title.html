@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>readability-case: ignores-title (RED)</title>
+<!-- 假页 R1：页面**不消费 ?title=**，永远画内建兜底「结构图示」。
+     这正是 v2.9.0 / v4.10.1 的病根类：plan/URL 全对，画面却是内建 demo 文案。
+     像素文本闸必须在这里判红（copy missing + placeholder present）。
+     仅测试用——不进 plan/nl2spec 的任何默认路径。 -->
+<style>html,body{margin:0;background:#0e0e0d}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script type="module">
+import { createSegment } from '/templates/common.js';
+
+const W = 1920, H = 1080;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const seg = createSegment({ duration: 3 });
+window.DURATION = seg.duration;
+
+window.renderFrame = (u) => {
+  seg.sample(u); // 让 __ev 有段采样数据（与真实页同构）
+  ctx.fillStyle = '#0e0e0d';
+  ctx.fillRect(0, 0, W, H);
+  // 故意无视 ?title / ?sub —— 内建标题烧进画面。
+  ctx.font = '900 120px sans-serif';
+  ctx.fillStyle = '#f5f0e8';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('结构图示', W / 2, H / 2);
+};
+
+window.__ready = false;
+window.renderFrame(0);
+window.__ready = true;
+</script>
+</body>
+</html>

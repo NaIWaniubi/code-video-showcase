@@ -316,7 +316,9 @@ window.renderFrame = (u) => {
   drawTopMeta(ctx, {
     W, H, pad,
     text: `${BRAND} · ${String(THEME.nameEn || THEME.id).toUpperCase()}`,
-    sub: 'RECIPE 19 · WHITEBOARD',
+    // G7 账（whiteboard 真不读 ?sub）：同 datarace——badge 位接 params.get('sub') 优先、
+    // 内建压轴，无参数 URL 逐字节不变。
+    sub: String(params.get('sub') || 'RECIPE 19 · WHITEBOARD').slice(0, 24),
     color: MUTED,
     accent: MARK,
   });

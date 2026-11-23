@@ -314,6 +314,14 @@ window.__bootError = null;
   TMP = makeCanvas(W, H); TMP_G = TMP.getContext('2d', { alpha: false });
   CHR = makeCanvas(W, H); CHR_G = CHR.getContext('2d');
   CHC = makeCanvas(W, H); CHC_G = CHC.getContext('2d');
+  // S1-3 契约（qa-text 360p 实战 r05 首猎）：标题/副题缓存于离屏 BASE、经切片
+  // 位移汇入 TMP，再由 ctx.drawImage(TMP,0,0) 整体上屏——记录器只见 blit 不见字。
+  // 按 __textInfos 约定把两行名义坐标挂到 TMP（唯一 1:1 上屏的层；BASE 是 28 片
+  // 源、CHR/CHC 是通道鬼影，挂它们会重复记录）。纯元数据，零像素影响。
+  TMP.__textInfos = [
+    { text: TITLE, x: L.titleX, y: L.titleY, align: L.align, size: L.titleSize },
+    { text: SUB, x: L.subX, y: L.subY, align: L.subAlign === 'center' ? 'center' : 'left', size: L.subSize },
+  ];
   window.renderFrame(0);
   window.__ready = true;
 })().catch((err) => {

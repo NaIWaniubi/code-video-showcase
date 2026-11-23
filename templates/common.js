@@ -177,10 +177,187 @@ export function createSegment(options = {}) {
     const shakeY = amp * Math.cos(u * 170 + 0.4);
     const after = Math.max(0.0001, duration - impactDur);
     const push = 1 + 0.05 * profile.push * clamp((u - impactDur) / after);
+    // __ev 打点（S1-3）：段采样激活。数值路径与 v4.12 完全一致，仅旁路记一笔。
+    if (__REC) fxEvent('sample', { u, flash: flash > 0.001, shake: amp > 0 });
     return { u, t: t0 + u * speed, fx: { flash, scale, shakeX, shakeY, push } };
   }
   return { duration, t0, speed, enabled: params.enabled, profile, sample };
 }
+
+// ── v4.13 S1-3（G7-1）：页面契约 __textsAt / __ev —— 纯旁路记录器 ─────────────
+// 契约（QA/可读性闸/未来 taste 帧级规则消费）：
+//   window.__textsAt(t) → [{id,text,x0,y0,x1,y1,size,userY,fill,alpha,font,kind,t}]
+//     在 t（= window.renderFrame 的入参口径）重跑一帧，记录该帧每一次
+//     fillText/strokeText 的**变换后包围盒**（device 像素，含 impact/applyImpact2D
+//     的全局变换）。两次同 t 调用结果必须一致——renderFrame 本就是 f(t)。
+//   window.__ev → [{t, ev:[{fx,detail}]}] 效果事件流（impact/flash/采样激活点），
+//     本刀只产数据不进判决（taste 帧级 6 条未来消费）。
+//   window.__evAt(t) → 该帧事件数组。
+// 零像素影响纪律：CanvasRenderingContext2D 原型钩子**只在 __textsAt/__evAt 调用
+// 栈内挂载/摘除**；正常渲染路径（渲染器只调 renderFrame）根本不换原型。
+// 记录器全程 try/catch——它坏了只丢数据，绝不能带崩一帧。
+let __REC = null;
+
+/**
+ * G7 校准层标记：HUD/顶栏/倒计时/角章这类**版面 chrome**（品牌名、计数器、时间码、
+ * STYLE NN/16 标签）不是「要读的正文」。qa-text 的 dwell/overlap/band 只量正文层，
+ * coverage/placeholder 仍全量看。零像素影响：不换任何绘制逻辑，只在录制栈里贴标签。
+ */
+export function withLayer(name, fn) {
+  if (!__REC) return fn();
+  const prev = __REC.layer;
+  __REC.layer = name;
+  try { return fn(); } finally { __REC.layer = prev; }
+}
+
+function __fnv1a(s) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(16);
+}
+
+function __fontSizeOf(fontStr) {
+  const m = /([0-9]*\.?[0-9]+)\s*(px|pt|em|rem|%)/.exec(String(fontStr || ''));
+  if (!m) return 16;
+  const v = parseFloat(m[1]);
+  const unit = m[2];
+  const px = unit === 'pt' ? v * (96 / 72) : (unit === 'em' || unit === 'rem') ? v * 16 : unit === '%' ? v * 0.16 : v;
+  return Number.isFinite(px) && px > 0 ? px : 16;
+}
+
+function __pushRecord(rec, ctx, text, kind, box) {
+  // box = {left, top, right, bottom} 在 ctx 当前用户空间；变换到 device 空间。
+  let { left, top, right, bottom } = box;
+  if (typeof ctx.getTransform === 'function') {
+    const tr = ctx.getTransform();
+    const corners = [[left, top], [right, top], [left, bottom], [right, bottom]]
+      .map(([px, py]) => ({ x: tr.a * px + tr.c * py + tr.e, y: tr.b * px + tr.d * py + tr.f }));
+    left = Math.min(...corners.map((c) => c.x)); right = Math.max(...corners.map((c) => c.x));
+    top = Math.min(...corners.map((c) => c.y)); bottom = Math.max(...corners.map((c) => c.y));
+  }
+  const size = Number(box.size) || __fontSizeOf(ctx.font);
+  const uy = Number.isFinite(box.userY) ? box.userY : (top + bottom) / 2;
+  rec.texts.push({
+    id: `${__fnv1a(text)}@r${Math.round(uy / 48)}`,
+    text, kind, t: rec.t, layer: rec.layer || 'content',
+    x0: +left.toFixed(1), y0: +top.toFixed(1), x1: +right.toFixed(1), y1: +bottom.toFixed(1),
+    size: +size.toFixed(1), userY: uy,
+    fill: typeof ctx.fillStyle === 'string' ? ctx.fillStyle : (box.color || ''),
+    alpha: +Number(ctx.globalAlpha == null ? 1 : ctx.globalAlpha).toFixed(3),
+    font: String(ctx.font || (size ? `${size}px` : '')),
+  });
+}
+
+function __recordText(ctx, kind, rawText, x, y) {
+  const rec = __REC;
+  if (!rec) return;
+  try {
+    const text = String(rawText);
+    if (!text) return;
+    const m = ctx.measureText(text);
+    const size = __fontSizeOf(ctx.font);
+    const ascent = Number.isFinite(m.fontBoundingBoxAscent) && m.fontBoundingBoxAscent > 0 ? m.fontBoundingBoxAscent : size * 0.92;
+    const descent = Number.isFinite(m.fontBoundingBoxDescent) ? Math.max(m.fontBoundingBoxDescent, size * 0.05) : size * 0.2;
+    const h = ascent + descent;
+    const w = m.width;
+    const align = ctx.textAlign || 'start';
+    let left = x;
+    if (align === 'center') left = x - w / 2;
+    else if (align === 'right' || align === 'end') left = x - w;
+    let top;
+    switch (ctx.textBaseline || 'alphabetic') {
+      case 'top': case 'hanging': top = y; break;
+      case 'middle': top = y - h / 2; break;
+      case 'bottom': case 'ideographic': top = y - h; break;
+      default: top = y - ascent;
+    }
+    __pushRecord(rec, ctx, text, kind, { left, top, right: left + w, bottom: top + h, size, userY: y });
+  } catch { /* 记录器永不打断绘制 */ }
+}
+
+/**
+ * 缓存文字层的 drawImage 补记（S1-3，big-card 预渲染文字层专用，任何按约定挂
+ * `canvas.__textInfo = {text,x,y,align,size}` 的页面通用）：录制帧内
+ * drawImage(层, dx, dy[, dw, dh]) 时，把层内文字框按缩放搬到目标空间再过当前
+ * 变换记入 texts——离屏缓存文案不再对像素文本层失明。
+ */
+function __recordImageText(ctx, img, args) {
+  const rec = __REC;
+  if (!rec) return;
+  try {
+    // 兼容两种约定：单条 `canvas.__textInfo` 与多条 `canvas.__textInfos = []`
+    // （glitch 的 BASE 同时缓存标题+副题，单槽不够）。
+    const list = img && (Array.isArray(img.__textInfos) ? img.__textInfos
+      : (img.__textInfo ? [img.__textInfo] : null));
+    if (!list) return;
+    const iw = Number(img.width) || 1;
+    const ih = Number(img.height) || 1;
+    let dx = 0, dy = 0, dw = iw, dh = ih;
+    if (args.length >= 6) { dx = Number(args[1]) || 0; dy = Number(args[2]) || 0; dw = Number(args[3]) || iw; dh = Number(args[4]) || ih; }
+    else if (args.length >= 3) { dx = Number(args[1]) || 0; dy = Number(args[2]) || 0; }
+    const sx = dw / iw, sy = dh / ih;
+    for (const ti of list) {
+      if (!ti || !ti.text) continue;
+      const size = Number(ti.size) || 16;
+      const h = size * 1.12;
+      const w = Number(ti.w) || size * String(ti.text).length;
+      const align = ti.align || 'center';
+      let left = Number(ti.x) || 0;
+      if (align === 'center') left -= w / 2; else if (align === 'right') left -= w;
+      const top = (Number(ti.y) || 0) - h / 2;
+      __pushRecord(rec, ctx, String(ti.text), 'layer', {
+        left: dx + left * sx, top: dy + top * sy, right: dx + (left + w) * sx, bottom: dy + (top + h) * sy,
+        size, userY: dy + ti.y * sy, color: ti.color || '',
+      });
+    }
+  } catch { /* 同上：永不打断绘制 */ }
+}
+
+/**
+ * 安装页面契约（幂等；非浏览器环境 no-op）。common.js 被 import 即装——
+ * 用 createSegment/renderFrame 的页面无需改代码。big-card.html 自绘循环同理：
+ * 契约只包裹 window.renderFrame 的一次调用，与预览 RAF 无交集。
+ */
+export function installPageContract(win = typeof window !== 'undefined' ? window : null) {
+  if (!win || typeof win.CanvasRenderingContext2D !== 'function') return false;
+  if (typeof win.__textsAt === 'function') return true;
+  if (!Array.isArray(win.__ev)) win.__ev = [];
+  const run = (t) => {
+    const proto = win.CanvasRenderingContext2D.prototype;
+    const origFill = proto.fillText;
+    const origStroke = proto.strokeText;
+    const origDraw = proto.drawImage;
+    const rec = { t: Number(t) || 0, texts: [], events: [] };
+    proto.fillText = function (text, x, y) { __recordText(this, 'fill', text, x, y); return origFill.apply(this, arguments); };
+    proto.strokeText = function (text, x, y) { __recordText(this, 'stroke', text, x, y); return origStroke.apply(this, arguments); };
+    proto.drawImage = function (img, ...rest) {
+      __recordImageText(this, img, [img, ...rest]);
+      return origDraw.apply(this, arguments);
+    };
+    __REC = rec;
+    try {
+      if (typeof win.renderFrame === 'function') win.renderFrame(t);
+    } finally {
+      proto.fillText = origFill;
+      proto.strokeText = origStroke;
+      proto.drawImage = origDraw;
+      __REC = null;
+      win.__ev.push({ t: rec.t, ev: rec.events.slice() });
+    }
+    return rec;
+  };
+  win.__textsAt = (t) => run(t).texts.slice();
+  win.__evAt = (t) => run(t).events.slice();
+  return true;
+}
+
+/** 效果打点（__ev 数据源）。非记录帧 = 单次 null 判断，零开销零行为变化。 */
+export function fxEvent(name, detail) {
+  if (!__REC) return;
+  __REC.events.push({ fx: name, t: __REC.t, ...(detail === undefined ? {} : { detail }) });
+}
+
+installPageContract();
 
 // Apply impact transform to a 2D context (assumes W/H = design size).
 export function applyImpact2D(ctx, fx, W = 1920, H = 1080) {
@@ -188,11 +365,13 @@ export function applyImpact2D(ctx, fx, W = 1920, H = 1080) {
   ctx.translate(W / 2 + fx.shakeX, H / 2 + fx.shakeY);
   ctx.scale(s, s);
   ctx.translate(-W / 2, -H / 2);
+  if (__REC) fxEvent('impact', { s: +s.toFixed(4), shakeX: fx.shakeX, shakeY: fx.shakeY });
 }
 
 // White flash overlay; call after restore.
 export function drawFlash(ctx, alpha, W = 1920, H = 1080, color = '#ffffff') {
   if (alpha <= 0.001) return;
+  if (__REC) fxEvent('flash', { alpha: +alpha.toFixed(3) });
   ctx.save();
   ctx.globalAlpha = clamp(alpha, 0, 1);
   ctx.fillStyle = color;
@@ -201,7 +380,7 @@ export function drawFlash(ctx, alpha, W = 1920, H = 1080, color = '#ffffff') {
 }
 
 // ---------- standard segment chrome ----------
-export function drawCapsuleLabel(ctx, index, name, category = '', opts = {}) {
+function _drawCapsuleLabel(ctx, index, name, category = '', opts = {}) {
   const {
     x = 96, y = 72, h = 58, padX = 26, font = '600 26px "Noto Sans SC", sans-serif',
     numberColor = '#d97757', textColor = '#f5f0e8',
@@ -235,7 +414,11 @@ export function drawCapsuleLabel(ctx, index, name, category = '', opts = {}) {
   ctx.restore();
 }
 
+/** G7 校准：胶囊 eyebrow（品牌·分类 + 计数器）属版面 chrome。 */
+export function drawCapsuleLabel(...args) { return withLayer('chrome', () => _drawCapsuleLabel(...args)); }
+
 export function drawCountdown(ctx, u, duration, opts = {}) {
+  return withLayer('chrome', () => {
   const { x = 1824, y = 1016, size = 34, color = 'rgba(245,240,232,0.72)', font = 'JetBrains Mono, monospace' } = opts;
   const remain = Math.max(0, Math.ceil(duration - u - 0.001));
   const text = `00:0${Math.min(9, remain)}`;
@@ -246,9 +429,11 @@ export function drawCountdown(ctx, u, duration, opts = {}) {
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(text, x, y);
   ctx.restore();
+  });
 }
 
 export function drawStamp(ctx, text, opts = {}) {
+  return withLayer('chrome', () => {
   const { x = 1824, y = 72, size = 20, align = 'right', color = 'rgba(245,240,232,0.42)', font = 'JetBrains Mono, monospace' } = opts;
   ctx.save();
   ctx.font = `${size}px ${font}`;
@@ -257,6 +442,7 @@ export function drawStamp(ctx, text, opts = {}) {
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x, y);
   ctx.restore();
+  });
 }
 
 // Cached vertical/radial gradient helper (avoid rebuilding gradients every frame).
