@@ -158,14 +158,21 @@ const baseSpec = JSON.parse(fs.readFileSync(path.join(ROOT, 'fixtures/mini-41s/s
   ok('T11 apostrophe escaped in overrides attr (F4)', html.includes('&#39;') && !/overrides='[^']*don't/.test(html));
 }
 {
-  // F9：规则目录与 EVALS 脱节必须拦（闸自身故障不许绿）
+  // F9：规则目录与 EVALS 脱节必须拦（闸自身故障不许绿）。
+  // G3-9 同步：taste 退出码改 0/1/2（1=判决阻断），13 归 qa 族。
   const cat = JSON.parse(fs.readFileSync(path.join(ROOT, 'schema/taste-rules.json'), 'utf8'));
-  cat.rules.push({ id: 'ghost-rule', title: '不存在的规则', severity: 'warning', weight: 5, input: 'spec', waivable: false });
+  cat.rules.push({ id: 'ghost-rule', title: '不存在的规则', severity: 'warning', weight: 5, input: 'spec', waivable: false, assert: { expr: 'ghost' } });
   const rf = path.join(tmp, 'rules.json'); writeJson(rf, cat);
   const res = spawnSync(process.execPath, [path.join(ROOT, 'scripts/taste.mjs'), path.join(ROOT, 'fixtures/mini-41s/spec.json'), '--root', ROOT, '--rules', rf],
     { encoding: 'utf8', timeout: 90000 });
   const out = (res.stdout || '') + (res.stderr || '');
-  ok('T12 unimplemented rule blocks (F9)', res.status === 13 && out.includes('gate-fault'), `exit=${res.status}`);
+  ok('T12 unimplemented rule blocks (F9)', res.status === 1 && out.includes('gate-fault'), `exit=${res.status}`);
+  // G3-6 同步：ghost-rule 缺 assert → 启动错 exit 2（目录非法不许走到判决）。
+  const cat2 = structuredClone(cat); delete cat2.rules[cat2.rules.length - 1].assert;
+  const rf2 = path.join(tmp, 'rules-noassert.json'); writeJson(rf2, cat2);
+  const res2 = spawnSync(process.execPath, [path.join(ROOT, 'scripts/taste.mjs'), path.join(ROOT, 'fixtures/mini-41s/spec.json'), '--root', ROOT, '--rules', rf2],
+    { encoding: 'utf8', timeout: 90000 });
+  ok('T12b missing assert → startup error (G3-6)', res2.status === 2 && String(res2.stderr || '').includes('E_TASTE_ASSERT'), `exit=${res2.status}`);
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

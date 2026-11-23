@@ -25,7 +25,7 @@ import { writeZip } from './lib/zip.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROG = 'node scripts/ship.mjs';
-const KNOWN = new Set(['spec', 'out', 'json', 'check', 'force', 'help']);
+const KNOWN = new Set(['spec', 'out', 'json', 'check', 'force', 'strict', 'help']);
 const argv = process.argv.slice(2);
 const positional = argv.filter((a) => !String(a).startsWith('--'));
 const { args, unknown } = parseStrict(argv, KNOWN);
@@ -35,7 +35,8 @@ if (args.help || positional.length < 1) {
   console.log(`Usage: node scripts/ship.mjs <spec.json> [options]
   <spec.json>         项目 spec（应先 cvs build 过，产物按 spec.render.outDir）
   --out <zip|dir>     zip 打包（默认）或解到目录 <stem>-ship/
-  --check             打包前对 master.mp4 跑双闸 QA（FAIL 时默认拒绝打包，--force 可强出）
+  --check             打包前对 master.mp4 跑双闸 QA + 审美闸 taste（FAIL 时默认拒绝打包，--force 可强出）
+  --strict            传给 taste：warning 级也拦（error 级永远拦）
   --force             QA 未过也照常打包（如实标注）
   --json              one-line JSON on stdout, human text to stderr`);
   process.exit(args.help ? 0 : 2);
@@ -73,6 +74,7 @@ if (missing.length) {
 
 // ── R11-W1：打包前双闸 QA ──────────────────────────────────
 let qaStatus = null;
+let tasteStatus = null;
 if (args.check && files.has(`${stem}/master/master.mp4`) && !args.force) {
   const py = process.env.PYTHON || 'python';
   const masterAbs = path.join(deliverableDir, 'master.mp4');
@@ -89,10 +91,27 @@ if (args.check && files.has(`${stem}/master/master.mp4`) && !args.force) {
     process.exit(13);
   }
   console.error('[ship]  ✓ 预检通过');
+  // G3-2：审美闸 taste（SKILL 承诺的「error 拦」从话术变事实）。与 qa 同级 spawn：
+  // error 级 finding 恒拦、ship --strict 时 warning 也拦；退出码 0/1/2 原样透传。
+  console.error('[ship]  pre-package taste…');
+  const tr = spawnSync(process.execPath, [
+    path.join(ROOT, 'scripts/taste.mjs'), specPath, '--root', ROOT,
+    ...(args.strict ? ['--strict'] : []),
+  ], { cwd: ROOT, stdio: 'inherit' });
+  tasteStatus = tr.status ?? 2;
+  if (tasteStatus !== 0) {
+    console.error(`[ship]  ✗ taste 审美闸不过（exit ${tasteStatus}）——拒绝打包。` +
+      `确认无误要强出？加 --force；确属误判走 .cvs/waivers.json（rule+reason+date）`);
+    process.exit(tasteStatus);
+  }
+  console.error('[ship]  ✓ taste 通过');
   // R12-W1：QA 报告一并入库——交付包自带质检凭据，接收方不用重跑就能看到当时的结论
-  for (const qname of ['qa/qa-video.json', 'qa/qa-audio.json']) {
-    const qpath = path.join(deliverableDir, '..', qname);
-    if (fs.existsSync(qpath)) files.set(`${stem}/qa-reports/${qname.split('/').pop()}`, fs.readFileSync(qpath));
+  for (const qpath of [
+    path.join(deliverableDir, '..', 'qa/qa-video.json'),
+    path.join(deliverableDir, '..', 'qa/qa-audio.json'),
+    path.join(ROOT, 'out', 'qa', 'taste.json'),
+  ]) {
+    if (fs.existsSync(qpath)) files.set(`${stem}/qa-reports/${path.basename(qpath)}`, fs.readFileSync(qpath));
   }
 }
 // ── 自生成 README ──────────────────────────────────────────
@@ -162,7 +181,9 @@ if (mode === 'dir') {
 
 const archiveName = mode === 'zip' ? `${stemFull}.zip` : null;
 const result = { ok: true, stem, entries: files.size, mode, archive: archiveName,
-  missing, qaChecked: !!args.check, qaPass: args.check ? qaStatus === 0 : null };
+  missing, qaChecked: !!args.check, qaPass: args.check ? qaStatus === 0 : null,
+  tasteChecked: args.check ? tasteStatus !== null : false,
+  tastePass: tasteStatus === null ? null : tasteStatus === 0, tasteExit: tasteStatus };
 if (args.json) process.stdout.write(JSON.stringify(result) + '\n');
 
 // 缺成片不算失败（清单如实标注），但要留痕给自动化判断

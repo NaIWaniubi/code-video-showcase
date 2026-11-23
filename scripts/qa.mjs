@@ -67,13 +67,19 @@ if (!planFile) {
 }
 if (!planFile) console.error('[qa] [W_NO_PLAN] 未找到 plan.json —— 内容级检查（帧数/切点/占位页/标题）全部跳过；本次不是交付级质检');
 
+// G3-1（已复现 finding）：旧代码算出 strict 却从不转发——子闸收不到 --strict，
+// WARN 在子进程里永远放行，`cvs qa --strict` 的「warnings fail too」是空头承诺。
+// 现在两个子闸都收到 --strict，语义由子闸自身兑现（qa-video/qa-audio 均有该旗标）。
+const strict = !!args.strict;
 const extraV = [];
 if (planFile) extraV.push('--plan', planFile);
+if (strict) extraV.push('--strict');
 // 音频源缺省 = 视频本身（qa-audio 内部抽音轨，量的是交付流而非合成 wav）。
 const audioArg = args.audio ? path.resolve(process.cwd(), String(args.audio)) : videoFile;
 
 const extraA = [];
 if (planFile) extraA.push('--plan', planFile);
+if (strict) extraA.push('--strict');
 
 const py = process.env.PYTHON || 'python';
 
@@ -92,9 +98,8 @@ aCode = spawnSync(py,
   { cwd: ROOT, stdio: 'inherit' }).status ?? 1;
 
 // ── 汇总 ───────────────────────────────────────────────────
-const strict = !!args.strict;
 const hardFail = vCode !== 0 || aCode !== 0;
-// strict 下 WARN 也拦：qa-video/qa-audio 的退出码已含该语义，无需再算。
+// strict 下 WARN 也拦：G3-1 已把 --strict 转发给两个子闸，退出码即含该语义，无需再算。
 console.error(
   `[qa]   video=${vCode === 0 ? 'PASS' : 'FAIL'} · audio=${aCode === 0 ? 'PASS' : 'FAIL'}` +
   (hardFail ? '  ✗ 交付不通过' : '  ✓ 全闸通过'),
