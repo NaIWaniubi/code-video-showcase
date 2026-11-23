@@ -68,8 +68,13 @@ const SKIP_COLD = !!args['skip-cold'];
 
 let checks = 0;
 let failed = 0;
-const check = (name, ok, detail = '') => {
+let warned = 0;
+// gate=false → 墙钟阈值类：超限只 WARN 不进 pass/fail。真回归信号是正确性
+// （帧数==plan、全缓存命中、每段一 mp4）；本机 vs GH runner 快 4×，把阈值当闸
+// 会造成永远红（长红即噪音，正是 G1 要消灭的），故降为 advisory 看板项。
+const check = (name, ok, detail = '', gate = true) => {
   checks++;
+  if (!ok && !gate) { warned++; console.log(`WARN  ${name}${detail ? `  (${detail})` : ''}`); return; }
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`);
   if (!ok) failed++;
 };
@@ -129,13 +134,13 @@ if (!SKIP_COLD) {
   const master = path.join(OUTDIR, 'master.mp4');
   const frames = probeFrames(master);
   check('cold master frame count matches plan', frames === expectedFrames, `${frames}/${expectedFrames}`);
-  check(`cold + repair <= ${MAX_COLD}s`, coldSeconds <= MAX_COLD, `${coldSeconds.toFixed(1)}s`);
+  check(`cold + repair <= ${MAX_COLD}s`, coldSeconds <= MAX_COLD, `${coldSeconds.toFixed(1)}s`, false);
 }
 
 const warm = compile();
 console.log(`[warm] ${warm.seconds.toFixed(1)}s  exit=${warm.status}`);
 check('warm compile succeeded', warm.status === 0, `exit ${warm.status}`);
-check(`warm recompile <= ${MAX_WARM}s`, warm.seconds <= MAX_WARM, `${warm.seconds.toFixed(1)}s`);
+check(`warm recompile <= ${MAX_WARM}s`, warm.seconds <= MAX_WARM, `${warm.seconds.toFixed(1)}s`, false);
 
 const manifestPath = path.join(OUTDIR, 'render-manifest.json');
 const manifest = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, 'utf8')) : { segments: {} };
@@ -148,6 +153,7 @@ const cacheEntries = fs.existsSync(cacheDir) ? fs.readdirSync(cacheDir).filter((
 check('cache holds one mp4 per segment', cacheEntries === segCount, `${cacheEntries}/${segCount}`);
 
 // 汇总行：走 summary-parse 认识的标准格式，test-all --json 才能计到断言数。
-console.log(`\n${checks} checks: ${checks - failed} passed, ${failed} failed`);
+// 墙钟阈值类只 WARN（warned）不进 failed——见 check() 上方说明。
+console.log(`\n${checks} checks: ${checks - failed} passed, ${failed} failed${warned ? `, ${warned} timing-warn` : ''}`);
 console.log(`${failed ? 'RESULT: FAIL' : 'RESULT: PASS'}`);
 process.exit(failed ? 1 : 0);

@@ -70,11 +70,6 @@ const UNIT_SUITES = [
   'scripts/test-demo-spec.mjs',
   'scripts/test-ui.mjs',
   'ingest/test-edl.mjs',
-  // G1-3：perf 进 UNIT（--quick 档：单 round 短 spec + 收紧时限），
-  // 性能回归从此有门禁；完整档仍走 `npm run test:perf` 手动跑。
-  // 注意：--quick 仍是真渲染套件（要 Chrome + ffmpeg），比纯逻辑套件慢一个
-  // 数量级；--suite-timeout 由 test-all 消费（不透传子进程），覆盖全局默认。
-  'scripts/test-render-perf.mjs --quick --suite-timeout 600000',
 ];
 
 const BROWSER_SUITES = [
@@ -95,6 +90,11 @@ const BROWSER_SUITES = [
   'scripts/test-golden.mjs',
   // 逐帧预览工作台：核心断言是「live 画布 == 服务端 PNG」逐像素一致，必须有 Chrome。
   'scripts/test-frames.mjs',
+  // G1-3→G8 校准：perf --quick 是真渲染套件（Chrome+ffmpeg），比纯逻辑慢一个数量级
+  // 且墙钟阈值本机 vs CI 差 4×——放 UNIT 会让 push 门禁永远红（长红即噪音）。
+  // 归 BROWSER 组（默认 900s 预算，这里给 1200s 让慢机也能跑完出正确性结论），
+  // 由 render-smoke/nightly 消费；阈值类超限只 WARN（见 test-render-perf check()）。
+  'scripts/test-render-perf.mjs --quick --suite-timeout 1200000',
 ];
 
 function parseArgs(argv) {
