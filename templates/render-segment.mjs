@@ -48,7 +48,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { launch as launchCdp, connect, evaluate as cdpEvaluate, waitFor as cdpWaitFor } from './cdp.mjs';
+import { launch as launchCdp, connect, evaluate as cdpEvaluate, waitFor as cdpWaitFor, resolveOnPath } from './cdp.mjs';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -152,7 +152,14 @@ export function normalizeOptions(raw = {}) {
   const height = num(raw.height, 1080);
   const stills = parseStills(raw.stills !== undefined ? raw.stills : raw.still);
   const outdir = path.resolve(str(raw.outdir, path.join(root, 'out', 'stills')));
-  const browser = raw.browser ? path.resolve(String(raw.browser)) : (process.env.CHROME_EXE || null);
+  // CI 首跑（golden job，CHROME_EXE 缺位时 --browser google-chrome 裸命令名）暴露：
+  // 无条件 path.resolve 会把 PATH 型命令名拼成 <cwd>/google-chrome → ENOENT。
+  // 语义对齐 cdp.mjs browserCandidates 的既有纪律：含路径分隔符才 resolve，裸名走 PATH 解析。
+  const browser = raw.browser
+    ? (String(raw.browser).includes('/') || String(raw.browser).includes('\\')
+        ? path.resolve(String(raw.browser))
+        : (resolveOnPath(String(raw.browser)) || String(raw.browser)))
+    : (process.env.CHROME_EXE || null);
   const log = typeof raw.log === 'function' ? raw.log : (line) => console.log(line);
   const warn = typeof raw.warn === 'function' ? raw.warn : (line) => console.warn(line);
   return {
