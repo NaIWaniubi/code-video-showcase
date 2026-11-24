@@ -8,16 +8,16 @@ An Agent Skill for producing 30–90 s "style showcase" films: an 8 s opening, e
 
 > **一键安装 / Install in one sentence**
 >
-> 把这句话发给你的 Agent：「把这个仓库安装成 Agent Skill：`git clone https://github.com/Moessif/code-video-showcase.git ~/.dsh/skills/code-video-showcase`（Claude Code 换成 `~/.claude/skills/`，通用 Agent 用 `.agents/skills/`），装好后读一遍 `SKILL.md` 确认可用。」
+> 把这句话发给你的 Agent：「把这个仓库安装成 Agent Skill：`git clone https://github.com/NaIWaniubi/cvs-verifiable-video.git ~/.dsh/skills/code-video-showcase`（Claude Code 换成 `~/.claude/skills/`，通用 Agent 用 `.agents/skills/`），装好后读一遍 `SKILL.md` 确认可用。」
 >
-> Send this to your agent: "Install https://github.com/Moessif/code-video-showcase as an Agent Skill: clone it into `~/.dsh/skills/code-video-showcase` (`~/.claude/skills/` for Claude Code, `.agents/skills/` for generic agents), then read `SKILL.md` to confirm it works."
+> Send this to your agent: "Install https://github.com/NaIWaniubi/cvs-verifiable-video as an Agent Skill: clone it into `~/.dsh/skills/code-video-showcase` (`~/.claude/skills/` for Claude Code, `.agents/skills/` for generic agents), then read `SKILL.md` to confirm it works."
 
 [![MIT License](https://img.shields.io/badge/license-MIT-d97757?style=flat-square)](LICENSE)
-[![CI](https://github.com/NaIWaniubi/code-video-showcase/actions/workflows/compiler.yml/badge.svg)](https://github.com/NaIWaniubi/code-video-showcase/actions/workflows/compiler.yml) <!-- CANONICAL-URL: 切新仓时同步替换 badge/clone/release 三处 -->
+[![CI](https://github.com/NaIWaniubi/cvs-verifiable-video/actions/workflows/compiler.yml/badge.svg)](https://github.com/NaIWaniubi/cvs-verifiable-video/actions/workflows/compiler.yml) <!-- CANONICAL-URL: 切新仓时同步替换 badge/clone/release 三处 -->
 [![Node 22+](https://img.shields.io/badge/node-%E2%89%A5%2022-3c873a?style=flat-square)](https://nodejs.org/)
 [![FFmpeg](https://img.shields.io/badge/ffmpeg-libx264%20%2B%20AAC-007808?style=flat-square)](https://ffmpeg.org/)
 [![No generative models](https://img.shields.io/badge/generative%20models-none-d97757?style=flat-square)](#design-constraints)
-[![Latest release](https://img.shields.io/github/v/release/Moessif/code-video-showcase?style=flat-square&color=d97757)](https://github.com/Moessif/code-video-showcase/releases)
+[![Latest release](https://img.shields.io/github/v/release/NaIWaniubi/cvs-verifiable-video?style=flat-square&color=d97757)](https://github.com/NaIWaniubi/cvs-verifiable-video/releases)
 
 **v3.0 flagship（断层领先三件套）**
 
@@ -42,7 +42,7 @@ An Agent Skill for producing 30–90 s "style showcase" films: an 8 s opening, e
 - **第 21 画风 `generative`**：已注册为正式配方页（recipe-generative.html），向导可选、combos 矩阵 17×21 同步。
 - **派生导出格式**：`--platform webm|gif|mp3` 直接转码入交付清单。
 
-**Changelog / 更新历史**：[CHANGELOG.md](CHANGELOG.md) · [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)
+**Changelog / 更新历史**：[CHANGELOG.md](CHANGELOG.md) · [GitHub Releases](https://github.com/NaIWaniubi/cvs-verifiable-video/releases)
 
 > **Credits / 致谢**：This skill started from a prompt by the creator **Mixx.ftr** — this repository is an independent engineering reconstruction and extension of that prompt into runnable templates, themes and a deterministic render pipeline.
 >
@@ -801,6 +801,6 @@ bash templates/concat-and-encode.sh --platform master out/segments.txt audio/mix
 
 ## Star History / Star 历史
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Moessif/code-video-showcase&type=Date)](https://www.star-history.com/#Moessif/code-video-showcase&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=NaIWaniubi/cvs-verifiable-video&type=Date)](https://www.star-history.com/#NaIWaniubi/cvs-verifiable-video&Date)
 
 > Star History 图的生成与嵌入方法参考：[如何拥有漂亮的 GitHub Star History 折线图](https://blog.csdn.net/SoulmateY/article/details/135317109)（CSDN）。

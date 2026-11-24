@@ -1,7 +1,7 @@
 # Changelog / 更新历史
 
 本项目的版本更新记录。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
-每个版本同时发布在 [GitHub Releases](https://github.com/Moessif/code-video-showcase/releases)。
+每个版本同时发布在 [GitHub Releases](https://github.com/NaIWaniubi/cvs-verifiable-video/releases)。
 
 ## [v4.13.0] - 2026-11-24 — 「读不读得完」变成闸 + KNOWN_RED 清零 + 分发实物入库
 
