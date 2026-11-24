@@ -30,6 +30,15 @@ import wave
 import numpy as np
 from scipy import signal
 
+# Windows-CI 实测（v4.13.0 windows-static 首红）：detail 文案含中文，控制台默认
+# cp1252 直接 UnicodeEncodeError 崩掉整个闸。stdout/stderr 一律 UTF-8（replace 兜底），
+# 与渲染器/CVS 其它组件的输出编码口径一致。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 EPS = 1e-12
 
 

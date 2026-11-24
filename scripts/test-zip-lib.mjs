@@ -50,7 +50,18 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 
-test('ship：既有成片目录 → 包内 7 件、含 README 与 master.mp4，退出 0', () => {
+test('ship：自带 stub 成片目录（hermetic，fresh checkout/CI 可跑）→ 退出 0、含 README', () => {
+  // 旧版依赖仓库里"既有"的 out/e2e-3s——out/ 是 gitignored，fresh CI 必缺席；
+  // G10 把「缺 master.mp4 退 13」的死账修活后，这条在 CI 上如实红了。
+  // 正解是测试自备夹具，而不是让 ship 放行缺成片的包。
+  const fixtureDir = path.join(ROOT, 'out', 'ship-ziplib-fixture');
+  fs.mkdirSync(fixtureDir, { recursive: true });
+  const stubs = {
+    'master.mp4': Buffer.from('stub-master-bytes-for-ziplib-test'),
+    'plan.json': Buffer.from(JSON.stringify({ meta: { fps: 30, width: 1920, height: 1080 }, segments: [], stats: { duration: 3 } })),
+    'delivery.json': Buffer.from(JSON.stringify({ files: [] })),
+  };
+  for (const [n, b] of Object.entries(stubs)) fs.writeFileSync(path.join(fixtureDir, n), b);
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cvs-ship-'));
   const specPath = path.join(tmpDir, 'ship-test.spec.json');
   fs.writeFileSync(specPath, JSON.stringify({
@@ -65,22 +76,24 @@ test('ship：既有成片目录 → 包内 7 件、含 README 与 master.mp4，�
     moreCard: { page: 'templates/big-card.html' },
     flash: { page: 'templates/segment.html' },
     ending: { page: 'templates/segment.html' },
-    render: { quality: 'master', preset: 'master', concurrency: 1, outDir: 'out/e2e-3s' },
+    render: { quality: 'master', preset: 'master', concurrency: 1, outDir: 'out/ship-ziplib-fixture' },
   }));
   const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts/ship.mjs'), specPath, '--out', 'dir'],
     { cwd: ROOT, encoding: 'utf8', timeout: 60000 });
   try {
     assert.equal(r.status, 0, (r.stderr || '') + (r.stdout || ''));
-    const destDirs = fs.readdirSync(ROOT).filter((f) => /^ship-test/.test(f));
-    assert.ok(destDirs.length >= 1, '应在工作区根生成 ship-test-<date> 目录');
+    const destDirs = fs.readdirSync(ROOT).filter((f) => /^ship-test[.-]/.test(f) || f === 'ship-test.spec');
+    assert.ok(destDirs.length >= 1, '应在工作区根生成 ship-test 目录');
     const readme = fs.readFileSync(path.join(ROOT, destDirs[0], 'ship-test.spec', 'README.md'), 'utf8');
     assert.match(readme, /从零复现|三步/, 'README 应含复现指南');
   } finally {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
-    // 清理工作区根的 ship 目录
+    // 清理 ship 目录：产物名是 `<spec名>-<date>`（如 ship-test.spec-2026-11-24）——
+    // 旧正则 ^ship-test- 匹配不到带点的名字，历次运行一直在泄目录（本次顺带根治）。
     for (const f of fs.readdirSync(ROOT)) {
-      if (/^ship-test-/.test(f)) { try { fs.rmSync(path.join(ROOT, f), { recursive: true, force: true }); } catch { /* ignore */ } }
+      if (/^ship-test([.-]|\.spec)/.test(f)) { try { fs.rmSync(path.join(ROOT, f), { recursive: true, force: true }); } catch { /* ignore */ } }
     }
+    try { fs.rmSync(fixtureDir, { recursive: true, force: true }); } catch { /* ignore */ }
   }
 });
 
