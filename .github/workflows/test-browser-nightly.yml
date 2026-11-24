@@ -21,7 +21,7 @@ jobs:
           cache: npm
 
       - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg python3-numpy python3-scipy
 
       - name: Install Chrome
         # G1-5：旧版 `sudo apt install ./x.deb || sudo apt -f -y && sudo apt install x.deb`

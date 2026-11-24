@@ -18,6 +18,10 @@ jobs:
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      # 首跑 CI 实测：runner 无 numpy/scipy → qa-audio 相关 contract 断言 5 红。
+      - name: Install python numerics (qa-audio.py)
+        run: sudo apt-get install -y python3-numpy python3-scipy
+
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
