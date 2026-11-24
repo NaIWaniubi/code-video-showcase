@@ -1474,7 +1474,8 @@
       "manifest": "out\\mini-41s\\render-manifest.json",
       "plan": "out\\mini-41s\\plan.json"
     },
-    "demoNote": "41s fixture rendered at 1920x1080 then deterministic bicubic downscale (ffmpeg scale=640:360, x264 crf28 threads=1 bitexact-style params); layers.plan preserves master lineage. Rebuild: node scripts/ship-demo.mjs"
+    "demoNote": "41s fixture rendered at 1920x1080 then deterministic bicubic downscale (ffmpeg scale=640:360, x264 crf28 threads=1 bitexact-style params); layers.plan preserves master lineage. Rebuild: node scripts/ship-demo.mjs",
+    "verifyNote": "Fresh-clone offline verify 2026-11-24: container/frames match; toolchain browser 36→38 auto-upgrade correctly flagged as differ (note, not fail)."
   },
   "mp4": "assets/demos/showcase-360.mp4"
 }
