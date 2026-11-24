@@ -142,7 +142,7 @@ async function main() {
 
     section('hit map');
     const table = await evaluate(client, sessionId, () => {
-      window.renderFrame(0.8);
+      window.renderFrame((window.DURATION || 1) * 0.8); // G4 后时钟参数化：按 DURATION 比例采样（原测试意图=入场完成段）
       const hit = window.__hit || [];
       const schemaTypes = [];
       const entries = hit.map((e) => {
@@ -203,13 +203,13 @@ async function main() {
         return h.toString(16);
       };
       const canvas = document.querySelector('canvas');
-      window.renderFrame(0.8);
+      window.renderFrame((window.DURATION || 1) * 0.8); // G4 后时钟参数化：按 DURATION 比例采样（原测试意图=入场完成段）
       const before = canvas.toDataURL('image/png');
       const patchesBefore = window.__spec().patches.length;
       const ret = window.__patch('card.keyword', { color: '#00ff00' });
       const after = canvas.toDataURL('image/png');
       const patchesAfter = window.__spec().patches.length;
-      window.renderFrame(0.8);
+      window.renderFrame((window.DURATION || 1) * 0.8); // G4 后时钟参数化：按 DURATION 比例采样（原测试意图=入场完成段）
       const again = canvas.toDataURL('image/png');
 
       let green = 0;
@@ -262,7 +262,7 @@ async function main() {
         return h.toString(16);
       };
       const canvas = document.querySelector('canvas');
-      window.renderFrame(0.8);
+      window.renderFrame((window.DURATION || 1) * 0.8); // G4 后时钟参数化：按 DURATION 比例采样（原测试意图=入场完成段）
       const before = hash(canvas.toDataURL('image/png'));
       const colorEntry = (window.__hit || []).find((e) => e.id === 'card.color');
       const beforeColor = colorEntry && colorEntry.props.color;
@@ -320,7 +320,7 @@ async function main() {
     section('__inspectRect / __patchMany（框选）');
     const multi = await evaluate(client, sessionId, () => {
       const canvas = document.querySelector('canvas');
-      window.renderFrame(0.8);
+      window.renderFrame((window.DURATION || 1) * 0.8); // G4 后时钟参数化：按 DURATION 比例采样（原测试意图=入场完成段）
       window.__editBridge.clearPatches();
       const all = window.__inspectRect(0, 0, 1920, 1080);
       const ids = all.map((e) => e.id);

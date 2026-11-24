@@ -117,7 +117,13 @@
 - 成片入库：解 .gitignore 吞 mp4 的静默陷阱（显式 `!assets/demos/*.mp4` + 小体积 360p 样片或 Git LFS 二选一）；bench/taste/diff 各配一条 demo；每画风模板静态详情页；README CI 徽章行。
 - skills.sh 上榜 + skill 随 tag 版本对齐安装；references 发布带逐文件 sha256 清单（吸收 openfilm community 纪律，本身就是叙事素材）。
 
-## 3. 依赖与顺序（G12 为 2026-11-24 新立案，插于此处属 §2 切片序列尾部）
+## 3. 依赖与顺序（G12/G13 为 2026-11-24 新立案，插于此处属 §2 切片序列尾部）
+
+### G13（2026-11-24 新立案，v4.13.0 终验全归因）toDataURL/CDP 回读路径的 S8 家族残留 + 冻结基线欠账
+基线（1c2a904）复现确认、非 v4.11-v4.13 引入：① recipe-datarace `--still` 两次独立进程 PNG SHA 不一致（跨进程位级承诺在该页破坏——该页 toDataURL 路径，gradient+globalAlpha 组合的 Skia 光栅器态相关）；② ink-wash 同页 renderFrame(0.3)→(1.77)→(0.3) 59/207万 px 漂移 maxDelta=17（超测试自身 Δ≤4 容差）；③ test-inspect patch 重绘 toDataURL 不等（同族）+「关键词矩形绿色像素 green=0」功能断言（需独立查，可能是真回归遗留）；④ reflow-pages 的 D7 冻结哈希在 v4.9.1 字体波后未重录（golden 同类违纪的第二现场，HEAD 上 big-card 两条仍陈旧）。
+方案：对 ①② 用「双进程差分定位到矩形 → 找页内具体绘制 API → 换预烘焙/降 alpha 叠加」的 R2-11 逐层排除法；对 ③green 先 git log -S 定位最后绿版本；④随下一次像素波统一重录 D7 并给 reflow-pages 加 --update 通道。纪律：这三套并入 BROWSER 门禁前必须先绿，暂时如实挂 KNOWN_RED（compiler.yml 不受影响，nightly 会红——观测位，非拦截位）。
+
+**立案当日终裁（同批全部归因完毕）**：③ 确系**真回归**且已修——G4 把 big-card 归一化后的 0..1 时刻喂给了 `bridge.setTime`（renderAt 按绝对秒回灌 → patch 重绘二次归一、时刻漂移），改为记 `u` 后 test-inspect **55/0**；④ 已重冻——教训入档：**哈希必须按消费测试自身的管线取值**（曾误用 png 管线得到另一组值），reflow-pages 按 jpeg+graySha 双跑实测重冻 big-card 两条（segment 未变）后 **56/0**；①② 重定性为**负载相关光栅抖动**：空闲机双进程逐字节稳（png/gray 全同），套件并发下才漂——指向 Chrome 光栅缓存驱逐 dither，非页内状态泄漏（无时钟源，纪律已核）。候选根治按序：渲染浏览器加确定性光栅旗标（--disable-partial-raster --num-raster-threads=1 等组合，需实测 golden 影响）；或 CI(Linux) 若天然稳则改口径为「本机观测项」。recipes 两条断言**保持红着报警**，不放宽阈值换绿。
 
 ### G12（2026-11-24 新立案，ship-demo 实战首猎）小横屏画幅排版专项
 现象：`cvs build` 直接指定非 1080p 横屏画幅（如 640×360）时，segment.html 系页面的 HUD 与设计常量

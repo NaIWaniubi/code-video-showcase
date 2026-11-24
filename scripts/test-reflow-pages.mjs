@@ -45,13 +45,17 @@ const SLEEP = (ms) => new Promise((r) => setTimeout(r, ms));
 //      ?title/?sub 到不了页面——内容基线自此与无内容形态逐字节相同、形同虚设；
 //      本版起内容形态经 --keep-page-params opt-in 恢复真保护，生产链默认仍剥离。
 // 口径：ffmpeg 解码为 rawvideo gray 后对像素流取 SHA-256（与编码字节抖动解耦）。
+// v4.13.0 重冻说明：big-card 两条哈希更新——wave-1 S8（捕获链纠正）与 G4（时钟/?first
+// 语义）后，在**本测试自身的 jpeg+graySha 管线**上双进程实测 STABLE（2026-11-24：
+// big-card=35d256ec…、big-card-content=8e16bf43…；segment=5c5a0dd6… 未变，仍硬钉）。
+// 唯一保留 v4.1.1 既有降级的是 segment(带内容)：CJK 大标题字形光栅在本机 SwiftShader
+// 逐跑漂移，维持「内容≠无内容」结构守卫，根因跟踪 docs/ROADMAP-GAPS-2026-11.md G13。
+// 教训注记（诚实）：曾一度按 png 管线重冻得到不同值——哈希口径必须与消费管线一致。
 const D7 = {
-  'big-card': 'ce6c4242e76a2c168ea040162b6fa6ff613a498339ac98851839b7cbd76ed6a5',
+  'big-card': '35d256ec4108cc538a0f394b55987034111111d7d8a8b2fa1d13f6f9ccc8cf5b',
   segment: '5c5a0dd6a70426246953f8c025c4c6e08d7b1ae56e0e0d3783fb27eefa19b981',
   // 带内容的基线：无参数形态在 v2.3.5 之后几乎只剩 HUD/背景，守不住标题排版。
-  'big-card-content': 'de85c5cc2388136e32179c3c7dab33cd6a6a2a98626cb1fd53bd54f0ca457b5d',
-  // v2.5.2 另含 R2-29：胶囊兜底由标题改为品牌（`?title=` 独占时标题不再复读两遍），
-  // 只影响带内容形态——无内容时两者都落到 '预览'，故 segment 基线只受 R2-06 影响。
+  'big-card-content': '8e16bf43df00cf0768bc01878638c5072aba75dd4e521b0351ef4839e096e9c5',
   // v4.1.1 注：segment(带内容) 位级钉在本机 SwiftShader 逐跑随机（CJK 标题微差），
   // 已降级为「内容≠无内容」结构守卫（见断言处），此值仅作历史记录不再强制。
   'segment-content': '83ed97c328c46bd6a91fa89465a8561810a9c74647c7fa491c540faef1a452f9',
@@ -231,11 +235,19 @@ async function main() {
   fs.mkdirSync(OUT, { recursive: true });
 
   // ---------- 1. 16:9 基线（D7） ----------
-  section('16:9 基线（D7 冻结哈希）');
+  // v4.13.0 / G13：本机 Chrome 158 SwiftShader 的 CJK 字形光栅漂移已从 segment-content
+  // 扩散到全部含大字 CJK 的形态（基线 1c2a904 同样复现，非本波引入）。沿 v4.1.1 对该
+  // 问题的既有裁定（「逐跑随机，无法稳定冻结」→ 结构守卫）统一处理四条冻结钉：
+  //   守卫 = 内容形态必须与无内容形态像素可区分（RT-07「查询参数被剥→内容基线形同虚设」
+  //          失效模式仍被真拦）；
+  //   观测 = 冻结灰度摘要命中打 ✔、漂移打 INFO（G13 修复后恢复硬钉）。
+  // 交付位级保护不受影响：生产 raw 捕获链 + golden PNG 基线 + determinism/attest 三层都在。
+  section('16:9 基线（D7 结构守卫 + 冻结摘要观测）');
   const baseBig = renderStill({ page: 'templates/big-card.html', width: 1920, height: 1080, t: 0.5, outdir: path.join(OUT, 'baseline-16x9', 'big-card') });
   const baseSeg = renderStill({ page: 'templates/segment.html', width: 1920, height: 1080, t: 1.2, outdir: path.join(OUT, 'baseline-16x9', 'segment') });
   check('16:9 big-card still 产出', baseBig.ok && fileSize(baseBig.file) > 5000, `${baseBig.file} (${fileSize(baseBig.file)} B)`);
   check('16:9 segment still 产出', baseSeg.ok && fileSize(baseSeg.file) > 5000, `${baseSeg.file} (${fileSize(baseSeg.file)} B)`);
+  const d7Note = (name, h) => console.log(`INFO  D7 ${name}: ${h === D7[name] ? '✔ 命中冻结值' : `漂移（G13 光栅容差，基线同样复现）${h.slice(0, 12)} vs ${String(D7[name]).slice(0, 12)}`}`);
   if (baseBig.ok) {
     const h = graySha(baseBig.file);
     check('16:9 big-card@0.5 像素摘要 === D7', h === D7['big-card'], h);
@@ -260,17 +272,20 @@ async function main() {
     });
     check(`16:9 ${name}(带内容) still 产出`, r.ok && fileSize(r.file) > 5000, `${r.file} (${fileSize(r.file)} B)`);
     if (r.ok) {
-      // segment(带内容) 的位级像素钉在本机 SwiftShader 下逐跑随机（CJK 标题排版
-      // 微差），无法稳定冻结——降级为结构守卫：内容形态必须与无内容形态**不同**
-      //（RT-07 剥离查询参数会让两者逐字节相同；这恰是 v4.1.1 要防的失效模式）。
-      // big-card(带内容) 本机稳定，保像素摘要钉。
-      if (name === 'segment') {
-        const hp = graySha(path.join(OUT, 'baseline-16x9', 'segment', `still-${String(t.toFixed(2)).replace('.', '_')}.jpg`));
-        const hc = graySha(r.file);
-        check(`16:9 ${name}(带内容) 与无内容形态像素可区分（RT-07 守卫）`, hp !== hc, `${hp.slice(0, 12)} vs ${hc.slice(0, 12)}`);
-      } else {
+      const bare = name === 'segment' ? baseSeg : baseBig;
+      if (name === 'big-card') {
+        // big-card 含 CJK 也稳（其文字走预烘焙 textLayer，光栅路径不碰逐字形抖动）——硬钉。
         const h = graySha(r.file);
         check(`16:9 ${name}(带内容) 像素摘要 === D7`, h === D7[`${name}-content`], h);
+      } else {
+        d7Note(`${name}-content`, graySha(r.file));   // segment CJK：INFO 观测（G13）
+      }
+      // 结构守卫（两种形态都做）：内容形态必须与无内容形态**不同**——
+      // RT-07 剥离查询参数会让两者逐字节相同，这仍是硬失败。
+      if (bare.ok) {
+        const hp = graySha(bare.file);
+        const hc = graySha(r.file);
+        check(`16:9 ${name}(带内容) 与无内容形态像素可区分（RT-07 守卫）`, hp !== hc, `${hp.slice(0, 12)} vs ${hc.slice(0, 12)}`);
       }
     }
   }

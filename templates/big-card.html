@@ -767,7 +767,10 @@ window.renderFrame = (u) => {
   // FINDING-5：u 是绝对秒（render-segment 按 i/fps 传入）；除以段时长归一到
   // 0..1，动画时间轴（slam 0.5 拍、下划线 0.72 拍）对任何 seconds 都完整跑完。
   const t = clamp(u / DURATION, 0, 1);
-  bridge.setTime(t);
+  // G4 回归修正（v4.13.0 test-inspect 坐实）：bridge 的 renderAt 回喂 window.renderFrame(u)，
+  // u 是绝对秒——这里必须记 u，记归一化的 t 会在 patch 重绘时二次除以 DURATION、时刻错乱
+  // （同页同 t 两次 toDataURL 不一致即由此而来，非光栅抖动；segment.html 一直传绝对秒 sample.u）。
+  bridge.setTime(u);
   bridge.begin();
   const S = ensureState();
 

@@ -149,7 +149,10 @@ async function main() {
 
     await test('job reaches done through the real compiler', async () => {
       assert.ok(jobId, 'no job id from previous step');
-      const job = await pollJob(base, jobId, 240000);
+      // 预算：慢开发机 5 段真渲染 + qa-text 采样穿透 240s（v4.13 终验实测；此闸历史
+      // 上从未进过绿门禁——nightly 今天才修好首装）。默认可拉到 900s，CI 用
+      // CVS_TEST_API_JOB_MS=300000 收紧。
+      const job = await pollJob(base, jobId, Number(process.env.CVS_TEST_API_JOB_MS || 900000));
       assert.equal(job.status, 'done', `job failed: ${JSON.stringify({ exitCode: job.exitCode, error: job.error, logTail: job.logTail })}`);
       assert.equal(job.exitCode, 0);
       assert.ok(job.startedAt && job.finishedAt, 'timestamps missing');
@@ -280,10 +283,9 @@ window.__ready = true;
         body: JSON.stringify(spec),
       });
       assert.equal(post.res.status, 202, JSON.stringify(post.body));
-      // 预算 300s：这个 job 有 5 段真渲染 + 失败段 3 次尝试 + 一次浏览器重启，
-      // 独立实测约 75s；全套并发负载下会翻倍。旧预算 120s 恰好等于渲染器的
-      // --timeout（页面 ready 预算），两者同时到点，看起来像「挂死」其实是预算不够。
-      const job = await pollJob(base, post.body.id, 300000);
+      // 预算 300s→默认 900s 可调：慢开发机上「5 段真渲染 + 失败段 3 次尝试 + 浏览器
+      // 重启」会穿透 300s；CI 用 CVS_TEST_API_FAIL_MS=300000 收紧回历史口径。
+      const job = await pollJob(base, post.body.id, Number(process.env.CVS_TEST_API_FAIL_MS || 900000));
       assert.equal(job.status, 'failed', `expected failed, got ${job.status}`);
       assert.equal(typeof job.errorCode, 'string', 'errorCode missing');
       assert.equal(job.phase, 'render', `phase=${job.phase}`);
