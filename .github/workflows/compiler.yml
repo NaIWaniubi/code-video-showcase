@@ -120,6 +120,10 @@ jobs:
           node-version: 22
           cache: npm
 
+      # 新仓首跑实测：windows runner 同样缺 numpy（qa-audio 断言 5 红），与 ubuntu 同因。
+      - name: Install python numerics (qa-audio.py)
+        run: pip install --quiet numpy scipy
+
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
