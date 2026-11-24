@@ -34,6 +34,9 @@ git push -u ship ship-main:main
 2. 把 `.github/workflows/` 原样带入（fork 上验证过的四条），新仓首跑作为最终验收。
 3. README 门面（clone 地址/徽章/release badge/CANONICAL-URL 锚点）切到新仓；旧 fork 与 Moessif 线留档不动。
 4. gitee 镜像同步新仓内容（保持单一对外源：gitee 跟 ship 不跟 fork）。
+5. **转正后每次发版的固定再同步（实测教训）**：新仓与 main 无共同历史，增量 push 必被 non-fast-forward 拒——一律重建孤儿单提交并强推：
+   `git checkout --orphan shipN && git add -A && git commit -m "CVS v<ver> — …" && git push -f <ship-url> shipN:main && git tag -f v<ver> && git push -f <ship-url> v<ver> && git checkout main && git branch -d shipN`；
+   fork/gitee 的 tag 也要 `git tag -f + push -f` 对齐同一发布点（否则 release/CI 指着的树仍带旧缺陷——v4.13.0 首夜两连击：ubuntu 缺 numpy → windows 也缺，tag 两次追补）。
 
 ## 4. Release 正文
 
