@@ -1,0 +1,198 @@
+<!doctype html><meta charset="utf-8"><title>CVS style catalog (27)</title>
+<style>body{font:14px/1.5 system-ui;background:#0e0e0d;color:#eee;margin:2rem auto;max-width:1200px;padding:0 1rem}
+h1{font-size:1.3rem}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:1rem}
+.card{background:#17161a;border:1px solid #2a2930;border-radius:8px;overflow:hidden;margin:0}
+.card img{width:100%;display:block}.card figcaption{padding:.6rem .8rem}
+.card.missing{opacity:.35}.dims{color:#9a96a6;font-size:.8rem}code{font-size:.75rem;color:#8fd0a8}</style>
+<h1>CVS 画风目录 · 27 styles · 由 scripts/make-catalog.mjs 生成，参数复制即用</h1>
+<div class="grid">
+<figure class="card">
+  <img loading="lazy" src="catalog/cyber-pixel.png" alt="cyber-pixel representative frame" width="640" height="360">
+  <figcaption><b>cyber-pixel</b>
+  <p>低分辨率像素网格 + CRT 扫描线的霓虹夜城</p>
+  <p class="dims">colourLogic: 深紫黑底 + 品红/青高光，palette 限 16 色感 · typeRules: 点阵/等宽字体；标题不斜体 · motionQuality: 步进感（animate on twos），位移吸附像素格 · soundPalette: chiptune 方波、琶音、噪声军鼓</p>
+  <code>cvs image --page &quot;templates/cyber-pixel.html?recipe=cyber-pixel&quot; --out preview-cyber-pixel.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/cyber-glitch.png" alt="cyber-glitch representative frame" width="640" height="360">
+  <figcaption><b>cyber-glitch</b>
+  <p>信号被撕裂的瞬间：数据错位的冷峻故障</p>
+  <p class="dims">colourLogic: 近黑底 + 单一高饱和通道色，错位期允许双色散 · typeRules: 等宽/无衬线，故障瞬间字面被切片 · motionQuality: 静止与爆发交替，glitch 有起止帧不留尾 · soundPalette: bitcrush 撞击、白噪门控、低频嗡鸣</p>
+  <code>cvs image --page &quot;templates/recipe-glitch.html?recipe=cyber-glitch&quot; --out preview-cyber-glitch.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/pixel-8bit.png" alt="pixel-8bit representative frame" width="640" height="360">
+  <figcaption><b>pixel-8bit</b>
+  <p>8-bit 游戏时代的欢快像素质感</p>
+  <p class="dims">colourLogic: 高明度互补色对撞，天空蓝绿底常见 · typeRules: 像素字体全大写常见 · motionQuality: 帧率降到 8-12fps 的定格感 · soundPalette: 方波旋律 + 噪声鼓</p>
+  <code>cvs image --page &quot;templates/recipe-8bit.html?recipe=8bit&quot; --out preview-pixel-8bit.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/ink-wash.png" alt="ink-wash representative frame" width="640" height="360">
+  <figcaption><b>ink-wash</b>
+  <p>水墨在生宣上的呼吸：留白即主体</p>
+  <p class="dims">colourLogic: 墨分五色 + 一点朱砂，纸面暖白 · typeRules: 宋/楷竖排气质，标题大留白 · motionQuality: 极慢晕开，笔断意连，忌弹跳缓动 · soundPalette: 古琴/箫单音长息、大量静默</p>
+  <code>cvs image --page &quot;templates/recipe-inkwash.html?recipe=ink-wash&quot; --out preview-ink-wash.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/guofeng.png" alt="guofeng representative frame" width="640" height="360">
+  <figcaption><b>guofeng</b>
+  <p>纹样、匾额与朱金：装饰性的东方礼制</p>
+  <p class="dims">colourLogic: 朱砂/石青/藤黄 + 明金描边 · typeRules: 宋体标题、印章落款点缀 · motionQuality: 庄重匀速，开合有序，忌弹性 · soundPalette: 编钟/鼓点正拍，管乐铺底</p>
+  <code>cvs image --page &quot;templates/recipe-guofeng.html?recipe=guofeng&quot; --out preview-guofeng.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/great-wall.png" alt="great-wall representative frame" width="640" height="360">
+  <figcaption><b>great-wall</b>
+  <p>大山大河的横卷史诗：尺度即叙事</p>
+  <p class="dims">colourLogic: 青绿山水或赭石夕照，天光渐变克制 · typeRules: 大字号匾额式标题压山巅 · motionQuality: 长镜头缓推，视差层速差表达纵深 · soundPalette: 弦乐长音 + 大鼓心跳</p>
+  <code>cvs image --page &quot;templates/recipe-greatwall.html?recipe=great-wall&quot; --out preview-great-wall.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/whiteboard.png" alt="whiteboard representative frame" width="640" height="360">
+  <figcaption><b>whiteboard</b>
+  <p>一支手的思考过程：画出来的解释</p>
+  <p class="dims">colourLogic: 白底 + 3 支笔色（黑蓝红经典） · typeRules: 手写字感，箭头批注大量使用 · motionQuality: 描边生长（stroke-dashoffset 式），停顿像思考 · soundPalette: 马克笔沙沙 + 轻快拨弦</p>
+  <code>cvs image --page &quot;templates/recipe-whiteboard.html?recipe=whiteboard&quot; --out preview-whiteboard.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/three-d.png" alt="three-d representative frame" width="640" height="360">
+  <figcaption><b>three-d</b>
+  <p>真实光照的立体物件：转体即展示</p>
+  <p class="dims">colourLogic: 影棚布光：主光+轮廓光，背景单色渐变 · typeRules: 无衬线细字远离主体 · motionQuality: 匀速转体 + 关键面停顿打光 · soundPalette: 低频铺底 + 材质音效（咔/嗡）</p>
+  <code>cvs image --page &quot;templates/recipe-threed.html?recipe=three-d&quot; --out preview-three-d.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/data-viz.png" alt="data-viz representative frame" width="640" height="360">
+  <figcaption><b>data-viz</b>
+  <p>数字自己会跳舞：图表即角色</p>
+  <p class="dims">colourLogic: 分类色板≤6 色，强调序列独占高亮 · typeRules: 数字用等宽对齐，单位常驻 · motionQuality: 缓动收尾落定，数据到位必停一拍读秒 · soundPalette: tick 音阶按数据升调</p>
+  <code>cvs image --page &quot;templates/recipe-datarace.html?recipe=data-race&quot; --out preview-data-viz.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/screencast.png" alt="screencast representative frame" width="640" height="360">
+  <figcaption><b>screencast</b>
+  <p>真实界面 + 电影化运镜：所见即可用</p>
+  <p class="dims">colourLogic: 界面自身色 + 品牌描边强调 · typeRules: 步骤标签大字卡，行间留呼吸 · motionQuality: 平移跟光标，缩放聚焦功能点，节奏跟操作因果 · soundPalette: 键盘点击拟音 + 轻节拍</p>
+  <code>cvs image --page &quot;templates/recipe-screencast.html?recipe=screencast&quot; --out preview-screencast.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/flat.png" alt="flat representative frame" width="640" height="360">
+  <figcaption><b>flat</b>
+  <p>无光影的色块修辞：几何说清一切</p>
+  <p class="dims">colourLogic: 高明度互补/类比色板，纯色无纹理 · typeRules: 粗无衬线，字重对比构建层级 · motionQuality: 弹性适中，位移+缩放组合干脆 · soundPalette: 马林巴/pop 拨弦</p>
+  <code>cvs image --page &quot;templates/recipe-flat.html?recipe=flat&quot; --out preview-flat.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/minimal.png" alt="minimal representative frame" width="640" height="360">
+  <figcaption><b>minimal</b>
+  <p>几乎什么都不放：一件物 + 大寂静</p>
+  <p class="dims">colourLogic: 双色制，中性底 chroma≥0.005（禁纯灰） · typeRules: 字号即层级，行长克制 · motionQuality: 极慢极稳，动如未动 · soundPalette: 钢琴单音/环境声留白</p>
+  <code>cvs image --page &quot;templates/recipe-minimal.html?recipe=minimal&quot; --out preview-minimal.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/vertical.png" alt="vertical representative frame" width="640" height="360">
+  <figcaption><b>vertical</b>
+  <p>竖屏原生：拇指时间轴的快语速</p>
+  <p class="dims">colourLogic: 跟随所选主题，饱和度略提抗小屏 · typeRules: 9:16 重排行规约，大字号下限更高 · motionQuality: 上推动势多，单段更短 · soundPalette: 跟随 audio.mood，起音更快</p>
+  <code>cvs image --page &quot;templates/segment.html?recipe=vertical&quot; --out preview-vertical.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/kinetic.png" alt="kinetic representative frame" width="640" height="360">
+  <figcaption><b>kinetic</b>
+  <p>文字是演员：排版打拍子</p>
+  <p class="dims">colourLogic: 2-3 色强对比，逐拍可闪底 · typeRules: 字重/字号/斜正变化承担全部表达 · motionQuality: 词级出场跟拍点，句末停顿 · soundPalette: 人声采样 + 军鼓，节奏驱动</p>
+  <code>cvs image --page &quot;templates/recipe-kinetic.html?recipe=kinetic&quot; --out preview-kinetic.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/swiss.png" alt="swiss representative frame" width="640" height="360">
+  <figcaption><b>swiss</b>
+  <p>网格统治：非对称秩序与 Helvetica 良知</p>
+  <p class="dims">colourLogic: 白/红/黑或蓝，专色平涂 · typeRules: 无衬线单族到底，左对齐硬回行 · motionQuality: 栏位级位移，克制缓出 · soundPalette: 机械节拍、钢琴扣</p>
+  <code>cvs image --page &quot;templates/recipe-swiss.html?recipe=swiss&quot; --out preview-swiss.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/editorial.png" alt="editorial representative frame" width="640" height="360">
+  <figcaption><b>editorial</b>
+  <p>杂志跨页：衬线标题的叙事腔调</p>
+  <p class="dims">colourLogic: 纸感底 + 双色系，图片主导饱和 · typeRules: 衬线大标 + 无衬线正文对唱 · motionQuality: 翻页式分区显现 · soundPalette: 弦乐拨奏 + 纸张声</p>
+  <code>cvs image --page &quot;templates/recipe-editorial.html?recipe=editorial&quot; --out preview-editorial.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/brutalist.png" alt="brutalist representative frame" width="640" height="360">
+  <figcaption><b>brutalist</b>
+  <p>未经装饰的诚实：边框、默认体、反 UX 惯例</p>
+  <p class="dims">colourLogic: 黑底白/黄，或反相；允许刺眼对比 · typeRules: 等宽/系统字体大字号，全大写 · motionQuality: 硬切，无缓动或线性位移 · soundPalette: 工业噪声门控、失真相位</p>
+  <code>cvs image --page &quot;templates/recipe-brutalist.html?recipe=brutalist&quot; --out preview-brutalist.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/vaporwave.png" alt="vaporwave representative frame" width="640" height="360">
+  <figcaption><b>vaporwave</b>
+  <p>假日算机的乡愁：网格地平线与落日</p>
+  <p class="dims">colourLogic: 品红/青/紫渐变落日，固定高光 · typeRules: 铬渐变标题 + 全角片假名点缀 · motionQuality: 匀速巡航镜头，闪烁有规律 · soundPalette: 慢放采样、pad 长音</p>
+  <code>cvs image --page &quot;templates/recipe-vaporwave.html?recipe=vaporwave&quot; --out preview-vaporwave.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/blueprint.png" alt="blueprint representative frame" width="640" height="360">
+  <figcaption><b>blueprint</b>
+  <p>蓝图上的推演：线稿、标注与尺寸线</p>
+  <p class="dims">colourLogic: 石青底白线或白底蓝线 · typeRules: 等宽小注 + 大写标号 · motionQuality: 按工序展开装配感 · soundPalette: 圆规/直尺拟音 + 电子脉冲</p>
+  <code>cvs image --page &quot;templates/recipe-blueprint.html?recipe=blueprint&quot; --out preview-blueprint.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/risograph.png" alt="risograph representative frame" width="640" height="360">
+  <figcaption><b>risograph</b>
+  <p>双色套印的错位浪漫：Riso 荧光油墨</p>
+  <p class="dims">colourLogic: 双色限定（ fluores 粉+蓝经典），叠色第三色 · typeRules: 粗几何字，油墨压字 · motionQuality: 套色逐帧错位闪现 · soundPalette: 印刷机节奏 lo-fi</p>
+  <code>cvs image --page &quot;templates/recipe-risograph.html?recipe=risograph&quot; --out preview-risograph.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/generative.png" alt="generative representative frame" width="640" height="360">
+  <figcaption><b>generative</b>
+  <p>规则涌现之美：种子固定即可复现的混沌</p>
+  <p class="dims">colourLogic: 单色渐层或双色调映射 · typeRules: 极简参数读数可露出 · motionQuality: 由 (t,seed) 纯函数驱动，禁无种子 random · soundPalette: 颗粒合成、随形变音高</p>
+  <code>cvs image --page &quot;templates/recipe-generative.html?recipe=generative&quot; --out preview-generative.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/wireframe.png" alt="wireframe representative frame" width="640" height="360">
+  <figcaption><b>wireframe</b>
+  <p>白模骨架：未上色的建筑透视练习</p>
+  <p class="dims">colourLogic: 中性灰阶 chroma≥0.005 · typeRules: 小注释体量 · motionQuality: 体量缓转/拆解 · soundPalette: 空灵 pad + 结构敲击</p>
+  <code>cvs image --page &quot;templates/recipe-wireframe.html?recipe=wireframe&quot; --out preview-wireframe.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/skeleton.png" alt="skeleton representative frame" width="640" height="360">
+  <figcaption><b>skeleton</b>
+  <p>骨骼绑定演示：关节如何驱动角色</p>
+  <p class="dims">colourLogic: 底暗线亮，关节高亮色 · typeRules: 解剖学标注小字 · motionQuality: 循环动作库（走跑跳），慢放插值可见 · soundPalette: 机械关节 + 计拍音</p>
+  <code>cvs image --page &quot;templates/recipe-skeleton.html?recipe=skeleton&quot; --out preview-skeleton.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/fractal.png" alt="fractal representative frame" width="640" height="360">
+  <figcaption><b>fractal</b>
+  <p>分形缩放：自相似的深渊推镜</p>
+  <p class="dims">colourLogic: 迭代深度映射色带 · typeRules: 缩放倍率读数 · motionQuality: 指数推镜匀速（在对数域） · soundPalette: 上升 Shepard 音</p>
+  <code>cvs image --page &quot;templates/recipe-fractal.html?recipe=fractal&quot; --out preview-fractal.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/firework.png" alt="firework representative frame" width="640" height="360">
+  <figcaption><b>firework</b>
+  <p>弹道与绽放：粒子有物理出身</p>
+  <p class="dims">colourLogic: 夜黑底 + 高亮焰色，余烬渐暗 · typeRules: 无字或一语点题 · motionQuality: 加速度真实（重力常数统一） · soundPalette: 升空哨 + 爆响 + 余音</p>
+  <code>cvs image --page &quot;templates/recipe-firework.html?recipe=firework&quot; --out preview-firework.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/terrain.png" alt="terrain representative frame" width="640" height="360">
+  <figcaption><b>terrain</b>
+  <p>等高线测绘：把数学画成地貌</p>
+  <p class="dims">colourLogic: 海拔分带配色（深谷到雪线） · typeRules: 坐标刻度小注 · motionQuality: 缓慢环绕/推近，等高线生长 · soundPalette: 风声 + 低频地形嗡鸣</p>
+  <code>cvs image --page &quot;templates/recipe-terrain.html?recipe=terrain&quot; --out preview-terrain.png</code></figcaption>
+</figure>
+<figure class="card">
+  <img loading="lazy" src="catalog/network.png" alt="network representative frame" width="640" height="360">
+  <figcaption><b>network</b>
+  <p>节点脉冲：连接本身是主角</p>
+  <p class="dims">colourLogic: 深底亮线，单点高亮传播 · typeRules: 节点标签克制露出 · motionQuality: 布局缓沉（阻尼），脉冲跟拍点 · soundPalette: 网络包点击 + 共鸣扩展</p>
+  <code>cvs image --page &quot;templates/recipe-network.html?recipe=network&quot; --out preview-network.png</code></figcaption>
+</figure>
+</div>

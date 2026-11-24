@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/shared/fonts.css">
+<title>recipe · network</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #0e0e0d; }
+  #c { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<script type="module">
+// recipe-network.html — 「网络脉冲」：星型+环型混合图拓扑，包脉冲沿链路
+// 以闭式相位行进（p=frac(ωt+φ)，尾迹按 p−δ 求值）——没有逐包状态机，
+// 同一 t 必出同一流量图样。节点呼吸、十字锚标、测绘感。
+import { createSegment, applyImpact2D, drawFlash, loadFonts, vars, TAU, clamp, hash01 } from './common.js';
+import {
+  themeFromURL, getTheme, loadFontsFor, hexToRgba, mix, relativeLuminance,
+} from './themes.js';
+import { setupStage, safePad, fitTextSize, drawHud } from './recipes/util.js';
+import { typeSize, safe, probe } from './tokens.mjs';
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { alpha: false });
+const { W, H, portrait } = setupStage(canvas);
+const pad = safePad(W, H);
+
+const params = new URLSearchParams(location.search);
+const seg = createSegment({ duration: 3.0 });
+window.DURATION = seg.duration;
+
+const THEME = getTheme(themeFromURL(location.search));
+const TC = THEME.colors;
+const V = vars();
+
+const TITLE = String(params.get('title') || V.title || '网络脉冲').slice(0, 14);
+const SUB = String(params.get('sub') || V.subtitle || '图拓扑 · 包流量 · 相位脉冲').slice(0, 40);
+const BRAND = String(V.brand || 'CVS').slice(0, 24);
+
+const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;
+const INK = isLight ? TC.ink : TC.paper;
+const MUTED = hexToRgba(INK, 0.45);
+const ACCENT = TC.accent;
+const PAPER = isLight ? TC.paperInk || TC.ink : TC.paper;
+
+const SANS = '"Noto Sans SC", "PingFang SC", sans-serif';
+const FAMILIES = Array.from(new Set([...(loadFontsFor(THEME) || []), 'Noto Sans SC', 'Inter']));
+
+/* ───────────────────────────── 布局 ───────────────────────────── */
+
+let L = null;
+function buildLayout() {
+  const cx = portrait ? Math.round(W / 2) : Math.round(W * 0.34);
+  const cy = Math.round(H * 0.48);
+  const R = Math.min(W, H) * (portrait ? 0.26 : 0.30);
+  const titleMaxW = portrait ? W - pad * 2 : W - Math.round(W * 0.64) - pad;
+  const titleSize = fitTextSize(ctx, TITLE, {
+    maxWidth: titleMaxW, family: SANS, weight: 800,
+    maxSize: typeSize('title', W, H), minSize: 40, spacing: 0.02,
+  });
+  probe('title', titleSize, safe(W, H));
+  return { cx, cy, R, titleSize,
+    titleX: portrait ? Math.round(W / 2) : Math.round(W * 0.64),
+    titleY: portrait ? Math.round(H * 0.84) : Math.round(H * 0.62),
+    subX: portrait ? Math.round(W / 2) : Math.round(W * 0.64), subY: 0 };
+}
+
+/* ──────────────── 图拓扑（种子化，闭式） ──────────────── */
+
+let NETWORK = null;
+function buildNetwork() {
+  let h = 2166136261;
+  for (let i = 0; i < BRAND.length; i++) h = Math.imul(h ^ BRAND.charCodeAt(i), 16777619);
+  const SEED = (h >>> 0) % 100000;
+  const rnd = (k) => hash01(k ^ SEED, k * 13);
+
+  // 内环 6 + 外环 7 + 中心枢纽
+  const nodes = [{ x: 0, y: 0, ring: -1, hub: true }];
+  const innerN = 6, outerN = 7;
+  for (let i = 0; i < innerN; i++) {
+    const a = (i / innerN) * TAU - Math.PI / 2;
+    nodes.push({ x: Math.cos(a) * L.R * 0.42, y: Math.sin(a) * L.R * 0.42, ring: 0 });
+  }
+  for (let i = 0; i < outerN; i++) {
+    const a = (i / outerN) * TAU + rnd(31) * 0.5;
+    nodes.push({ x: Math.cos(a) * L.R, y: Math.sin(a) * L.R, ring: 1 });
+  }
+  const links = [];
+  const pushLink = (a, b, phase, speed) => {
+    links.push({ a, b, phase, speed: speed || (0.12 + rnd((a * 31 + b) | 0) * 0.3) });
+  };
+  // 枢纽 → 内环（主干）
+  for (let i = 1; i <= innerN; i++) pushLink(0, i, rnd(i * 7), 0.18);
+  // 内环节点链
+  for (let i = 1; i <= innerN; i++) pushLink(i, 1 + ((i) % innerN), rnd(i * 11 + 2), 0.1);
+  // 内环 → 外环（关联）
+  for (let j = 0; j < outerN; j++) {
+    const inn = 1 + ((j * 2 + 1) % innerN);
+    pushLink(inn, innerN + 1 + j, rnd(j * 17 + 5), 0.16);
+    if (rnd(j * 19 + 9) > 0.55) {
+      pushLink(inn, innerN + 1 + ((j + 3) % outerN), rnd(j * 23 + 4), 0.22);
+    }
+  }
+  // 外环端点孤立小瓣（装饰环）
+  NETWORK = { nodes, links };
+}
+
+/** 沿链路的点（含尾迹偏移）。 */
+function pointOnLink(link, t, dx) {
+  const a = NETWORK.nodes[link.a], b = NETWORK.nodes[link.b];
+  const p = clamp(((t * link.speed + link.phase + dx) % 1 + 1) % 1);
+  return { x: a.x + (b.x - a.x) * p, y: a.y + (b.y - a.y) * p, p };
+}
+
+/* ────────────────────────── 场景 ────────────────────────────── */
+
+function drawScene(u, t) {
+  ctx.fillStyle = TC.bg;
+  ctx.fillRect(0, 0, W, H);
+  const { cx, cy } = L;
+
+  // 链路基线
+  ctx.save();
+  ctx.globalAlpha = 0.34;
+  ctx.strokeStyle = MUTED;
+  ctx.lineWidth = 1.2;
+  for (const lk of NETWORK.links) {
+    const a = NETWORK.nodes[lk.a], b = NETWORK.nodes[lk.b];
+    ctx.beginPath();
+    ctx.moveTo(cx + a.x, cy + a.y);
+    ctx.lineTo(cx + b.x, cy + b.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 脉冲：头点 + 三段尾迹（闭式 p−δ）
+  for (const lk of NETWORK.links) {
+    for (let dk = 0; dk <= 3; dk++) {
+      const q = pointOnLink(lk, t, -dk * 0.045);
+      const alpha = (1 - dk * 0.28) * (dk === 0 ? 1 : 0.75);
+      ctx.fillStyle = hexToRgba(ACCENT, alpha);
+      ctx.beginPath();
+      ctx.arc(cx + q.x, cy + q.y, dk === 0 ? 3.2 : 2.2 - dk * 0.35, 0, TAU);
+      ctx.fill();
+    }
+  }
+
+  // 节点呼吸圈
+  for (const n of NETWORK.nodes) {
+    const br = n.hub ? 9 : 5.5;
+    const pulse = 0.55 + 0.45 * Math.abs(Math.sin(t * 1.6 + (n.x + n.y)));
+    ctx.fillStyle = hexToRgba(n.hub ? ACCENT : PAPER, 0.28 + 0.4 * pulse);
+    ctx.beginPath();
+    ctx.arc(cx + n.x, cy + n.y, br * (n.hub ? 1.7 : 1.25), 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = n.hub ? ACCENT : hexToRgba(INK, 0.9);
+    ctx.beginPath();
+    ctx.arc(cx + n.x, cy + n.y, n.hub ? 5.2 : 3.4, 0, TAU);
+    ctx.fill();
+  }
+
+  // 测绘十字锚标（中心枢纽）
+  ctx.save();
+  ctx.strokeStyle = hexToRgba(INK, 0.5);
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([3, 4]);
+  ctx.beginPath(); ctx.moveTo(cx - 26, cy); ctx.lineTo(cx + 26, cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy - 26); ctx.lineTo(cx, cy + 26); ctx.stroke();
+  ctx.restore();
+
+  // 标题色带
+  const fade = smoothstepX(clamp(t / 0.55));
+  if (fade > 0.001) {
+    ctx.save();
+    ctx.globalAlpha = fade;
+    const bandH = Math.round(L.titleSize * 1.7);
+    const bandW = Math.min(portrait ? W - pad * 2 : W * 0.34, L.titleSize * 9);
+    const bandX = portrait ? Math.round((W - bandW) / 2) : Math.round(W * 0.64 - bandW / 2);
+    ctx.fillStyle = ACCENT;
+    ctx.fillRect(bandX, L.titleY - bandH / 2, bandW, bandH);
+    ctx.fillStyle = isLight ? TC.paper : TC.bg;
+    ctx.font = `800 ${L.titleSize}px ${SANS}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(TITLE, bandX + bandW / 2, L.titleY + 1);
+    ctx.restore();
+  }
+  const subFade = smoothstepX(clamp((t - 0.4) / 0.5));
+  if (subFade > 0.001 && SUB) {
+    ctx.save();
+    ctx.globalAlpha = subFade * 0.9;
+    ctx.font = `${Math.max(13, L.titleSize * 0.26)}px ${SANS}`;
+    ctx.fillStyle = MUTED;
+    ctx.textAlign = portrait ? 'center' : 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(SUB, L.subX, L.titleY + Math.round(L.titleSize * 1.7));
+    ctx.restore();
+  }
+
+  try {
+    drawHud(ctx, { W, H, u, duration: seg.duration, theme: THEME,
+      label: 'DEMO GRAPH', name: 'NETFLOW', brand: BRAND, pad });
+  } catch { /* HUD 不参与核心画面 */ }
+}
+
+
+function smoothstepX(a) { const x = Math.min(1, Math.max(0, a)); return x * x * (3 - 2 * x); }
+
+window.renderFrame = (u) => {
+  const { t, fx } = seg.sample(u);
+  ctx.save();
+  ctx.scale(1 + (fx.scale - 1), 1 + (fx.scale - 1));
+  drawScene(u, t);
+  ctx.restore();
+  applyImpact2D(ctx, fx, W, H);
+  drawFlash(ctx, fx.flash, W, H, TC.paper);
+};
+
+window.__ready = false;
+window.__bootError = null;
+(async () => {
+  try {
+    await loadFonts(FAMILIES);
+    L = buildLayout();
+    buildNetwork();
+    window.renderFrame(0);
+    window.__ready = true;
+  } catch (e) {
+    window.__bootError = String((e && e.stack) || e);
+  }
+})();
+</script>
+</body>
+</html>

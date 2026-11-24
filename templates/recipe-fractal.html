@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/shared/fonts.css">
+<title>recipe · fractal</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #0e0e0d; }
+  #c { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<script type="module">
+// recipe-fractal.html — 「分形演示」：L-system 式递归生长的树。
+// 每一条枝是 (深度, 种子哈希) 的闭式决定——分叉角、长度比、左右摆动全部
+// 由 hash01(i ^ seed) 生成，不调用任何随机源；生长进度 g=t/DURATION 决定
+// 到哪一层、当前层长到几成。同一 t 必出同一树形（确定性分形）。
+import { createSegment, applyImpact2D, drawFlash, loadFonts, vars, TAU, clamp, hash01 } from './common.js';
+import {
+  themeFromURL, getTheme, loadFontsFor, hexToRgba, mix, relativeLuminance,
+} from './themes.js';
+import { setupStage, safePad, fitTextSize, drawHud } from './recipes/util.js';
+import { typeSize, safe, probe } from './tokens.mjs';
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { alpha: false });
+const { W, H, portrait } = setupStage(canvas);
+const pad = safePad(W, H);
+
+const params = new URLSearchParams(location.search);
+const seg = createSegment({ duration: 3.0 });
+window.DURATION = seg.duration;
+
+const THEME = getTheme(themeFromURL(location.search));
+const TC = THEME.colors;
+const V = vars();
+
+const TITLE = String(params.get('title') || V.title || '分形演示').slice(0, 14);
+const SUB = String(params.get('sub') || V.subtitle || '递归分叉 · 种子驱动 · 生长即时间').slice(0, 40);
+const BRAND = String(V.brand || 'CVS').slice(0, 24);
+
+const isLight = THEME.mode === 'light' || relativeLuminance(TC.bg) > 0.55;
+const INK = isLight ? TC.ink : TC.paper;
+const MUTED = hexToRgba(INK, 0.45);
+const ACCENT = TC.accent;
+
+const SANS = '"Noto Sans SC", "PingFang SC", sans-serif';
+const FAMILIES = Array.from(new Set([...(loadFontsFor(THEME) || []), 'Noto Sans SC', 'Inter']));
+
+/* ───────────────────────────── 布局 ───────────────────────────── */
+
+let L = null;
+function buildLayout() {
+  const baseY = Math.round(H * 0.84);
+  const trunkLen = Math.min(W * 0.22, H * 0.34);
+  const cx = portrait ? Math.round(W / 2) : Math.round(W * 0.30);
+  const titleMaxW = portrait ? W - pad * 2 : W - Math.round(W * 0.60) - pad;
+  const titleSize = fitTextSize(ctx, TITLE, {
+    maxWidth: titleMaxW, family: SANS, weight: 800,
+    maxSize: typeSize('title', W, H), minSize: 40, spacing: 0.02,
+  });
+  probe('title', titleSize, safe(W, H));
+  return { cx, baseY, trunkLen, titleSize,
+    titleX: portrait ? Math.round(W / 2) : Math.round(W * 0.60),
+    titleY: Math.round(H * 0.62),
+    subX: portrait ? Math.round(W / 2) : Math.round(W * 0.60), subY: 0 };
+}
+
+/* ────────────────── L-system 递归（原语） ───────────────────── */
+
+const MAX_DEPTH = 7;                 // 总层数（含干）
+function lsysBranch(seed, i, depth, len) {
+  const rnd = (k) => hash01((i * 73856093) ^ (k * 19349663) ^ seed, k);
+  const branchAngle = (0.42 + 0.30 * rnd(1)) * (rnd(2) > 0.5 ? 1 : -1) * (0.6 + 0.4 * (1 - depth / MAX_DEPTH));
+  const lenRatio = 0.68 + 0.14 * rnd(3);
+  const both = rnd(4) > 0.18;        // 少数枝单叉（自然感）
+  const sway = 0.10 * rnd(5);
+  return { branchAngle, lenRatio, both, sway };
+}
+
+function drawTree(g) {
+  // g：生长进度 0..1（已到第几层 + 当前层完成度）
+  const frontier = g * (MAX_DEPTH + 2);       // 连续前沿
+  const levelsDone = Math.floor(frontier);
+  const fracFrontier = clamp(frontier - levelsDone, 0, 1);
+
+  // 品牌哈希作种子 → 换 brand 即换一棵树，但每帧确定。
+  let h = 2166136261;
+  for (let i = 0; i < BRAND.length; i++) h = Math.imul(h ^ BRAND.charCodeAt(i), 16777619);
+  const TREE_SEED = (h >>> 0) % 100000;
+
+  drawBranch(L.cx, L.baseY, -Math.PI / 2, L.trunkLen, 0, TREE_SEED, levelsDone, fracFrontier, MAX_DEPTH);
+}
+
+function drawBranch(x, y, ang, len, depth, seed, levelsDone, frac, maxDepth) {
+  if (depth > maxDepth || len < 3) return;
+  // 前沿层按 frac 截短——「正在长」的那一层只画到进度那么长
+  const effFrac = depth < levelsDone ? 1 : frac;
+  if (effFrac <= 0.001) return;
+  const ex = x + Math.cos(ang) * len * effFrac;
+  const ey = y + Math.sin(ang) * len * effFrac;
+
+  ctx.strokeStyle = depth === 0 ? hexToRgba(INK, 0.9)
+    : hexToRgba(mix(INK, ACCENT, 0.28 + 0.55 * (depth / maxDepth)), 0.92);
+  ctx.lineWidth = Math.max(1.2, (maxDepth - depth + 1) * 1.15);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(ex, ey);
+  ctx.stroke();
+
+  if (depth >= maxDepth) {
+    // 叶：前端圆点强调色
+    ctx.fillStyle = hexToRgba(ACCENT, 0.9);
+    ctx.beginPath();
+    ctx.arc(ex, ey, 3.4, 0, TAU);
+    ctx.fill();
+    return;
+  }
+  if (effFrac < 1) return;              // 前沿层只长主枝，下一层等下一刻
+
+  const info = lsysBranch(seed, depth * 131 + 7, depth, len);
+  const baseAng = ang + info.sway * Math.sin(depth);
+  drawBranch(ex, ey, baseAng + info.branchAngle, len * info.lenRatio, depth + 1, seed,
+    levelsDone, frac, maxDepth);
+  if (info.both) {
+    drawBranch(ex, ey, baseAng - info.branchAngle, len * info.lenRatio, depth + 1, seed,
+      levelsDone, frac, maxDepth);
+  }
+}
+
+/* ────────────────────────── 场景 ────────────────────────────── */
+
+function drawScene(u, t) {
+  ctx.fillStyle = TC.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // 地平线（根系参考线）
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.strokeStyle = MUTED;
+  ctx.setLineDash([5, 9]);
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(W * 0.06, L.baseY + 1);
+  ctx.lineTo(W * 0.94, L.baseY + 1);
+  ctx.stroke();
+  ctx.restore();
+
+  // 缓动生长 + 结束时轻微回缩呼吸（纯 t 函数，无状态）
+  const raw = clamp(t / seg.duration);
+  const breathe = 1 + 0.02 * Math.sin(raw * TAU * 2 + Math.PI);
+  drawTree(clamp(raw * breathe));
+
+  // 标题色带
+  const fade = smoothstepX(clamp(t / 0.55));
+  if (fade > 0.001) {
+    ctx.save();
+    ctx.globalAlpha = fade;
+    const bandH = Math.round(L.titleSize * 1.7);
+    const bandW = Math.min(portrait ? W - pad * 2 : W * 0.36, L.titleSize * 9);
+    const bandX = portrait ? Math.round((W - bandW) / 2) : Math.round(W * 0.60 - bandW / 2);
+    ctx.fillStyle = ACCENT;
+    ctx.fillRect(bandX, L.titleY - bandH / 2, bandW, bandH);
+    ctx.fillStyle = isLight ? TC.paper : TC.bg;
+    ctx.font = `800 ${L.titleSize}px ${SANS}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(TITLE, bandX + bandW / 2, L.titleY + 1);
+    ctx.restore();
+  }
+  const subFade = smoothstepX(clamp((t - 0.4) / 0.5));
+  if (subFade > 0.001 && SUB) {
+    ctx.save();
+    ctx.globalAlpha = subFade * 0.9;
+    ctx.font = `${Math.max(13, L.titleSize * 0.26)}px ${SANS}`;
+    ctx.fillStyle = MUTED;
+    ctx.textAlign = portrait ? 'center' : 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(SUB, L.subX, L.titleY + Math.round(L.titleSize * 1.7));
+    ctx.restore();
+  }
+
+  try {
+    drawHud(ctx, { W, H, u, duration: seg.duration, theme: THEME,
+      label: 'DEMO FRACTAL', name: 'LSYSTEM', brand: BRAND, pad });
+  } catch { /* HUD 不参与核心画面 */ }
+}
+
+function smoothstepX(a) { const x = Math.min(1, Math.max(0, a)); return x * x * (3 - 2 * x); }
+
+window.renderFrame = (u) => {
+  const { t, fx } = seg.sample(u);
+  ctx.save();
+  ctx.scale(1 + (fx.scale - 1), 1 + (fx.scale - 1));
+  drawScene(u, t);
+  ctx.restore();
+  applyImpact2D(ctx, fx, W, H);
+  drawFlash(ctx, fx.flash, W, H, TC.paper);
+};
+
+window.__ready = false;
+window.__bootError = null;
+(async () => {
+  try {
+    await loadFonts(FAMILIES);
+    L = buildLayout();
+    window.renderFrame(0);
+    window.__ready = true;
+  } catch (e) {
+    window.__bootError = String((e && e.stack) || e);
+  }
+})();
+</script>
+</body>
+</html>

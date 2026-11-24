@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>readability-case: naked-no-contract (RED)</title>
+<!-- 假页 R0（降级负例）：不 import common.js——页面能渲染、有 DOM 有画布，
+     但没有任何文本契约。闸对它的正确行为不是装绿，而是
+     「text contract」FAIL（全片失明=闸降级）+ 「pixel text coverage」FAIL。
+     这正是 G7-1 说的「防有 DOM 无文本」的注入样例。 -->
+<style>html,body{margin:0;background:#0e0e0d}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+(function () {
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  window.DURATION = 3;
+  window.renderFrame = function (u) {
+    ctx.fillStyle = '#0e0e0d';
+    ctx.fillRect(0, 0, 1920, 1080);
+    ctx.fillStyle = '#f5f0e8';
+    ctx.font = '900 120px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('无契约页', 960, 540);
+  };
+  window.renderFrame(0);
+  window.__ready = true;
+})();
+</script>
+</body>
+</html>

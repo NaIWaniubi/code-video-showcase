@@ -1,0 +1,45 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# agent swarm scratch / collaboration ledgers (never ship in the public repo — audit FINDING-13)
+.team/
+.cluster/
+
+# build products / rendered media
+out/
+analysis/
+tmp/
+*.mp4
+*.mov
+*.wav
+*.m4a
+*.mp3
+*.webm
+# G11：仓库内的成品 demo/目录图是**故意的**对外证据，显式豁免防被上面的通配静默吞掉
+# （审计 G11 实测：直接 git add 会被静默忽略，用户以为提交了）
+!assets/demos/**
+!assets/catalog/**.png
+*.log
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# python cache
+__pycache__/
+*.pyc
+
+# generated fonts (scripts/build-fonts.mjs; 32MB, rebuild with `bash arm.sh`)
+shared/fonts/
+
+# v2 QA / optional AI lane
+qa/
+ai/cache/
+assets/ai/
+.theme-preview-tmp/
+*.passlog*
+# cvs ship 目录模式产物（--out dir，默认落工作区根）
+/ship-*/

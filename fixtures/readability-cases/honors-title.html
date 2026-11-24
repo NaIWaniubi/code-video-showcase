@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>readability-case: honors-title (GREEN)</title>
+<!-- 假页 R1 的对照：正常消费 ?title / ?sub，文案全段停留。
+     像素文本闸必须全绿——它证明闸不会因为「页吃了对题」而误报。 -->
+<style>html,body{margin:0;background:#0e0e0d}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script type="module">
+import { createSegment } from '/templates/common.js';
+
+const W = 1920, H = 1080;
+const p = new URLSearchParams(location.search);
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const seg = createSegment({ duration: 3 });
+window.DURATION = seg.duration;
+
+window.renderFrame = (u) => {
+  seg.sample(u);
+  ctx.fillStyle = '#0e0e0d';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '900 120px sans-serif';
+  ctx.fillStyle = '#f5f0e8';
+  ctx.fillText(String(p.get('title') || ''), W / 2, H * 0.42);
+  ctx.font = '500 48px sans-serif';
+  ctx.fillStyle = '#b9b2a6';
+  ctx.fillText(String(p.get('sub') || ''), W / 2, H * 0.58);
+};
+
+window.__ready = false;
+window.renderFrame(0);
+window.__ready = true;
+</script>
+</body>
+</html>
